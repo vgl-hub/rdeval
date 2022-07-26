@@ -1,0 +1,3 @@
+[submodule "gfalibs"]
+	path = gfalibs
+	url = https://github.com/vgl-hub/gfalibs.git
