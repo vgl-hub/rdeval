@@ -2,7 +2,21 @@
 
 std::string version = "0.0.1";
 
+//global
+std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now(); // immediately start the clock when the program is run
+
+int hc_flag;
+int hc_cutoff;
+short int tabular_flag;
 int cmd_flag;
+int verbose_flag;
+int outBubbles_flag;
+int stats_flag;
+int maxThreads = 0;
+
+std::mutex mtx;
+ThreadPool<std::function<void()>> threadPool;
+Log lg;
 
 int main(int argc, char **argv) {
     
@@ -10,6 +24,11 @@ int main(int argc, char **argv) {
     short unsigned int pos_op = 1; // optional arguments
     
     bool arguments = true;
+    bool isPipe = false; // to check if input is from pipe
+    
+    unsigned long long int gSize = 0; // expected genome size, with 0 NG/LG* statistics are not computed
+    
+    UserInput userInput; // initialize input object
     
     std::string cmd;
     
@@ -54,10 +73,6 @@ int main(int argc, char **argv) {
                 }
                 break;
             default: // handle positional arguments
-                                
-                    
-                        
-                }
                 
             case 0: // case for long options without short options
                 
@@ -112,14 +127,16 @@ int main(int argc, char **argv) {
         
     }
     
+    Input in;
+    in.load(userInput); // load user input
+    lg.verbose("Loaded user input");
+    
     InReads inReads; // initialize sequence collection object
     lg.verbose("Read object generated");
 
     in.read(inReads); // read input content to inReads container
 
     if (stats_flag) { // output summary statistics
-        
-        report.reportStats(inSequences, gSize);
         
         inReads.report();
         

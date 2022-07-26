@@ -1,5 +1,5 @@
 CXX = g++
-INCLUDE_DIR = -I./include -I./gflib/include
+INCLUDE_DIR = -I./include -I./gfalibs/include
 WARNINGS = -Wall -Wextra
 
 CXXFLAGS = -g -std=gnu++14 -O3 $(INCLUDE_DIR) $(WARNINGS)
@@ -8,25 +8,37 @@ TARGET = rdeval
 BUILD = build/bin
 SOURCE = src
 INCLUDE = include
-LDFLAGS :=
+BINDIR := $(BUILD)/.o
 
-GFLIB_DIR := $(CURDIR)/gflib
-GFLIB_FILES := $(GFLIB_DIR)/$(SOURCE)/* $(GFLIB_DIR)/$(INCLUDE)/*
+LDFLAGS := -pthread
+LIBS = -lz
 
-main: $(SOURCE)/main.cpp $(GFLIB_FILES) | $(BUILD)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(SOURCE)/main.cpp -o $(BUILD)/$(TARGET)
+OBJS := main input reads
+BINS := $(addprefix $(BINDIR)/, $(OBJS))
 
-$(GFLIB_FILES): gflib
+GFALIBS_DIR := $(CURDIR)/gfalibs
+GFALIBS_FILES := $(GFALIBS_DIR)/$(SOURCE)/* $(GFALIBS_DIR)/$(INCLUDE)/*
+
+head: $(BINS) $(GFALIBS_FILES) | $(BUILD)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(BUILD)/$(TARGET) $(BINDIR)/* $(GFALIBS_DIR)/*.o $(LIBS)
+
+$(BINDIR)%: $(SOURCE)/%.cpp $(INCLUDE)/%.h | $(BINDIR)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -c $(SOURCE)/$(notdir $@).cpp -o $@
+
+$(GFALIBS_FILES): gfalibs
 	@# Do nothing
 
 
-.PHONY: gflib
-gflib:
-	$(MAKE) -j -C $(GFLIB_DIR)
+.PHONY: gfalibs
+gfalibs:
+	$(MAKE) -j -C $(GFALIBS_DIR)
 	
 $(BUILD):
 	-mkdir -p $@
 	
+$(BINDIR):
+	-mkdir -p $@
+	
 clean:
-	$(MAKE) -j -C $(GFLIB_DIR) clean
+	$(MAKE) -j -C $(GFALIBS_DIR) clean
 	$(RM) -r build
