@@ -20,7 +20,7 @@ GFALIBS_DIR := $(CURDIR)/gfalibs
 GFALIBS_FILES := $(GFALIBS_DIR)/$(SOURCE)/* $(GFALIBS_DIR)/$(INCLUDE)/*
 
 head: $(BINS) $(GFALIBS_FILES) | $(BUILD)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(BUILD)/$(TARGET) $(BINDIR)/* $(GFALIBS_DIR)/*.o $(LIBS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(BUILD)/$(TARGET) $(BINDIR)/* $(LIBS)
 
 $(BINDIR)%: $(SOURCE)/%.cpp $(INCLUDE)/%.h | $(BINDIR)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -c $(SOURCE)/$(notdir $@).cpp -o $@
@@ -32,6 +32,7 @@ $(GFALIBS_FILES): gfalibs
 .PHONY: gfalibs
 gfalibs:
 	$(MAKE) -j -C $(GFALIBS_DIR)
+	mv $(GFALIBS_DIR)/*.o $(BINDIR)/
 	
 $(BUILD):
 	-mkdir -p $@
