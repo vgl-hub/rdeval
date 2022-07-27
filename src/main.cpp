@@ -15,7 +15,7 @@ int stats_flag;
 int maxThreads = 0;
 
 std::mutex mtx;
-ThreadPool<std::function<void()>> threadPool;
+ThreadPool<std::function<bool()>> threadPool;
 Log lg;
 
 int main(int argc, char **argv) {
@@ -133,14 +133,20 @@ int main(int argc, char **argv) {
     
     InReads inReads; // initialize sequence collection object
     lg.verbose("Read object generated");
+    
+    threadPool.init(maxThreads); // initialize threadpool
 
     in.read(inReads); // read input content to inReads container
+    
+    jobWait(threadPool);
 
     if (stats_flag) { // output summary statistics
         
         inReads.report();
         
     }
+    
+    threadPool.join(); // join threads
     
     exit(EXIT_SUCCESS);
     

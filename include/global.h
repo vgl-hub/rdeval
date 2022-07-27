@@ -22,7 +22,7 @@ extern int verbose_flag;
 extern int maxThreads;
 
 extern std::mutex mtx;
-extern ThreadPool<std::function<void()>> threadPool;
+extern ThreadPool<std::function<bool()>> threadPool;
 extern Log lg;
 
 #endif /* GLOBAL_H */
