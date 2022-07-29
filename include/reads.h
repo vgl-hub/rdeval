@@ -23,7 +23,7 @@ public:
     
     void load(UserInput userInput);
     
-    void traverseInReads(Sequences* sequence);
+    bool traverseInReads(Sequences* sequence);
     
     InSegment* traverseInRead(Log* threadLog, Sequence* sequence, unsigned int seqPos);
     

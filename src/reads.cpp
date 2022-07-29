@@ -178,7 +178,7 @@ void InReads::appendReads(Sequences* readBatch) { // read a collection of reads
     
 }
 
-void InReads::traverseInReads(Sequences* readBatch) { // traverse the read
+bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
 
     Log threadLog;
     
@@ -205,6 +205,8 @@ void InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     logs.push_back(threadLog);
     
     lck.unlock();
+    
+    return true;
     
 }
 
