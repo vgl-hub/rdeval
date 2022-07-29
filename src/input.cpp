@@ -3,6 +3,7 @@
 #include <string>
 #include <queue>
 #include <thread>
+#include <cstring>
 
 #include <iostream>
 #include <fstream>
