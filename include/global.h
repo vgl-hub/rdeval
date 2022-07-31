@@ -19,6 +19,7 @@ extern short int tabular_flag;
 extern int outBubbles_flag;
 extern int stats_flag;
 extern int verbose_flag;
+extern int discoverPaths_flag;
 extern int maxThreads;
 
 extern std::mutex mtx;

@@ -13,6 +13,7 @@ int verbose_flag;
 int outBubbles_flag;
 int stats_flag;
 int maxThreads = 0;
+int discoverPaths_flag;
 
 std::mutex mtx;
 ThreadPool<std::function<bool()>> threadPool;
