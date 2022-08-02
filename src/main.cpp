@@ -43,6 +43,7 @@ int main(int argc, char **argv) {
     static struct option long_options[] = { // struct mapping long options
         {"input-reads", required_argument, 0, 'r'},
         
+        {"verbose", no_argument, &verbose_flag, 1},
         {"cmd", no_argument, &cmd_flag, 1},
         {"version", no_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
@@ -73,7 +74,6 @@ int main(int argc, char **argv) {
                         return EXIT_FAILURE;
                 }
                 break;
-            default: // handle positional arguments
                 
             case 0: // case for long options without short options
                 
@@ -81,7 +81,8 @@ int main(int argc, char **argv) {
 //                  splitLength = atoi(optarg);
                 
                 break;
-                
+            
+            default: // handle positional arguments
             case 'r': // input reads
                 
                 if (isPipe && userInput.pipeType == 'n') { // check whether input is from pipe and that pipe input was not already set
@@ -90,8 +91,14 @@ int main(int argc, char **argv) {
                 
                 }else{ // input is a regular file
                     
-                    ifFileExists(optarg);
-                    userInput.iReadFileArg = optarg;
+                    optind--;
+                    for( ;optind < argc && *argv[optind] != '-'; optind++){
+                        
+                        ifFileExists(argv[optind]);
+                        userInput.iReadFileArg.push_back(argv[optind]);
+                        
+                    }
+                    
                     stats_flag = true;
                     
                 }
@@ -107,6 +114,7 @@ int main(int argc, char **argv) {
                 printf("mytool [command]\n");
                 printf("\nOptions:\n");
                 printf("-r --reads <file> input file (fasta, fastq [.gz]). Optional reads. Summary statistics will be generated.\n");
+                printf("--verbose verbose output.\n");
                 printf("-v --version software version.\n");
                 printf("--cmd print $0 to stdout.\n");
                 exit(0);
