@@ -32,10 +32,12 @@ int main(int argc, char **argv) {
     UserInput userInput; // initialize input object
     
     std::string cmd;
+
+    char helpStr[] = "rdeval input.[fasta|fastq|gfa][.gz] [expected genome size]";
     
     if (argc == 1) { // gfastats with no arguments
             
-        printf("mytool [command]\n-h for additional help.\n");
+        printf("%s", helpStr);
         exit(0);
         
     }
@@ -106,14 +108,14 @@ int main(int argc, char **argv) {
                 break;
                 
             case 'v': // software version
-                printf("mytool v%s\n", version.c_str());
+                printf("rdeval v%s\n", version.c_str());
                 printf("Giulio Formenti giulio.formenti@gmail.com\n");
                 exit(0);
                 
             case 'h': // help
-                printf("mytool [command]\n");
+                printf("%s", helpStr);
                 printf("\nOptions:\n");
-                printf("-r --reads <file> input file (fasta, fastq [.gz]). Optional reads. Summary statistics will be generated.\n");
+                printf("-r --reads <file1> <file2> <file n> input file (fasta, fastq [.gz]). Optional reads. Summary statistics will be generated.\n");
                 printf("--verbose verbose output.\n");
                 printf("-v --version software version.\n");
                 printf("--cmd print $0 to stdout.\n");
