@@ -16,6 +16,7 @@ class InReads {
     
     std::vector<unsigned long long int> readNstars    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     std::vector<unsigned int> readLstars     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<unsigned long long int> readLens;
     
 public:
     
@@ -34,6 +35,10 @@ public:
     double computeAvgReadLen();
     
     unsigned long long int getReadN50();
+
+    int getSmallestRead();
+
+    int getLargestRead();
     
     void report();
     

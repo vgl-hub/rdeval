@@ -194,11 +194,16 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     
     std::vector<InSegment*> inReadsBatch;
     
-    unsigned int readN = 0;
-    
+    unsigned int readN = 0; 
+    std::vector<unsigned long long int> readLensBatch;
+    InSegment* read;
+
     for (Sequence* sequence : readBatch->sequences) {
         
-        inReadsBatch.push_back(traverseInRead(&threadLog, sequence, readBatch->batchN+readN++));
+        read = traverseInRead(&threadLog, sequence, readBatch->batchN+readN++);
+        readLensBatch.push_back(read->getSegmentLen());
+
+        inReadsBatch.push_back(read);
         
     }
     
@@ -209,6 +214,8 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     lck.lock();
     
     inReads.insert(std::end(inReads), std::begin(inReadsBatch), std::end(inReadsBatch));
+    readLens.insert(std::end(readLens), std::begin(readLensBatch), std::end(readLensBatch));
+
     
     logs.push_back(threadLog);
     
@@ -220,7 +227,7 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
 
 InSegment* InReads::traverseInRead(Log* threadLog, Sequence* sequence, unsigned int seqPos) { // traverse a single read
     
-    unsigned long long int A = 0, C = 0, G = 0, T = 0, lowerCount = 0;
+    unsigned long long int A = 0, C = 0, G = 0, T = 0, N = 0, lowerCount = 0;
     
     for (char &base : *sequence->sequence) {
         
@@ -234,30 +241,39 @@ InSegment* InReads::traverseInRead(Log* threadLog, Sequence* sequence, unsigned 
             case 'A':
             case 'a':{
                 
-                A++;
+                ++A;
                 break;
                 
             }
             case 'C':
             case 'c':{
                 
-                C++;
+                ++C;
                 break;
                 
             }
             case 'G':
             case 'g': {
                 
-                G++;
+                ++G;
                 break;
                 
             }
             case 'T':
             case 't': {
                 
-                T++;
+                ++T;
                 break;
                 
+            }
+
+            case 'N':
+            case 'n':
+            case 'X':
+            case 'x': {
+
+                ++N;
+                break;
             }
                 
             default: {
@@ -271,7 +287,7 @@ InSegment* InReads::traverseInRead(Log* threadLog, Sequence* sequence, unsigned 
     // operations on the segment
     InSegment* inSegment = new InSegment;
     
-    inSegment->set(threadLog, 0, 0, sequence->header, &sequence->comment, sequence->sequence, &A, &C, &G, &T, &lowerCount, seqPos, sequence->sequenceQuality);
+    inSegment->set(threadLog, 0, 0, sequence->header, &sequence->comment, sequence->sequence, &A, &C, &G, &T, &lowerCount, seqPos, sequence->sequenceQuality, NULL, &N);
     
     return inSegment;
     
@@ -305,16 +321,20 @@ unsigned long long int InReads::getReadN50() {
 
 void InReads::evalNstars() {
 
-    std::vector<unsigned long long int> readLens;
-
-    for (InSegment* read : inReads) {
-        
-        readLens.push_back(read->getA() + read->getC() + read->getG() + read->getT());
-
-    }
-
-    computeNstars(readLens, readNstars, readLstars);
+    computeNstars(readLens, readNstars, readLstars); // WOULD BE HELPFUL TO READLENS OUTSIDE OF THIS FUNCTION
     
+}
+
+int InReads::getSmallestRead() {
+
+    return readLens.back();
+
+}
+
+int InReads::getLargestRead() {
+
+    return readLens.front();
+
 }
 
 void InReads::report() {
@@ -332,6 +352,9 @@ void InReads::report() {
         std::cout<<output("Average read length") << gfa_round(computeAvgReadLen()) << "\n";
         evalNstars(); // read N* statistics
         std::cout<<output("Read N50")<<getReadN50()<<"\n";
+        std::cout<<output("Smallest read length")<<getSmallestRead()<<"\n";
+        std::cout<<output("Largest read length")<<getLargestRead()<<"\n";
+
         
     }
     
