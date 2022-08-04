@@ -45,6 +45,8 @@ int main(int argc, char **argv) {
     static struct option long_options[] = { // struct mapping long options
         {"input-reads", required_argument, 0, 'r'},
         
+        {"threads", required_argument, 0, 'j'},
+        
         {"verbose", no_argument, &verbose_flag, 1},
         {"cmd", no_argument, &cmd_flag, 1},
         {"version", no_argument, 0, 'v'},
@@ -57,7 +59,7 @@ int main(int argc, char **argv) {
         
         int option_index = 0;
         
-        c = getopt_long(argc, argv, "-:r:vh",
+        c = getopt_long(argc, argv, "-:r:j:vh",
                         long_options, &option_index);
         
         if (c == -1) { // exit the loop if run out of options
@@ -85,6 +87,15 @@ int main(int argc, char **argv) {
                 break;
             
             default: // handle positional arguments
+                
+                if (isInt(optarg)) { // if the positional argument is a number, it is likely the expected genome size
+                    
+                    gSize = atoll(optarg); pos_op++;
+                    
+                    break;
+                    
+                }
+                
             case 'r': // input reads
                 
                 if (isPipe && userInput.pipeType == 'n') { // check whether input is from pipe and that pipe input was not already set
@@ -94,7 +105,7 @@ int main(int argc, char **argv) {
                 }else{ // input is a regular file
                     
                     optind--;
-                    for( ;optind < argc && *argv[optind] != '-'; optind++){
+                    for( ;optind < argc && *argv[optind] != '-' && !isInt(argv[optind]); optind++){
                         
                         ifFileExists(argv[optind]);
                         userInput.iReadFileArg.push_back(argv[optind]);
@@ -107,6 +118,11 @@ int main(int argc, char **argv) {
                     
                 break;
                 
+            case 'j': // max threads
+                maxThreads = atoi(optarg);
+                stats_flag = 1;
+                break;
+                
             case 'v': // software version
                 printf("rdeval v%s\n", version.c_str());
                 printf("Giulio Formenti giulio.formenti@gmail.com\n");
@@ -115,6 +131,7 @@ int main(int argc, char **argv) {
             case 'h': // help
                 printf("%s", helpStr);
                 printf("\nOptions:\n");
+                printf("-j --threads <n> numbers of threads (default:max).\n");
                 printf("-r --reads <file1> <file2> <file n> input file (fasta, fastq [.gz]). Optional reads. Summary statistics will be generated.\n");
                 printf("--verbose verbose output.\n");
                 printf("-v --version software version.\n");
@@ -153,7 +170,7 @@ int main(int argc, char **argv) {
 
     if (stats_flag) { // output summary statistics
         
-        inReads.report();
+        inReads.report(gSize);
         
     }
     

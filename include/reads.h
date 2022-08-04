@@ -40,7 +40,7 @@ public:
 
     int getLargestRead();
     
-    void report();
+    void report(unsigned long long int gSize);
     
     void evalNstars();
     

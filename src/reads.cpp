@@ -337,7 +337,7 @@ int InReads::getLargestRead() {
 
 }
 
-void InReads::report() {
+void InReads::report(unsigned long long int gSize) {
 
     if (inReads.size() > 0) {
         
@@ -354,6 +354,7 @@ void InReads::report() {
         std::cout<<output("Read N50")<<getReadN50()<<"\n";
         std::cout<<output("Smallest read length")<<getSmallestRead()<<"\n";
         std::cout<<output("Largest read length")<<getLargestRead()<<"\n";
+        std::cout<<output("Coverage")<<gfa_round((double)getTotReadLen()/gSize)<<"\n";
 
         
     }

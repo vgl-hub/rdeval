@@ -19,7 +19,7 @@ rdeval testFiles/*
 
 ## How to cite
 
-If you use **gfastats** in your work, please cite:
+If you use **rdeval** in your work, please cite:
 
 Gfastats: conversion, evaluation and manipulation of genome sequences using assembly graphs
 
