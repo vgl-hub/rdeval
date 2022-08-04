@@ -95,6 +95,7 @@ int main(int argc, char **argv) {
                     break;
                     
                 }
+                /* fall through */
                 
             case 'r': // input reads
                 
