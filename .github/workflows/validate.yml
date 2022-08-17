@@ -1,0 +1,33 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    name: Validate
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            command: ".github/workflows/val.sh"
+          - os: ubuntu-latest
+            command: ".github/workflows/val.sh"
+            chmod: true
+          - os: windows-2019
+            command: ".github/workflows/val.bat"
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+            submodules: true
+    - name: Build
+      run: make all -j
+    - name: Validate
+      run: |
+        chmod +x .github/workflows/val.sh
+        ${{ matrix.command }}
+
