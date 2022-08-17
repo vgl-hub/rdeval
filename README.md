@@ -1,28 +1,10 @@
-# rdeval
-Multithreaded read analysis
+validate is automatically run on pushes to any branch, or pull requests to main
 
-## Installation
+to automatically create a new release and automatically upload mac, ubuntu, and windows builds run:
+`git tag v*`
+`git push origin v*`
+where * is the version number.
 
-Either download one of the releases or `git clone https://github.com/vgl-hub/rdeval.git --recursive` and `make -j` in `rdeval` folder.
-
-## Usage
-
-`rdeval input.[fasta|fastq|gfa][.gz] [expected genome size]`
-
-To check out all options and flags use `rdeval -h`.
-
-You can test some typical usage example:
-
-```
-rdeval testFiles/* 
-```
-
-## How to cite
-
-If you use **rdeval** in your work, please cite:
-
-Gfastats: conversion, evaluation and manipulation of genome sequences using assembly graphs
-
-Giulio Formenti, Linelle Abueg, Angelo Brajuka, Nadolina Brajuka, Cristo Gallardo, Alice Giani, Olivier Fedrigo, Erich D. Jarvis
-
-doi: https://doi.org/10.1093/bioinformatics/btac460
+Example:
+`git tag v1.2.1`
+`git push origin v1.2.1`
