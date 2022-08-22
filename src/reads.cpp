@@ -197,11 +197,16 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     unsigned int readN = 0; 
     std::vector<unsigned long long int> readLensBatch;
     InSegment* read;
+    unsigned long long int batchA = 0, batchT=0, batchC=0, batchG=0;
 
     for (Sequence* sequence : readBatch->sequences) {
         
         read = traverseInRead(&threadLog, sequence, readBatch->batchN+readN++);
         readLensBatch.push_back(read->getSegmentLen());
+        batchA += read->getA();
+        batchT += read->getT();
+        batchC += read->getC();
+        batchG += read->getG();
 
         inReadsBatch.push_back(read);
         
@@ -215,8 +220,11 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     
     inReads.insert(std::end(inReads), std::begin(inReadsBatch), std::end(inReadsBatch));
     readLens.insert(std::end(readLens), std::begin(readLensBatch), std::end(readLensBatch));
+    totA+=batchA;
+    totT+=batchT;
+    totC+=batchC;
+    totG+=batchG;
 
-    
     logs.push_back(threadLog);
     
     lck.unlock();
@@ -307,6 +315,14 @@ unsigned long long int InReads::getTotReadLen() {
     
 }
 
+int InReads::computeGCcontent() { 
+
+    unsigned long long int totReadLen = totA + totC + totG + totT; 
+    double GCcontent = (double) (totG+totC)/totReadLen * 100;
+    
+    return GCcontent;
+}
+
 double InReads::computeAvgReadLen() {
     
     return (double) getTotReadLen()/inReads.size();
@@ -337,6 +353,8 @@ int InReads::getLargestRead() {
 
 }
 
+
+
 void InReads::report(unsigned long long int gSize) {
 
     if (inReads.size() > 0) {
@@ -355,6 +373,8 @@ void InReads::report(unsigned long long int gSize) {
         std::cout<<output("Smallest read length")<<getSmallestRead()<<"\n";
         std::cout<<output("Largest read length")<<getLargestRead()<<"\n";
         std::cout<<output("Coverage")<<gfa_round((double)getTotReadLen()/gSize)<<"\n";
+        std::cout<<output("GC content %")<<computeGCcontent()<<"\n";
+        std::cout<<output("Base composition (A:C:T:G)")<<totA<<":"<<totC<<":"<<totT<<":"<<totG<<"\n";
 
         
     }

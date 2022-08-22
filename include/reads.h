@@ -17,6 +17,8 @@ class InReads {
     std::vector<unsigned long long int> readNstars    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     std::vector<unsigned int> readLstars     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     std::vector<unsigned long long int> readLens;
+    unsigned long long int totA =0, totT=0, totC=0, totG=0;
+
     
 public:
     
@@ -31,6 +33,8 @@ public:
     void appendReads(Sequences* readBatch);
     
     unsigned long long int getTotReadLen();
+
+    int computeGCcontent();
     
     double computeAvgReadLen();
     
@@ -43,6 +47,11 @@ public:
     void report(unsigned long long int gSize);
     
     void evalNstars();
+
+    int meanQual(); 
+
+    int medQual();
+
     
 };
 
