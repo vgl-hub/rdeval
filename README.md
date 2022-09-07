@@ -29,7 +29,7 @@ To check out all options and flags use `rdeval -h`.
 You can test some typical usage with the files in the `testFiles` folder, e.g.:
 
 ```
-gfastats testFiles/random1.fasta 10 // computes summary statistics, including coverage (expected genome size 10bp)
+rdeval testFiles/random1.fastq 10 // computes summary statistics, including coverage (expected genome size 10bp)
 ```
 
 ## How to cite
