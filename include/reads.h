@@ -45,13 +45,10 @@ public:
     int getLargestRead();
     
     void report(unsigned long long int gSize);
+
+    void printReadLengths(char sizeOutType);
     
     void evalNstars();
-
-    int meanQual(); 
-
-    int medQual();
-
     
 };
 

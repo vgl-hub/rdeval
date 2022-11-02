@@ -303,15 +303,7 @@ InSegment* InReads::traverseInRead(Log* threadLog, Sequence* sequence, unsigned 
 
 unsigned long long int InReads::getTotReadLen() {
     
-    unsigned long long int totReadLen = 0;
-    
-    for (InSegment* read : inReads) {
-        
-        totReadLen += read->getA() + read->getC() + read->getG() + read->getT();
-        
-    }
-    
-    return totReadLen;
+    return totA + totC + totG + totT;
     
 }
 
@@ -375,6 +367,84 @@ void InReads::report(unsigned long long int gSize) {
         std::cout<<output("Coverage")<<gfa_round((double)getTotReadLen()/gSize)<<"\n";
         std::cout<<output("GC content %")<<computeGCcontent()<<"\n";
         std::cout<<output("Base composition (A:C:T:G)")<<totA<<":"<<totC<<":"<<totT<<":"<<totG<<"\n";
+        std::cout<<output("Average read quality")<<getAvgQualities()<<"\n";
+        
+    }
+    
+}
+
+
+bool compareReadLengths(InRead* read1, InRead* read2) {
+    return (read1->getReadLen() < read2->getReadLen());
+
+}
+
+void InReads::printReadLengths(char sizeOutType) {
+
+    // if (sizeOutType == 's') {
+    //     sort(inReads.begin(), inReads.end(), compareReadLengths);
+    // }
+
+    // for (InRead* read : inReads) {
+        
+    //     std::cout << (read->getA() + read->getC() + read->getG() + read->getT()) << "\n";
+        
+    // }
+}
+
+InRead::~InRead()
+{
+    delete inRead;
+    delete inSequenceQuality;
+}
+
+void InRead::set(Log* threadLog, unsigned int uId, unsigned int iId, std::string seqHeader, std::string* seqComment, std::string* sequence, unsigned long long int* A, unsigned long long int* C, unsigned long long int* G, unsigned long long int* T, unsigned long long int* lowerCount, unsigned int seqPos, std::string* sequenceQuality, double* avgQuality, std::vector<Tag>* inSequenceTags, unsigned long long int* N) {
+    
+    threadLog->add("Processing read: " + seqHeader + " (uId: " + std::to_string(uId) + ", iId: " + std::to_string(iId) + ")");
+    
+    unsigned long long int seqSize = 0;
+    
+    this->setiId(iId); // set temporary sId internal to scaffold
+    
+    this->setuId(uId); // set absolute id
+    
+    this->setReadPos(seqPos); // set original order
+    
+    this->setReadHeader(&seqHeader);
+    
+    if (*seqComment != "") {
+        
+        this->setReadComment(*seqComment);
+        
+    }
+    
+    if (inSequenceTags != NULL) {
+        
+        this->setReadTags(inSequenceTags);
+        
+    }
+    
+    if (*sequence != "*") {
+        
+        this->setInRead(sequence);
+        
+        threadLog->add("Segment sequence set");
+        
+        if (sequenceQuality != NULL) {
+            
+            this->setInReadQuality(sequenceQuality);
+            
+            threadLog->add("Segment sequence quality set");
+
+            this->setAvgQuality(avgQuality);
+            
+        }
+        
+        this->setACGT(A, C, G, T, N);
+        
+        threadLog->add("Increased ACGT counts");
+        
+        this->setLowerCount(lowerCount);
 
         
     }
