@@ -3,7 +3,7 @@
 
 struct UserInputRdeval : UserInput {
 
-    std::string filter;
+    std::string filter = "none";
 
 };
 

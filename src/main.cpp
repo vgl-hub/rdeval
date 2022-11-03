@@ -174,7 +174,6 @@ int main(int argc, char **argv) {
         printf("\n");
         
     }
-    
     Input in;
     in.load(userInput); // load user input
 
@@ -191,6 +190,7 @@ int main(int argc, char **argv) {
 
     if (stats_flag) { // output summary statistics
         
+
         inReads.report(gSize);
         
     }

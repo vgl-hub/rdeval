@@ -202,8 +202,11 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
     InRead* read;
     unsigned long long int batchA = 0, batchT=0, batchC=0, batchG=0;
     std::vector<double> batchAvgQualities;
-    unsigned long long int filterInt = stoi(userInput->filter.substr(1));
-    
+    unsigned int filterInt;
+    if (!(userInput->filter == "none")) {
+        filterInt = stoi(userInput->filter.substr(1));
+    }
+
     // perhaps I need to hard code a small function because the filter is currently in the for-loop and basically requires re-parsing the filter operand each time
 
     for (Sequence* sequence : readBatch->sequences) {
@@ -338,15 +341,14 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, unsigned int
 
 unsigned long long int InReads::getTotReadLen() {
     
-    // unsigned long long int totReadLen = totA + totC + totG + totT;
+    // unsigned long long int totReadLen;
     
     // for (InRead* read : inReads) {
         
-    //     totReadLen += read->getA() + read->getC() + read->getG() + read->getT();
+    //     totReadLen = read->getA() + read->getC() + read->getG() + read->getT();
+    //     std::cout << totReadLen << "\n";
         
     // }
-
-
     
     return totA + totC + totG + totT;
     
