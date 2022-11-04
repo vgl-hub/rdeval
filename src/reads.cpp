@@ -101,6 +101,12 @@ void InReads::load(UserInput userInput) {
                     break;
                 }
                 case '@': {
+                    
+                    char c;
+                    while (stream->get(c))          // loop getting single characters
+                      std::cout << c;
+                    
+                    exit(1);
 
                     while (getline(*stream, newLine)) { // file input
 
@@ -145,13 +151,6 @@ void InReads::load(UserInput userInput) {
                         }
 
                         lg.verbose("Individual fastq sequence read: " + seqHeader);
-                        
-                        if (stream->good())  {                    // check for EOF
-                            std::cout << stream->get();
-                            exit(1);}
-                        else{
-                            std::cout << "[error reading]\n";
-                        }
 
                     }
 
