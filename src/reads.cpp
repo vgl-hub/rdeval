@@ -124,20 +124,20 @@ void InReads::load(UserInput userInput) {
                         }
 
                         std::string* inSequence = new std::string;
-                        getline(*stream, *inSequence);
+                        getline(*stream, *inSequence, '\n');
                         
                         lg.verbose(*inSequence);
 
-                        getline(*stream, newLine);
+                        getline(*stream, newLine, '\n');
                         
                         lg.verbose(newLine);
 
                         std::string* inSequenceQuality = new std::string;
-                        getline(*stream, *inSequenceQuality);
+                        getline(*stream, *inSequenceQuality, '\n');
                         
                         lg.verbose(*inSequenceQuality);
                         
-                        getline(*stream, *inSequenceQuality);
+                        getline(*stream, *inSequenceQuality, '\n');
                         lg.verbose(*inSequenceQuality);
 
                         readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence, inSequenceQuality});
