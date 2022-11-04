@@ -136,6 +136,9 @@ void InReads::load(UserInput userInput) {
                         getline(*stream, *inSequenceQuality);
                         
                         lg.verbose(*inSequenceQuality);
+                        
+                        getline(*stream, *inSequenceQuality);
+                        lg.verbose(*inSequenceQuality);
 
                         readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence, inSequenceQuality});
                         seqPos++;
