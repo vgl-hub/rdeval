@@ -103,6 +103,8 @@ void InReads::load(UserInput userInput) {
                 case '@': {
 
                     while (getline(*stream, newLine)) { // file input
+                        
+                        lg.verbose("Started reading sequence ");
 
                         newLine.erase(0, 1);
 
