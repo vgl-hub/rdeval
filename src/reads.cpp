@@ -102,9 +102,9 @@ void InReads::load(UserInput userInput) {
                 }
                 case '@': {
                     
-                    char c;
-                    while (stream->get(c))          // loop getting single characters
-                      std::cout << c;
+                    char test;
+                    while (stream->get(test))          // loop getting single characters
+                      std::cout << test;
                     
                     exit(1);
 
