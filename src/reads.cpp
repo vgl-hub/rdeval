@@ -49,12 +49,6 @@ void InReads::load(UserInput userInput) {
         StreamObj streamObj;
 
         stream = streamObj.openStream(userInput, 'r', &i);
-        
-        char test;
-        while (stream->get(test))          // loop getting single characters
-          std::cout << test;
-        
-        exit(1);
 
         Sequences* readBatch = new Sequences;
 
