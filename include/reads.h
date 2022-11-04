@@ -110,7 +110,7 @@ class InReads {
     std::vector<unsigned long long int> readNstars    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     std::vector<unsigned int> readLstars     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     std::vector<unsigned long long int> readLens;
-    unsigned long long int totA =0, totT=0, totC=0, totG=0;
+    unsigned long long int totA =0, totT=0, totC=0, totG=0, totN=0;
     std::vector<std::string> qualities;
     std::vector<double> avgQualities; 
     std::vector<std::vector<int>> qualitiesInts;
@@ -145,12 +145,10 @@ public:
     double getAvgQualities();
     
     void report(unsigned long long int gSize);
+
+    void printReadLengths(char sizeOutType);
     
     void evalNstars();
-
-    int meanQual(); 
-
-    int medQual();
 
     
 };

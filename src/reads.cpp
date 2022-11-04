@@ -200,7 +200,7 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
     unsigned int readN = 0; 
     std::vector<unsigned long long int> readLensBatch;
     InRead* read;
-    unsigned long long int batchA = 0, batchT=0, batchC=0, batchG=0;
+    unsigned long long int batchA = 0, batchT=0, batchC=0, batchG=0, batchN =0;
     std::vector<double> batchAvgQualities;
     unsigned int filterInt;
     if (!(userInput->filter == "none")) {
@@ -230,6 +230,7 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
         batchT += read->getT();
         batchC += read->getC();
         batchG += read->getG();
+        batchN += read->getN();
 
         batchAvgQualities.push_back(read->getAvgQuality());
         
@@ -252,6 +253,7 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
     totT+=batchT;
     totC+=batchC;
     totG+=batchG;
+    totN+=batchN;
 
     logs.push_back(threadLog);
     
@@ -350,7 +352,7 @@ unsigned long long int InReads::getTotReadLen() {
         
     // }
     
-    return totA + totC + totG + totT;
+    return totA + totC + totG + totT + totN;
     
 }
 
@@ -445,6 +447,40 @@ void InReads::report(unsigned long long int gSize) {
         
     }
     
+}
+
+// bool compareReadLengths(InRead* read1, InRead* read2) {
+//     return (read1->getReadLen() < read2->getReadLen());
+
+// }
+
+void InReads::printReadLengths(char sizeOutType) {
+
+    if (sizeOutType == 's' || sizeOutType == 'h') {
+        sort(readLens.begin(), readLens.end());
+
+    }
+
+    if (sizeOutType == 'h') {
+        
+        int count = 1; 
+        for (unsigned long long int i = 0; i < readLens.size(); i++) {
+            if (readLens[i] == readLens[i+1]) {
+                count += 1;
+            }
+            else if (readLens[i] != readLens[i+1]) {
+                std::cout << readLens[i] << "   " << count << "\n";
+                count = 1;
+            }
+        }
+    }
+
+    else {
+        for (auto i: readLens) {
+            std::cout << i << "\n";
+        }
+    }
+
 }
 
 InRead::~InRead()
@@ -674,6 +710,11 @@ unsigned long long int InRead::getT() {
     return T;
 }
 
+unsigned long long int InRead::getN() {
+
+    return N;
+}
+
 
 
 unsigned int InRead::getLowerCount(unsigned long long int start, unsigned long long int end) {
@@ -704,7 +745,7 @@ unsigned int InRead::getLowerCount(unsigned long long int start, unsigned long l
 
 double InRead::computeGCcontent() {
     
-    double GCcontent = (double) (G + C) / (G + C + A + T) * 100;
+    double GCcontent = (double) (G + C) / (G + C + A + T + N) * 100;
     
     return GCcontent;
 }
