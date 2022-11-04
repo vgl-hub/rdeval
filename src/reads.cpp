@@ -146,11 +146,12 @@ void InReads::load(UserInput userInput) {
 
                         lg.verbose("Individual fastq sequence read: " + seqHeader);
                         
-                        if (stream->good())                      // check for EOF
-                          std::cout << stream->get();
-                        exit(1);
-                        else
-                          std::cout << "[error reading]\n";
+                        if (stream->good())  {                    // check for EOF
+                            std::cout << stream->get();
+                            exit(1);}
+                        else{
+                            std::cout << "[error reading]\n";
+                        }
 
                     }
 
