@@ -102,9 +102,7 @@ void InReads::load(UserInput userInput) {
                 }
                 case '@': {
 
-                    while (getline(*stream, newLine, '\n')) { // file input
-                        
-                        lg.verbose("Started reading sequence ");
+                    while (getline(*stream, newLine)) { // file input
 
                         newLine.erase(0, 1);
 
@@ -124,21 +122,12 @@ void InReads::load(UserInput userInput) {
                         }
 
                         std::string* inSequence = new std::string;
-                        getline(*stream, *inSequence, '\n');
-                        
-                        lg.verbose(*inSequence);
+                        getline(*stream, *inSequence);
 
-                        getline(*stream, newLine, '\n');
-                        
-                        lg.verbose(newLine);
+                        getline(*stream, newLine);
 
                         std::string* inSequenceQuality = new std::string;
-                        getline(*stream, *inSequenceQuality, '\n');
-                        
-                        lg.verbose(*inSequenceQuality);
-                        
-                        getline(*stream, *inSequenceQuality, '\n');
-                        lg.verbose(*inSequenceQuality);
+                        getline(*stream, *inSequenceQuality);
 
                         readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence, inSequenceQuality});
                         seqPos++;
@@ -156,6 +145,11 @@ void InReads::load(UserInput userInput) {
                         }
 
                         lg.verbose("Individual fastq sequence read: " + seqHeader);
+                        
+                        if (stream->eof())                      // check for EOF
+                          std::cout << "[EoF reached]\n";
+                        else
+                          std::cout << "[error reading]\n";
 
                     }
 
