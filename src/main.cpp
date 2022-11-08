@@ -158,7 +158,7 @@ int main(int argc, char **argv) {
                 printf("\nOptions:\n");
                 printf("-j --threads <n> numbers of threads (default:max).\n");
                 printf("-f --filter <n> minimum length for retention (default:0).\n");
-                printf("-s --out-size u|s|h  generates size list (unsorted|sorted|histogram).\n");
+                printf("-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cummulative table).\n");
                 printf("-r --reads <file1> <file2> <file n> input file (fasta, fastq [.gz]). Optional reads. Summary statistics will be generated.\n");
                 printf("--verbose verbose output.\n");
                 printf("-v --version software version.\n");

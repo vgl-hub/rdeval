@@ -456,13 +456,14 @@ void InReads::report(unsigned long long int gSize) {
 
 void InReads::printReadLengths(char sizeOutType) {
 
-    if (sizeOutType == 's' || sizeOutType == 'h') {
+    if (sizeOutType == 's' || sizeOutType == 'h' || sizeOutType == 'c') {
         sort(readLens.begin(), readLens.end());
 
     }
 
     if (sizeOutType == 'h') {
-        
+
+
         int count = 1; 
         for (unsigned long long int i = 0; i < readLens.size(); i++) {
             if (readLens[i] == readLens[i+1]) {
@@ -473,6 +474,39 @@ void InReads::printReadLengths(char sizeOutType) {
                 count = 1;
             }
         }
+    }
+
+    if (sizeOutType == 'c') {
+
+        int count = 1; 
+        unsigned long long int sizexCount;
+        std::vector<unsigned int> counts;
+        std::vector<unsigned long long int> sizexCounts;
+        unsigned long long int sizexCountSum = 0;
+        std::vector<unsigned long long int> uniqReadLens;
+
+        for (unsigned long long int i = 0; i < readLens.size(); i++) {
+            if (readLens[i] == readLens[i+1]) {
+                count += 1; 
+            }
+            else if (readLens[i] != readLens[i+1]) {
+                sizexCount = (readLens[i] * count);
+                counts.push_back(count);
+                sizexCounts.push_back(sizexCount);
+                uniqReadLens.push_back(readLens[i]);
+                sizexCountSum += sizexCount;
+
+                count = 1;
+            }
+        }
+
+        unsigned long long int sizexCountSums = 0; 
+        for (unsigned long long int i = 0; i < sizexCounts.size(); i++) {
+            std::cout << uniqReadLens[i] << "," << counts[i] << "," <<sizexCounts[i] << "," << sizexCountSum - sizexCountSums << "\n"; 
+            sizexCountSums += sizexCounts[i];
+        }
+
+
     }
 
     else {
