@@ -147,6 +147,8 @@ public:
     void report(unsigned long long int gSize);
 
     void printReadLengths(char sizeOutType);
+
+    void printQualities(char qualityOut);
     
     void evalNstars();
 

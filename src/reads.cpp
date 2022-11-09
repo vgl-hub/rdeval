@@ -517,6 +517,21 @@ void InReads::printReadLengths(char sizeOutType) {
 
 }
 
+void InReads::printQualities(char qualityOut) {
+
+    if (qualityOut == 'c'){ 
+        for (unsigned long long int i = 0; i < (avgQualities.size()); i++) {
+            std::cout << avgQualities[i] << "\n"; 
+        }
+    }
+    else if (qualityOut == 'l') { // l prints read lengths and qualities 
+        for (unsigned long long int i = 0; i < (avgQualities.size()); i++) {
+            std::cout << readLens[i] << "," << avgQualities[i] << "\n";
+        }
+    }
+
+}
+
 InRead::~InRead()
 {
     delete inRead;
