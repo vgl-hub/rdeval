@@ -463,7 +463,6 @@ void InReads::printReadLengths(char sizeOutType) {
 
     if (sizeOutType == 'h') {
 
-
         int count = 1; 
         for (unsigned long long int i = 0; i < readLens.size(); i++) {
             if (readLens[i] == readLens[i+1]) {

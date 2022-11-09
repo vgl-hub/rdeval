@@ -150,12 +150,14 @@ int main(int argc, char **argv) {
                 sizeOutType = *optarg;
                 outSize_flag = 1;
                 stats_flag = false;
+                quality_flag = false;
                 break;
 
             case 'q':
                 qualityOut = *optarg;
                 quality_flag = 1;
                 stats_flag = false;
+                outSize_flag = false;
                 break;
 
 
