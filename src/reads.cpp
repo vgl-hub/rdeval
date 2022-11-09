@@ -470,7 +470,7 @@ void InReads::printReadLengths(char sizeOutType) {
                 count += 1;
             }
             else if (readLens[i] != readLens[i+1]) {
-                std::cout << readLens[i] << "   " << count << "\n";
+                std::cout << readLens[i] << "," << count << "\n";
                 count = 1;
             }
         }
