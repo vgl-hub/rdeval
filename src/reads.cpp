@@ -54,12 +54,12 @@ void InReads::load(UserInput userInput) {
         
         char ch;
         
-        while (stream->get(ch) && ch != EOF)
-          std::cout<<ch;
-        
-        std::cout<<std::endl;
-        
-        exit(1);
+//        while (stream->get(ch) && ch != EOF)
+//          std::cout<<ch;
+//        
+//        std::cout<<std::endl;
+//        
+//        exit(1);
 
         if (stream) {
 
