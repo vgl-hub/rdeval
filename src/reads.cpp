@@ -32,6 +32,15 @@ InReads::~InReads()
 
 }
 
+std::istream& getline(std::istream& stream, std::string& str)
+{
+  char ch;
+  str.clear();
+  while (stream.get(ch) && ch != '\n')
+    str.push_back(ch);
+  return stream;
+}
+
 void InReads::load(UserInput userInput) {
 
     unsigned int batchSize = 100;
@@ -51,15 +60,6 @@ void InReads::load(UserInput userInput) {
         stream = streamObj.openStream(userInput, 'r', &i);
 
         Sequences* readBatch = new Sequences;
-        
-        char ch;
-        
-//        while (stream->get(ch) && ch != EOF)
-//          std::cout<<ch;
-//        
-//        std::cout<<std::endl;
-//        
-//        exit(1);
 
         if (stream) {
 
