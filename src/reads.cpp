@@ -24,6 +24,15 @@
 
 #include "reads.h"
 
+std::istream& getline(std::istream& stream, std::string& str)
+{
+  char ch;
+  str.clear();
+  while (stream.get(ch) && ch != '\n')
+    str.push_back(ch);
+  return stream;
+}
+
 InReads::~InReads()
 {
 
