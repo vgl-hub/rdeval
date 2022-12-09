@@ -32,15 +32,6 @@ InReads::~InReads()
 
 }
 
-std::istream& getline(std::istream& stream, std::string& str)
-{
-  char ch;
-  str.clear();
-  while (stream.get(ch) && ch != '\n')
-    str.push_back(ch);
-  return stream;
-}
-
 void InReads::load(UserInput userInput) {
 
     unsigned int batchSize = 100;
