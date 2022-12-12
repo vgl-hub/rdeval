@@ -1,17 +1,26 @@
 #include <stdlib.h>
+#include <string>
+#include <vector>
+#include <mutex>
+#include <string.h>
 
-#include <istream>
+#include <iostream>
 #include <fstream>
+
+#include "zlib.h"
+#include <zstream/zstream_common.hpp>
+#include <zstream/izstream.hpp>
+#include <zstream/izstream_impl.hpp>
 
 #include "log.h"
 #include "global.h"
 
 #include "bed.h"
 #include "struct.h"
-#include "functions.h" // global functions
 #include "gfa-lines.h"
-
 #include "stream-obj.h"
+
+#include "functions.h" // global functions
 
 #include "reads.h"
 
@@ -94,7 +103,7 @@ void InReads::load(UserInput userInput) {
                         arguments = readDelimited(newLine, " ");
 
                         seqHeader = arguments[0]; //process header line
-//                        seqComment = arguments[1]; //read comment
+                        seqComment = arguments[1]; //read comment
 
                         std::string* inSequence = new std::string;
                         getline(*stream, *inSequence);
