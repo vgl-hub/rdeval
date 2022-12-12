@@ -1,7 +1,7 @@
 #include <stdlib.h>
-#include <string>
+#include <unistd.h>
 
-#include <iostream>
+#include <istream>
 #include <fstream>
 
 #include "log.h"
@@ -12,7 +12,6 @@
 #include "functions.h" // global functions
 #include "gfa-lines.h"
 
-#include "zlib.h"
 #include "stream-obj.h"
 
 #include "reads.h"
