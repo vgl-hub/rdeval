@@ -42,6 +42,8 @@ void InReads::load(UserInput userInput) {
         stream = streamObj.openStream(userInput, 'r', &i);
 
         Sequences* readBatch = new Sequences;
+        
+        std::vector<std::string> arguments;
 
         if (stream) {
 
@@ -52,17 +54,11 @@ void InReads::load(UserInput userInput) {
                     stream->get();
 
                     while (getline(*stream, newLine)) {
+                        
+                        arguments = readDelimited(newLine, " ");
 
-                        h = std::string(std::strtok(std::strdup(newLine.c_str())," ")); //process header line
-                        c = strtok(NULL,""); //read comment
-
-                        seqHeader = h;
-
-                        if (c != NULL) {
-
-                            seqComment = std::string(c);
-
-                        }
+                        seqHeader = arguments[0]; //process header line
+                        seqComment = arguments[1]; //read comment
 
                         std::string* inSequence = new std::string;
 
@@ -95,20 +91,10 @@ void InReads::load(UserInput userInput) {
 
                         newLine.erase(0, 1);
 
-                        h = std::string(std::strtok(std::strdup(newLine.c_str())," ")); //process header line
-                        c = strtok(NULL,""); //read comment
+                        arguments = readDelimited(newLine, " ");
 
-                        seqHeader = h;
-
-                        if (c != NULL) {
-
-                            seqComment = std::string(c);
-
-                        }else{
-
-                            seqComment = "";
-
-                        }
+                        seqHeader = arguments[0]; //process header line
+                        seqComment = arguments[1]; //read comment
 
                         std::string* inSequence = new std::string;
                         getline(*stream, *inSequence);
