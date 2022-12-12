@@ -1,8 +1,8 @@
 #include <stdlib.h>
+#include <string.h>
 
 #include <istream>
 #include <fstream>
-#include <sstream>
 
 #include "log.h"
 #include "global.h"
