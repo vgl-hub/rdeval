@@ -12,12 +12,16 @@ int cmd_flag;
 int verbose_flag;
 int outBubbles_flag;
 int stats_flag;
+int outSize_flag;
+int filterInput = 0;
+int quality_flag;
 int maxThreads = 0;
 int discoverPaths_flag;
 
 std::mutex mtx;
 ThreadPool<std::function<bool()>> threadPool;
 Log lg;
+
 
 int main(int argc, char **argv) {
     
@@ -29,7 +33,10 @@ int main(int argc, char **argv) {
     
     unsigned long long int gSize = 0; // expected genome size, with 0 NG/LG* statistics are not computed
     
-    UserInput userInput; // initialize input object
+    UserInputRdeval userInput; // initialize input object
+
+    char sizeOutType = 'u'; //default output from this flag is unsorted sizes 
+    char qualityOut = 'a'; // average quality per read 
     
     std::string cmd;
 
@@ -46,6 +53,11 @@ int main(int argc, char **argv) {
         {"input-reads", required_argument, 0, 'r'},
         
         {"threads", required_argument, 0, 'j'},
+
+        {"filter", required_argument, 0, 'f'},
+        {"out-size", required_argument, 0, 's'},
+
+        {"quality", required_argument, 0, 'q'},
         
         {"verbose", no_argument, &verbose_flag, 1},
         {"cmd", no_argument, &cmd_flag, 1},
@@ -59,7 +71,7 @@ int main(int argc, char **argv) {
         
         int option_index = 0;
         
-        c = getopt_long(argc, argv, "-:r:j:vh",
+        c = getopt_long(argc, argv, "-:r:j:f:s:q:vh",
                         long_options, &option_index);
         
         if (c == -1) { // exit the loop if run out of options
@@ -92,7 +104,7 @@ int main(int argc, char **argv) {
                     
                     gSize = atoll(optarg); pos_op++;
                     
-                    break;
+                    break; 
                     
                 }
                 /* fall through */
@@ -123,6 +135,32 @@ int main(int argc, char **argv) {
                 maxThreads = atoi(optarg);
                 stats_flag = 1;
                 break;
+
+            case 'f' : //filtering input
+
+                userInput.filter = optarg;
+
+                if (!((userInput.filter[0] == '>' || userInput.filter[0] == '<' || userInput.filter[0] == '=') && isInt(userInput.filter.substr(1)))) {
+                    printf ("Could not parse filter: %s \n", userInput.filter.c_str());
+                    exit(0);
+                }
+                break;
+
+            case 's':
+                sizeOutType = *optarg;
+                outSize_flag = 1;
+                stats_flag = false;
+                quality_flag = false;
+                break;
+
+            case 'q':
+                qualityOut = *optarg;
+                quality_flag = 1;
+                stats_flag = false;
+                outSize_flag = false;
+                break;
+
+
                 
             case 'v': // software version
                 printf("rdeval v%s\n", version.c_str());
@@ -133,6 +171,9 @@ int main(int argc, char **argv) {
                 printf("%s", helpStr);
                 printf("\nOptions:\n");
                 printf("-j --threads <n> numbers of threads (default:max).\n");
+                printf("-f --filter <n> minimum length for retention (default:0).\n");
+                printf("-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cummulative table).\n");
+                printf("-q --quality a generates list of average quality for each read.\n");
                 printf("-r --reads <file1> <file2> <file n> input file (fasta, fastq [.gz]). Optional reads. Summary statistics will be generated.\n");
                 printf("--verbose verbose output.\n");
                 printf("-v --version software version.\n");
@@ -155,9 +196,9 @@ int main(int argc, char **argv) {
         printf("\n");
         
     }
-    
     Input in;
     in.load(userInput); // load user input
+
     lg.verbose("Loaded user input");
     
     InReads inReads; // initialize sequence collection object
@@ -171,8 +212,19 @@ int main(int argc, char **argv) {
 
     if (stats_flag) { // output summary statistics
         
+
         inReads.report(gSize);
         
+    }
+
+    else if (outSize_flag) {
+        
+        inReads.printReadLengths(sizeOutType);
+    }
+    else if (quality_flag) {
+
+        inReads.printQualities(qualityOut);
+
     }
     
     threadPool.join(); // join threads

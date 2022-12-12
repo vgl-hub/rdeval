@@ -3,7 +3,7 @@
 
 class Input {
     
-    UserInput userInput;
+    UserInputRdeval userInput;
     
     //intermediates
     std::string h;
@@ -19,7 +19,7 @@ class Input {
     
 public:
     
-    void load(UserInput userInput);
+    void load(UserInputRdeval userInput);
     
     void read(InReads& inReads);
     
