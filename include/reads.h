@@ -8,6 +8,10 @@ class InReads {
     UserInput userInput;
     std::vector<InSegment*> inReads;
     
+    //intermediates
+    std::string h;
+    char* c;
+    
     unsigned int seqPos = 0; // to keep track of the original sequence order
     
     std::vector<unsigned long long int> readNstars    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};

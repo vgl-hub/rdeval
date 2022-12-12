@@ -1,26 +1,19 @@
 #include <stdlib.h>
 #include <string>
-#include <vector>
-#include <mutex>
-#include <string.h>
 
 #include <iostream>
 #include <fstream>
-
-#include "zlib.h"
-#include <zstream/zstream_common.hpp>
-#include <zstream/izstream.hpp>
-#include <zstream/izstream_impl.hpp>
 
 #include "log.h"
 #include "global.h"
 
 #include "bed.h"
 #include "struct.h"
-#include "gfa-lines.h"
-#include "stream-obj.h"
-
 #include "functions.h" // global functions
+#include "gfa-lines.h"
+
+#include "zlib.h"
+#include "stream-obj.h"
 
 #include "reads.h"
 
@@ -51,8 +44,6 @@ void InReads::load(UserInput userInput) {
         stream = streamObj.openStream(userInput, 'r', &i);
 
         Sequences* readBatch = new Sequences;
-        
-        std::vector<std::string> arguments;
 
         if (stream) {
 
@@ -63,11 +54,17 @@ void InReads::load(UserInput userInput) {
                     stream->get();
 
                     while (getline(*stream, newLine)) {
-                        
-                        arguments = readDelimited(newLine, " ");
 
-                        seqHeader = arguments[0]; //process header line
-                        seqComment = arguments[1]; //read comment
+                        h = std::string(strtok(strdup(newLine.c_str())," ")); //process header line
+                        c = strtok(NULL,""); //read comment
+
+                        seqHeader = h;
+
+                        if (c != NULL) {
+
+                            seqComment = std::string(c);
+
+                        }
 
                         std::string* inSequence = new std::string;
 
@@ -100,10 +97,20 @@ void InReads::load(UserInput userInput) {
 
                         newLine.erase(0, 1);
 
-                        arguments = readDelimited(newLine, " ");
+                        h = std::string(strtok(strdup(newLine.c_str())," ")); //process header line
+                        c = strtok(NULL,""); //read comment
 
-                        seqHeader = arguments[0]; //process header line
-                        seqComment = arguments[1]; //read comment
+                        seqHeader = h;
+
+                        if (c != NULL) {
+
+                            seqComment = std::string(c);
+
+                        }else{
+
+                            seqComment = "";
+
+                        }
 
                         std::string* inSequence = new std::string;
                         getline(*stream, *inSequence);
