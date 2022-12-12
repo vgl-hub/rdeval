@@ -53,7 +53,7 @@ void InReads::load(UserInput userInput) {
 
                     while (getline(*stream, newLine)) {
 
-                        h = std::string(strtok(strdup(newLine.c_str())," ")); //process header line
+                        h = std::string(std::strtok(std::strdup(newLine.c_str())," ")); //process header line
                         c = strtok(NULL,""); //read comment
 
                         seqHeader = h;
@@ -95,7 +95,7 @@ void InReads::load(UserInput userInput) {
 
                         newLine.erase(0, 1);
 
-                        h = std::string(strtok(strdup(newLine.c_str())," ")); //process header line
+                        h = std::string(std::strtok(std::strdup(newLine.c_str())," ")); //process header line
                         c = strtok(NULL,""); //read comment
 
                         seqHeader = h;
