@@ -1,26 +1,19 @@
 #include <stdlib.h>
 #include <string>
-#include <vector>
-#include <mutex>
-#include <string.h>
 
 #include <iostream>
 #include <fstream>
-
-#include "zlib.h"
-#include <zstream/zstream_common.hpp>
-#include <zstream/izstream.hpp>
-#include <zstream/izstream_impl.hpp>
 
 #include "log.h"
 #include "global.h"
 
 #include "bed.h"
 #include "struct.h"
-#include "gfa-lines.h"
-#include "stream-obj.h"
-
 #include "functions.h" // global functions
+#include "gfa-lines.h"
+
+#include "zlib.h"
+#include "stream-obj.h"
 
 #include "reads.h"
 
@@ -60,9 +53,7 @@ void InReads::load(UserInput userInput) {
 
                     stream->get();
 
-                    while (!stream->eof()) {
-
-                        getline(*stream, newLine);
+                    while (getline(*stream, newLine)) {
 
                         h = std::string(strtok(strdup(newLine.c_str())," ")); //process header line
                         c = strtok(NULL,""); //read comment
