@@ -193,6 +193,7 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
         filterInt = stoi(userInput->filter.substr(1));
     }
 
+
     // perhaps I need to hard code a small function because the filter is currently in the for-loop and basically requires re-parsing the filter operand each time
 
     for (Sequence* sequence : readBatch->sequences) {
@@ -211,6 +212,7 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
         }
         
         read = traverseInRead(&threadLog, sequence, readBatch->batchN+readN++);
+
         readLensBatch.push_back(read->getReadLen());
         batchA += read->getA();
         batchT += read->getT();
@@ -218,7 +220,9 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
         batchG += read->getG();
         batchN += read->getN();
 
-        batchAvgQualities.push_back(read->getAvgQuality());
+        if (read->inSequenceQuality != NULL) 
+            batchAvgQualities.push_back(read->getAvgQuality());
+        
         
         inReadsBatch.push_back(read);
         
@@ -253,7 +257,7 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, unsigned int
 
     unsigned long long int A = 0, C = 0, G = 0, T = 0, N = 0, lowerCount = 0;
     unsigned long long int sumQuality =0;
-    double avgQuality;
+    double avgQuality=0;
     
     for (char &base : *sequence->sequence) {
         
@@ -309,6 +313,8 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, unsigned int
         }
     }
 
+
+    if (sequence->sequenceQuality != NULL){
     for (char &quality : *sequence -> sequenceQuality) { 
 
         sumQuality += int(quality) - 33;
@@ -316,6 +322,7 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, unsigned int
         }
     
     avgQuality = sumQuality/(sequence->sequenceQuality->size());
+    }
 
         // operations on the segment
 
