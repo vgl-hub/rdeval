@@ -188,7 +188,7 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
     InRead* read;
     unsigned long long int batchA = 0, batchT=0, batchC=0, batchG=0, batchN =0;
     std::vector<double> batchAvgQualities;
-    unsigned int filterInt;
+    unsigned int filterInt = 0;
     if (!(userInput->filter == "none")) {
         filterInt = stoi(userInput->filter.substr(1));
     }
@@ -198,11 +198,11 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
 
     for (Sequence* sequence : readBatch->sequences) {
 
-        if ((userInput->filter[0] == '>') && (sequence->sequence->size()< filterInt)){ 
+        if ((userInput->filter[0] == '>') && (sequence->sequence->size() <= filterInt)){
             // std::cout << "Sequence shorter than filter length." << "\n"; // less compute time to assign to a variable or call like this? // would like to output sequence name here 
             continue;
         }
-        else if ((userInput->filter[0] == '<') && (sequence->sequence->size() > filterInt)) {
+        else if ((userInput->filter[0] == '<') && (sequence->sequence->size() >= filterInt)) {
             // std::cout << "Sequence longer than filter length." << "\n"; 
             continue;
         }
