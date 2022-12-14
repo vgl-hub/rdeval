@@ -2,6 +2,7 @@
 #include <string.h>
 #include <vector>
 #include <fstream>
+#include <algorithm>
 
 #include "log.h"
 #include "global.h"

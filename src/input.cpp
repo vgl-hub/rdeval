@@ -1,6 +1,9 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <memory>
+#include <condition_variable>
+#include <mutex>
 
 #include "log.h"
 #include "bed.h"
