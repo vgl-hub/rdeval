@@ -1,4 +1,19 @@
-#include <main.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <vector>
+#include <getopt.h>
+#include <fstream>
+
+#include "global.h"
+#include "log.h"
+#include "bed.h"
+#include "struct.h"
+#include "functions.h"
+#include "gfa-lines.h"
+#include "reads.h"
+#include "stream-obj.h"
+#include "input.h"
 
 std::string version = "0.0.1";
 
@@ -21,7 +36,6 @@ int discoverPaths_flag;
 std::mutex mtx;
 ThreadPool<std::function<bool()>> threadPool;
 Log lg;
-
 
 int main(int argc, char **argv) {
     

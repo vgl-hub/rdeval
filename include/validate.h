@@ -1,15 +1,6 @@
 #ifndef VALIDATE_H
 #define VALIDATE_H
 
-#include <iostream>
-#include <algorithm>
-#include <fstream>
-#include <string>
-#include <dirent.h>
-#include <vector>
-#include <set>
-#include <string>
-
 std::string getExePath(const std::string &argv0) {
     std::string exePath = argv0.substr(0, argv0.find_last_of("/\\")+1);
     std::replace(exePath.begin(), exePath.end(), '\\', '/');

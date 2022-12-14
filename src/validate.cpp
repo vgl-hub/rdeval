@@ -1,26 +1,12 @@
-/*
-USAGE:
-test <path to test folder or files>
-
-EXAMPLE:
-build/bin/rdeval-validate validateFiles
-build/bin/rdeval-validate validateFiles/random1.fasta0.tst
-
-
-*/
-
-#include <algorithm>
+#include <unistd.h>
+#include <iostream>
 #include <fstream>
+#include <set>
 #include <string>
 #include <dirent.h>
 #include <vector>
-#include <unistd.h>
-#include <limits.h>
-#include <map>
-#include <set>
-#include <regex>
 
-#include <validate.h>
+#include "validate.h"
 
 bool printCommand = false;
 const std::string tmp = "tmp.txt";

@@ -1,20 +1,14 @@
 #include <stdlib.h>
 #include <string.h>
-
-#include <istream>
-#include <fstream>
 #include <vector>
-#include <iterator>
-#include <algorithm>
+#include <fstream>
 
 #include "log.h"
 #include "global.h"
-
 #include "bed.h"
 #include "struct.h"
 #include "gfa-lines.h"
 #include "functions.h" // global functions
-
 #include "stream-obj.h"
 
 #include "reads.h"
