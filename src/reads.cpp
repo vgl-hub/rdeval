@@ -65,7 +65,7 @@ void InRead::set(Log* threadLog, unsigned int uId, unsigned int iId, std::string
             
             threadLog->add("Segment sequence quality set");
 
-            this->setAvgQuality(avgQuality);
+            this->avgQuality = *avgQuality;
             
         }
         
@@ -89,18 +89,6 @@ void InRead::set(Log* threadLog, unsigned int uId, unsigned int iId, std::string
         
     }
     
-}
-
-void InRead::setAvgQuality(double* InReadAvgQuality) {
-    
-    avgQuality = *InReadAvgQuality;
-
-}
-
-double InRead::getAvgQuality() {
-
-    return avgQuality;
-
 }
 
 void InReads::load(UserInputRdeval* userInput) { 
@@ -297,7 +285,7 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
         batchN += read->getN();
 
         if (read->inSequenceQuality != NULL) 
-            batchAvgQualities.push_back(read->getAvgQuality());
+            batchAvgQualities.push_back(read->avgQuality);
         
         
         inReadsBatch.push_back(read);

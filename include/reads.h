@@ -16,10 +16,6 @@ public:
     
     void set(Log* threadLog, unsigned int uId, unsigned int iId, std::string readHeader, std::string* readComment, std::string* read, unsigned long long int* A, unsigned long long int* C, unsigned long long int* G, unsigned long long int* T, unsigned long long int* lowerCount, unsigned int readPos, std::string* sequenceQuality, double* avgQuality, std::vector<Tag>* inReadTags = NULL, unsigned long long int* N = NULL);
     
-    void setAvgQuality(double* avgQuality);
-    
-    double getAvgQuality();
-    
 friend class InReads;
     
 };
