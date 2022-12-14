@@ -15,11 +15,6 @@
 #include <fstream>
 #include <sstream>
 
-#include "zlib.h"
-#include <zstream/zstream_common.hpp>
-#include <zstream/izstream.hpp>
-#include <zstream/izstream_impl.hpp>
-
 #include "global.h"
 #include "log.h"
 #include "bed.h"

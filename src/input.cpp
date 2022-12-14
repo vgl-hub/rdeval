@@ -8,11 +8,6 @@
 #include <iostream>
 #include <fstream>
 
-#include "zlib.h"
-#include <zstream/zstream_common.hpp>
-#include <zstream/izstream.hpp>
-#include <zstream/izstream_impl.hpp>
-
 #include "log.h"
 #include "global.h"
 #include "bed.h"

@@ -27,6 +27,82 @@ InReads::~InReads()
 
 }
 
+void InRead::set(Log* threadLog, unsigned int uId, unsigned int iId, std::string seqHeader, std::string* seqComment, std::string* sequence, unsigned long long int* A, unsigned long long int* C, unsigned long long int* G, unsigned long long int* T, unsigned long long int* lowerCount, unsigned int seqPos, std::string* sequenceQuality, double* avgQuality, std::vector<Tag>* inSequenceTags, unsigned long long int* N) {
+    
+    threadLog->add("Processing read: " + seqHeader + " (uId: " + std::to_string(uId) + ", iId: " + std::to_string(iId) + ")");
+    
+    unsigned long long int seqSize = 0;
+    
+    this->setiId(iId); // set temporary sId internal to scaffold
+    
+    this->setuId(uId); // set absolute id
+    
+    this->setSeqPos(seqPos); // set original order
+    
+    this->setSeqHeader(&seqHeader);
+    
+    if (*seqComment != "") {
+        
+        this->setSeqComment(*seqComment);
+        
+    }
+    
+    if (inSequenceTags != NULL) {
+        
+        this->setSeqTags(inSequenceTags);
+        
+    }
+    
+    if (*sequence != "*") {
+        
+        this->setInSequence(sequence);
+        
+        threadLog->add("Segment sequence set");
+        
+        if (sequenceQuality != NULL) {
+            
+            this->setInSequenceQuality(sequenceQuality);
+            
+            threadLog->add("Segment sequence quality set");
+
+            this->setAvgQuality(avgQuality);
+            
+        }
+        
+        this->setACGT(A, C, G, T, N);
+        
+        threadLog->add("Increased ACGT counts");
+        
+        this->setLowerCount(lowerCount);
+
+        threadLog->add("Increased total count of lower bases");
+        
+        seqSize = *A + *C + *G + *T;
+        
+    }else{
+        
+        seqSize = *lowerCount;
+        
+        this->setLowerCount(&seqSize);
+        
+        threadLog->add("No seq input. Length (" + std::to_string(seqSize) + ") recorded in lower count");
+        
+    }
+    
+}
+
+void InRead::setAvgQuality(double* InReadAvgQuality) {
+    
+    avgQuality = *InReadAvgQuality;
+
+}
+
+double InRead::getAvgQuality() {
+
+    return avgQuality;
+
+}
+
 void InReads::load(UserInputRdeval* userInput) { 
 
     unsigned int batchSize = 100;
@@ -213,7 +289,7 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
         
         read = traverseInRead(&threadLog, sequence, readBatch->batchN+readN++);
 
-        readLensBatch.push_back(read->getReadLen());
+        readLensBatch.push_back(read->inSequence->size());
         batchA += read->getA();
         batchT += read->getT();
         batchC += read->getC();
@@ -522,348 +598,4 @@ void InReads::printQualities(char qualityOut) {
         }
     }
 
-}
-
-InRead::~InRead()
-{
-    delete inRead;
-    delete inSequenceQuality;
-}
-
-void InRead::set(Log* threadLog, unsigned int uId, unsigned int iId, std::string seqHeader, std::string* seqComment, std::string* sequence, unsigned long long int* A, unsigned long long int* C, unsigned long long int* G, unsigned long long int* T, unsigned long long int* lowerCount, unsigned int seqPos, std::string* sequenceQuality, double* avgQuality, std::vector<Tag>* inSequenceTags, unsigned long long int* N) {
-    
-    threadLog->add("Processing read: " + seqHeader + " (uId: " + std::to_string(uId) + ", iId: " + std::to_string(iId) + ")");
-    
-    unsigned long long int seqSize = 0;
-    
-    this->setiId(iId); // set temporary sId internal to scaffold
-    
-    this->setuId(uId); // set absolute id
-    
-    this->setReadPos(seqPos); // set original order
-    
-    this->setReadHeader(&seqHeader);
-    
-    if (*seqComment != "") {
-        
-        this->setReadComment(*seqComment);
-        
-    }
-    
-    if (inSequenceTags != NULL) {
-        
-        this->setReadTags(inSequenceTags);
-        
-    }
-    
-    if (*sequence != "*") {
-        
-        this->setInRead(sequence);
-        
-        threadLog->add("Segment sequence set");
-        
-        if (sequenceQuality != NULL) {
-            
-            this->setInReadQuality(sequenceQuality);
-            
-            threadLog->add("Segment sequence quality set");
-
-            this->setAvgQuality(avgQuality);
-            
-        }
-        
-        this->setACGT(A, C, G, T, N);
-        
-        threadLog->add("Increased ACGT counts");
-        
-        this->setLowerCount(lowerCount);
-
-        threadLog->add("Increased total count of lower bases");
-        
-        seqSize = *A + *C + *G + *T;
-        
-    }else{
-        
-        seqSize = *lowerCount;
-        
-        this->setLowerCount(&seqSize);
-        
-        threadLog->add("No seq input. Length (" + std::to_string(seqSize) + ") recorded in lower count");
-        
-    }
-    
-}
-    
-void InRead::setReadHeader(std::string* h) {
-    seqHeader = *h;
-}
-
-void InRead::setReadComment(std::string c) {
-    seqComment = c;
-}
-
-void InRead::setInRead(std::string* s) {
-    inRead = s;
-}
-
-void InRead::setInReadQuality(std::string* q) {
-    inSequenceQuality = q;
-}
-
-void InRead::setReadTags(std::vector<Tag>* tag) {
-    tags = *tag;
-}
-
-
-void InRead::setuId(unsigned int i) { // absolute id
-    uId = i;
-}
-
-void InRead::setiId(unsigned int i) { // temporary id, internal to scaffold
-    iId = i;
-}
-
-void InRead::setReadPos(unsigned int i) { // temporary id, internal to scaffold
-    seqPos = i;
-}
-
-std::string InRead::getReadHeader() {
-    return seqHeader;
-}
-
-std::string InRead::getReadComment() {
-    return seqComment;
-}
-
-std::vector<Tag> InRead::getTags() {
-    return tags;
-}
-
-std::string InRead::getInRead(unsigned int start, unsigned int end) {
-    
-    if (inRead == NULL) {
-        
-        return "*";
-        
-    }else{
-    
-        return start != 0 || end != 0 ? inRead->substr(start-1, end-start+1) : *inRead;
-        
-    }
-    
-}
-
-std::string InRead::getInReadQuality(unsigned int start, unsigned int end) {
-    
-    if (inSequenceQuality != NULL) {
-    
-        return start != 0 || end != 0 ? inSequenceQuality->substr(start-1, end-start+1) : *inSequenceQuality;
-        
-    }else{
-        
-        return "";
-        
-    }
-    
-}
-
-// std::vector<int> InRead::getQualitiesInt() {
-
-//     return QualitiesInt;
-
-// }
-
-unsigned int InRead::getReadPos() {
-    
-    return seqPos;
-
-}
-
-unsigned long long int InRead::getReadLen(unsigned long long int start, unsigned long long int end) {
-    
-    if (inRead == NULL) {
-        
-        return lowerCount;
-        
-    }else{
-    
-        return start != 0 || end != 0 ? end-start+1 : A + C + G + T + N; // need to sum long long int to prevent size() overflow
-        
-    }
-    
-}
-
-unsigned int InRead::getuId() { // absolute id
-    
-    return uId;
-}
-
-unsigned int InRead::getiId() { // temporary id, internal to scaffold
-    
-    return iId;
-}
-
-void InRead::setAvgQuality(double* InReadAvgQuality) {
-    
-    avgQuality = *InReadAvgQuality;
-
-}
-
-// void InRead::setQualitiesInt(std::vector<int>* qualInt) {
-
-//     QualitiesInt = *qualInt;
-
-// }
-
-void InRead::setACGT(unsigned long long int* a, unsigned long long int* c, unsigned long long int* g, unsigned long long int* t, unsigned long long int* n) {
-    
-    A = *a;
-    C = *c;
-    G = *g;
-    T = *t;
-    N = *n;
-    
-}
-
-void InRead::setLowerCount(unsigned long long int* C) {
-    
-    lowerCount = *C;
-    
-}
-
-unsigned long long int InRead::getA() {
-    
-    return A;
-}
-
-unsigned long long int InRead::getC() {
-    
-    return C;
-}
-
-unsigned long long int InRead::getG() {
-    
-    return G;
-}
-
-unsigned long long int InRead::getT() {
-    
-    return T;
-}
-
-unsigned long long int InRead::getN() {
-
-    return N;
-}
-
-
-
-unsigned int InRead::getLowerCount(unsigned long long int start, unsigned long long int end) {
-    
-    if (start == 0 || end == 0) {
-        
-        return lowerCount;
-        
-    }else{
-        
-        unsigned long long int lowerCountSubset = 0;
-        
-        for (char base : *inRead) { // need to fix this loop
-            
-            if (islower(base)) {
-                
-                ++lowerCountSubset;
-                
-            }
-            
-        }
-        
-        return lowerCountSubset;
-        
-    }
-
-}
-
-double InRead::computeGCcontent() {
-    
-    double GCcontent = (double) (G + C) / (G + C + A + T + N) * 100;
-    
-    return GCcontent;
-}
-
-double InRead::getAvgQuality() {
-
-    return avgQuality;
-
-}
-
-bool InRead::trimRead(unsigned int start, unsigned int end) {
-    
-    for(char& base : inRead->substr(start, end-start)) {
-        
-        switch (base) {
-            case 'A':
-            case 'a':{
-                
-                A--;
-                break;
-                
-            }
-            case 'C':
-            case 'c':{
-                
-                C--;
-                break;
-                
-            }
-            case 'G':
-            case 'g': {
-                
-                G--;
-                break;
-                
-            }
-            case 'T':
-            case 't': {
-                
-                T--;
-                break;
-                
-            }
-                
-        }
-        
-    }
-    
-    inRead->erase(start, end-start);
-    
-    if (inSequenceQuality->size()>0) {
-    
-        inSequenceQuality->erase(start, end-start);
-    
-    }
-    
-    return true;
-}
-
-bool InRead::rvcpRead() {
-
-    *inRead = revCom(*inRead);
-
-    return true;
-    
-}
-
-bool InRead::invertRead() {
-
-    *inRead = rev(*inRead);
-    
-    if (inSequenceQuality != NULL) {
-    
-        *inSequenceQuality = rev(*inSequenceQuality);
-    
-    }
-        
-    return true;
-    
 }
