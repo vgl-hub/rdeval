@@ -4,7 +4,6 @@
 #include <vector>
 #include <getopt.h>
 #include <fstream>
-#include <algorithm>
 
 #include "global.h"
 #include "log.h"
