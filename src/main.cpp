@@ -158,7 +158,7 @@ int main(int argc, char **argv) {
                 userInput.filter.erase(remove(userInput.filter.begin(), userInput.filter.end(), '\''));
                 userInput.filter.erase(remove(userInput.filter.begin(), userInput.filter.end(), '\\'));
 
-                if (!((userInput.filter[0] == '>' || userInput.filter[0] == '<' || userInput.filter[0] == '=') && isInt(userInput.filter.substr(1)))) {
+                if (!(userInput.filter[0] == '>' || userInput.filter[0] == '<' || userInput.filter[0] == '=') || !isInt(userInput.filter.substr(1))) {
                     printf ("Could not parse filter: %s \n", userInput.filter.c_str());
                     exit(0);
                 }
