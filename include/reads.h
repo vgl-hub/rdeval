@@ -22,7 +22,11 @@ friend class InReads;
 
 class InReads {
     
+    unsigned int batchSize = 10000;
+    
     std::vector<Log> logs;
+    
+    std::shared_ptr<std::istream> stream;
     
     UserInputRdeval userInput;
     std::vector<InRead*> inReads;

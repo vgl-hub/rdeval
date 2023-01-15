@@ -86,13 +86,9 @@ void InRead::set(Log* threadLog, unsigned int uId, unsigned int iId, std::string
     
 }
 
-void InReads::load(UserInputRdeval* userInput) { 
-
-    unsigned int batchSize = 100;
+void InReads::load(UserInputRdeval* userInput) {
     
     std::string newLine, seqHeader, seqComment, line, bedHeader;
-    
-    std::shared_ptr<std::istream> stream;
     
     unsigned int numFiles = userInput->iReadFileArg.size();
     
@@ -218,9 +214,7 @@ void InReads::appendReads(Sequences* readBatch, UserInputRdeval* userInput) { //
     
     threadPool.queueJob([=]{ return traverseInReads(readBatch, userInput); });
     
-    std::unique_lock<std::mutex> lck (mtx, std::defer_lock);
-    
-    lck.lock();
+    std::unique_lock<std::mutex> lck (mtx);
     
     for (auto it = logs.begin(); it != logs.end(); it++) {
      
@@ -229,8 +223,6 @@ void InReads::appendReads(Sequences* readBatch, UserInputRdeval* userInput) { //
         if(verbose_flag) {std::cerr<<"\n";};
         
     }
-    
-    lck.unlock();
     
 }
 
@@ -289,14 +281,11 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
     
     delete readBatch;
     
-    std::unique_lock<std::mutex> lck (mtx, std::defer_lock);
-    
-    lck.lock();
+    std::unique_lock<std::mutex> lck(mtx);
     
     inReads.insert(std::end(inReads), std::begin(inReadsBatch), std::end(inReadsBatch));
     readLens.insert(std::end(readLens), std::begin(readLensBatch), std::end(readLensBatch));
     avgQualities.insert(std::end(avgQualities), std::begin(batchAvgQualities), std::end(batchAvgQualities));
-
 
     totA+=batchA;
     totT+=batchT;
@@ -305,8 +294,6 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
     totN+=batchN;
 
     logs.push_back(threadLog);
-    
-    lck.unlock();
     
     return true;
     
