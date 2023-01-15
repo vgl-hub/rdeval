@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
                 
                 userInput.filter = optarg;
                 
-                rmChrFromStr(userInput.filter, "\'\\");
+                rmChrFromStr(userInput.filter, "'\\");
 
                 if (!(userInput.filter[0] == '>' || userInput.filter[0] == '<' || userInput.filter[0] == '=') || !isInt(userInput.filter.substr(1))) {
                     printf ("Could not parse filter: %s \n", userInput.filter.c_str());
