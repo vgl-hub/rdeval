@@ -41,6 +41,7 @@ class InReads {
     std::vector<unsigned int> readLstars     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     std::vector<unsigned long long int> readLens;
     unsigned long long int totA =0, totT=0, totC=0, totG=0, totN=0;
+    // std::vector<long double> listA, listC, listT, listG, listN;
     std::vector<std::string> qualities;
     std::vector<double> avgQualities; 
     std::vector<std::vector<int>> qualitiesInts;
@@ -79,6 +80,8 @@ public:
     void printReadLengths(char sizeOutType);
 
     void printQualities(char qualityOut);
+
+    void printContent(char content);
     
     void evalNstars();
 

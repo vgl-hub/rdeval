@@ -30,6 +30,7 @@ int stats_flag;
 int outSize_flag;
 int filterInput = 0;
 int quality_flag;
+int content_flag;
 int maxThreads = 0;
 int discoverPaths_flag;
 
@@ -51,6 +52,7 @@ int main(int argc, char **argv) {
 
     char sizeOutType = 'u'; //default output from this flag is unsorted sizes 
     char qualityOut = 'a'; // average quality per read 
+    char content = 'a'; // default output is to print the normalized ATCGN content for all sequences 
     
     std::string cmd;
 
@@ -72,6 +74,7 @@ int main(int argc, char **argv) {
         {"out-size", required_argument, 0, 's'},
 
         {"quality", required_argument, 0, 'q'},
+        {"content",required_argument, 0, 'c'},
         
         {"verbose", no_argument, &verbose_flag, 1},
         {"cmd", no_argument, &cmd_flag, 1},
@@ -85,7 +88,7 @@ int main(int argc, char **argv) {
         
         int option_index = 0;
         
-        c = getopt_long(argc, argv, "-:r:j:f:s:q:vh",
+        c = getopt_long(argc, argv, "-:r:j:f:s:q:c:vh",
                         long_options, &option_index);
         
         if (c == -1) { // exit the loop if run out of options
@@ -176,6 +179,16 @@ int main(int argc, char **argv) {
                 outSize_flag = false;
                 break;
 
+            case 'c':
+                content = *optarg;
+                content_flag = 1;
+                stats_flag = false;
+                outSize_flag = false; 
+                quality_flag = false;
+                break;
+
+            case 'o':
+                
 
                 
             case 'v': // software version
@@ -190,6 +203,7 @@ int main(int argc, char **argv) {
                 printf("-f --filter <n> minimum length for retention (default:0).\n");
                 printf("-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cummulative table).\n");
                 printf("-q --quality a generates list of average quality for each read.\n");
+                printf("-c --content a|g|t|n generates a list of sequences and their ATCGN base content; all bases, GC content, AT content, Ns (default:a).\n");
                 printf("-r --reads <file1> <file2> <file n> input file (fasta, fastq [.gz]). Optional reads. Summary statistics will be generated.\n");
                 printf("--verbose verbose output.\n");
                 printf("-v --version software version.\n");
@@ -242,6 +256,14 @@ int main(int argc, char **argv) {
         inReads.printQualities(qualityOut);
 
     }
+
+    else if (content_flag) {
+
+        inReads.printContent(content);
+
+    }
+
+
     
     threadPool.join(); // join threads
     

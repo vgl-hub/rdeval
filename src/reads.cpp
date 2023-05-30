@@ -238,6 +238,7 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
     std::vector<unsigned long long int> readLensBatch;
     InRead* read;
     unsigned long long int batchA = 0, batchT=0, batchC=0, batchG=0, batchN =0;
+    // std::vector<long double> batchListA, batchListC, batchListT, batchListG, batchListN;
     std::vector<double> batchAvgQualities;
     unsigned int filterInt = 0;
     if (!(userInput->filter == "none")) {
@@ -273,7 +274,14 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
 
         if (read->inSequenceQuality != NULL) 
             batchAvgQualities.push_back(read->avgQuality);
-        
+
+        // // check for flag such that if there isn't a flag it doesn't create these 
+        // batchListA.push_back(read -> getA()/float(sequence->sequence->size()));
+        // //batchListA.push_back(read->getA());
+        // batchListT.push_back(read -> getT()/float(sequence->sequence->size()));
+        // batchListC.push_back(read -> getC()/float(sequence->sequence->size()));
+        // batchListG.push_back(read -> getG()/float(sequence->sequence->size()));
+        // batchListN.push_back(read -> getN()/float(sequence->sequence->size()));
         
         inReadsBatch.push_back(read);
         
@@ -286,6 +294,7 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
     inReads.insert(std::end(inReads), std::begin(inReadsBatch), std::end(inReadsBatch));
     readLens.insert(std::end(readLens), std::begin(readLensBatch), std::end(readLensBatch));
     avgQualities.insert(std::end(avgQualities), std::begin(batchAvgQualities), std::end(batchAvgQualities));
+    // listA.insert(std::end(listA),std::begin(batchListA),std::end(batchListA));
 
     totA+=batchA;
     totT+=batchT;
@@ -518,7 +527,7 @@ void InReads::printReadLengths(char sizeOutType) {
 
         int count = 1; 
         unsigned long long int sizexCount;
-        std::vector<unsigned int> counts;
+        std::vector<unsigned  int> counts;
         std::vector<unsigned long long int> sizexCounts;
         unsigned long long int sizexCountSum = 0;
         std::vector<unsigned long long int> uniqReadLens;
@@ -568,4 +577,34 @@ void InReads::printQualities(char qualityOut) {
         }
     }
 
+}
+void InReads::printContent(char content) {
+    // if (content == 'a'){ //imaging a function in which you could perhaps print different combinations of bases, or just N's or in different formats (i.e./ percent of reads v. normalized v. not etc.)
+    //     for (unsigned long long int i = 0; i < (listA.size()); i++) {
+    //         std::cout << listA[i] << "\n";
+    //     }
+
+    // }
+
+    for (InRead* read : inReads){
+
+        long double readLen=read->getA()+read->getT()+read->getC()+read->getG()+read->getN();
+
+        if (content == 'a' && outflag == ){
+            std::cout << read->getA()/readLen << "," << read->getT()/readLen << "," << read->getC()/readLen << "," << read->getG()/readLen <<"," << read->getN()/readLen << "\n";
+        }
+
+        if (content == 'g') {
+            std::cout << (read->getC()+read->getG())/readLen << "\n";
+        }
+
+        if (content == 't') {
+            std::cout << (read->getA()+read->getT())/readLen << "\n";
+        }
+
+        if (content == 'n') {
+            std::cout << read->getN()/readLen << "\n";
+        }
+
+    }
 }
