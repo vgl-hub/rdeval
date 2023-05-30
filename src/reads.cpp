@@ -590,9 +590,9 @@ void InReads::printContent(char content) {
 
         long double readLen=read->getA()+read->getT()+read->getC()+read->getG()+read->getN();
 
-        if (content == 'a' && outflag == ){
-            std::cout << read->getA()/readLen << "," << read->getT()/readLen << "," << read->getC()/readLen << "," << read->getG()/readLen <<"," << read->getN()/readLen << "\n";
-        }
+        // if (content == 'a' && outflag == ){
+        //     std::cout << read->getA()/readLen << "," << read->getT()/readLen << "," << read->getC()/readLen << "," << read->getG()/readLen <<"," << read->getN()/readLen << "\n";
+        // }
 
         if (content == 'g') {
             std::cout << (read->getC()+read->getG())/readLen << "\n";
