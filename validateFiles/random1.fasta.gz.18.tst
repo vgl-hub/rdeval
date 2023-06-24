@@ -1,4 +1,4 @@
-testFiles/random1.fasta.gz -f '<10'
+testFiles/random1.fasta.gz -f "<10"
 embedded
 +++Read summary+++: 
 # reads: 2
