@@ -22,11 +22,11 @@ InReads::~InReads()
 
 }
 
-void InRead::set(Log* threadLog, unsigned int uId, unsigned int iId, std::string seqHeader, std::string* seqComment, std::string* sequence, unsigned long long int* A, unsigned long long int* C, unsigned long long int* G, unsigned long long int* T, unsigned long long int* lowerCount, unsigned int seqPos, std::string* sequenceQuality, double* avgQuality, std::vector<Tag>* inSequenceTags, unsigned long long int* N) {
+void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHeader, std::string* seqComment, std::string* sequence, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t seqPos, std::string* sequenceQuality, double* avgQuality, std::vector<Tag>* inSequenceTags, uint64_t* N) {
     
     threadLog->add("Processing read: " + seqHeader + " (uId: " + std::to_string(uId) + ", iId: " + std::to_string(iId) + ")");
     
-    unsigned long long int seqSize = 0;
+    uint64_t seqSize = 0;
     
     this->setiId(iId); // set temporary sId internal to scaffold
     
@@ -90,11 +90,11 @@ void InReads::load(UserInputRdeval* userInput) {
     
     std::string newLine, seqHeader, seqComment, line, bedHeader;
     
-    unsigned int numFiles = userInput->inReads.size();
+    uint32_t numFiles = userInput->inReads.size();
     
     lg.verbose("Processing " + std::to_string(numFiles) + " files");
     
-    for (unsigned int i = 0; i < numFiles; i++) {
+    for (uint32_t i = 0; i < numFiles; i++) {
         
         StreamObj streamObj;
 
@@ -234,13 +234,13 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
     
     std::vector<InRead*> inReadsBatch;
     
-    unsigned int readN = 0; 
-    std::vector<unsigned long long int> readLensBatch;
+    uint32_t readN = 0;
+    std::vector<uint64_t> readLensBatch;
     InRead* read;
-    unsigned long long int batchA = 0, batchT=0, batchC=0, batchG=0, batchN =0;
+    uint64_t batchA = 0, batchT=0, batchC=0, batchG=0, batchN =0;
     // std::vector<long double> batchListA, batchListC, batchListT, batchListG, batchListN;
     std::vector<double> batchAvgQualities;
-    unsigned int filterInt = 0;
+    uint32_t filterInt = 0;
     if (!(userInput->filter == "none")) {
         filterInt = stoi(userInput->filter.substr(1));
     }
@@ -308,10 +308,10 @@ bool InReads::traverseInReads(Sequences* readBatch, UserInputRdeval* userInput) 
     
 }
 
-InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, unsigned int seqPos) { // traverse a single read
+InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seqPos) { // traverse a single read
 
-    unsigned long long int A = 0, C = 0, G = 0, T = 0, N = 0, lowerCount = 0;
-    unsigned long long int sumQuality =0;
+    uint64_t A = 0, C = 0, G = 0, T = 0, N = 0, lowerCount = 0;
+    uint64_t sumQuality =0;
     double avgQuality=0;
     
     for (char &base : *sequence->sequence) {
@@ -389,9 +389,9 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, unsigned int
     
 }
 
-unsigned long long int InReads::getTotReadLen() {
+uint64_t InReads::getTotReadLen() {
     
-    // unsigned long long int totReadLen;
+    // uint64_t totReadLen;
     
     // for (InRead* read : inReads) {
         
@@ -404,9 +404,9 @@ unsigned long long int InReads::getTotReadLen() {
     
 }
 
-int InReads::computeGCcontent() { 
+double InReads::computeGCcontent() {
 
-    unsigned long long int totReadLen = totA + totC + totG + totT; 
+    uint64_t totReadLen = totA + totC + totG + totT;
     double GCcontent = (double) (totG+totC)/totReadLen * 100;
     
     return GCcontent;
@@ -418,7 +418,7 @@ double InReads::computeAvgReadLen() {
     
 }
 
-unsigned long long int InReads::getReadN50() {
+uint64_t InReads::getReadN50() {
     
     return readNstars[4];
     
@@ -430,13 +430,13 @@ void InReads::evalNstars() {
     
 }
 
-int InReads::getSmallestRead() {
+uint64_t InReads::getSmallestRead() {
 
     return readLens.back();
 
 }
 
-int InReads::getLargestRead() {
+uint64_t InReads::getLargestRead() {
 
     return readLens.front();
 
@@ -444,9 +444,9 @@ int InReads::getLargestRead() {
 
 void InReads::getQualities(){
 
-    for (const auto &item : qualities){
+    for (const auto &item : qualities)
         std::cout << item << "\n";
-    }
+    
     std::cout << std::endl;
 
 
@@ -455,23 +455,20 @@ void InReads::getQualities(){
 
 double InReads::getAvgQualities(){
 
-unsigned long long int sumQualities = 0;
-unsigned long long int avgQualitiesSize=avgQualities.size();
-double avgQuality = 0;
+    uint64_t sumQualities = 0;
+    uint64_t avgQualitiesSize=avgQualities.size();
+    double avgQuality = 0;
 
-for (unsigned long long int i=0; i < avgQualitiesSize; i++) {
+    for (uint64_t i=0; i < avgQualitiesSize; i++)
+        sumQualities += avgQualities[i]*readLens[i];  //sum the qualities normalized by their read length
 
-    sumQualities += avgQualities[i]*readLens[i];  //sum the qualities normalized by their read length
-
-}
-
-avgQuality = (sumQualities/getTotReadLen());
-return avgQuality;
+    avgQuality = (sumQualities/getTotReadLen());
+    return avgQuality;
 
 }
 
 
-void InReads::report(unsigned long long int gSize) {
+void InReads::report(uint64_t gSize) {
 
     if (inReads.size() > 0) {
         
@@ -512,7 +509,7 @@ void InReads::printReadLengths(char sizeOutType) {
     if (sizeOutType == 'h') {
 
         int count = 1; 
-        for (unsigned long long int i = 0; i < readLens.size(); i++) {
+        for (uint64_t i = 0; i < readLens.size(); i++) {
             if (readLens[i] == readLens[i+1]) {
                 count += 1;
             }
@@ -526,13 +523,13 @@ void InReads::printReadLengths(char sizeOutType) {
     if (sizeOutType == 'c') {
 
         int count = 1; 
-        unsigned long long int sizexCount;
+        uint64_t sizexCount;
         std::vector<unsigned  int> counts;
-        std::vector<unsigned long long int> sizexCounts;
-        unsigned long long int sizexCountSum = 0;
-        std::vector<unsigned long long int> uniqReadLens;
+        std::vector<uint64_t> sizexCounts;
+        uint64_t sizexCountSum = 0;
+        std::vector<uint64_t> uniqReadLens;
 
-        for (unsigned long long int i = 0; i < readLens.size(); i++) {
+        for (uint64_t i = 0; i < readLens.size(); i++) {
             if (readLens[i] == readLens[i+1]) {
                 count += 1; 
             }
@@ -547,8 +544,8 @@ void InReads::printReadLengths(char sizeOutType) {
             }
         }
 
-        unsigned long long int sizexCountSums = 0; 
-        for (unsigned long long int i = 0; i < sizexCounts.size(); i++) {
+        uint64_t sizexCountSums = 0;
+        for (uint64_t i = 0; i < sizexCounts.size(); i++) {
             std::cout << uniqReadLens[i] << "," << counts[i] << "," <<sizexCounts[i] << "," << sizexCountSum - sizexCountSums << "\n"; 
             sizexCountSums += sizexCounts[i];
         }
@@ -567,12 +564,12 @@ void InReads::printReadLengths(char sizeOutType) {
 void InReads::printQualities(char qualityOut) {
 
     if (qualityOut == 'c'){ 
-        for (unsigned long long int i = 0; i < (avgQualities.size()); i++) {
+        for (uint64_t i = 0; i < (avgQualities.size()); i++) {
             std::cout << avgQualities[i] << "\n"; 
         }
     }
     else if (qualityOut == 'l') { // l prints read lengths and qualities 
-        for (unsigned long long int i = 0; i < (avgQualities.size()); i++) {
+        for (uint64_t i = 0; i < (avgQualities.size()); i++) {
             std::cout << readLens[i] << "," << avgQualities[i] << "\n";
         }
     }
@@ -580,7 +577,7 @@ void InReads::printQualities(char qualityOut) {
 }
 void InReads::printContent(char content) {
     // if (content == 'a'){ //imaging a function in which you could perhaps print different combinations of bases, or just N's or in different formats (i.e./ percent of reads v. normalized v. not etc.)
-    //     for (unsigned long long int i = 0; i < (listA.size()); i++) {
+    //     for (uint64_t i = 0; i < (listA.size()); i++) {
     //         std::cout << listA[i] << "\n";
     //     }
 
