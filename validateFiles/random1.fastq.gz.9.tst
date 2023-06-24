@@ -8,6 +8,6 @@ Read N50: 10
 Smallest read length: 10
 Largest read length: 10
 Coverage: inf
-GC content %: 28
+GC content %: 28.5714
 Base composition (A:C:T:G): 2:1:3:1
 Average read quality: 24
