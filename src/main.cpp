@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
     bool arguments = true;
     bool isPipe = false; // to check if input is from pipe
     
-    unsigned long long int gSize = 0; // expected genome size, with 0 NG/LG* statistics are not computed
+    uint64_t gSize = 0; // expected genome size, with 0 NG/LG* statistics are not computed
     
     UserInputRdeval userInput; // initialize input object
 
