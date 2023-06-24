@@ -22,7 +22,7 @@ void Input::load(UserInputRdeval userInput) {
 
 void Input::read(InReads& inReads) {
     
-    if (userInput.iReadFileArg.empty()) {return;}
+    if (userInput.inReads.empty()) {return;}
 
     inReads.load(&userInput);
 

@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
                     for( ;optind < argc && *argv[optind] != '-' && !isInt(argv[optind]); optind++){
                         
                         ifFileExists(argv[optind]);
-                        userInput.iReadFileArg.push_back(argv[optind]);
+                        userInput.inReads.push_back(argv[optind]);
                         
                     }
                     

@@ -90,7 +90,7 @@ void InReads::load(UserInputRdeval* userInput) {
     
     std::string newLine, seqHeader, seqComment, line, bedHeader;
     
-    unsigned int numFiles = userInput->iReadFileArg.size();
+    unsigned int numFiles = userInput->inReads.size();
     
     lg.verbose("Processing " + std::to_string(numFiles) + " files");
     
