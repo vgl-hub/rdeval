@@ -11,6 +11,8 @@
 #include "bed.h"
 #include "struct.h"
 #include "gfa-lines.h"
+#include "uid-generator.h"
+#include "gfa.h"
 #include "reads.h"
 #include "stream-obj.h"
 
@@ -26,11 +28,17 @@ void Input::read() {
     
     if (userInput.inFiles.empty()) {return;}
 
-    InReads inReads(userInput); // initialize sequence collection object
+    std::string outFile = "";
+    if(userInput.outFiles.size())
+        outFile = userInput.outFiles[0];
+    
+    InReads inReads(userInput, outFile); // initialize sequence collection object
     lg.verbose("Read object generated");
     threadPool.init(maxThreads); // initialize threadpool
+    
     inReads.load();
     jobWait(threadPool);
+    inReads.writeToStream(); // write last batch
 
     if (userInput.stats_flag) // output summary statistics
         inReads.report();

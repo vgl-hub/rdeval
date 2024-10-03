@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
         
         int option_index = 0;
         
-        c = getopt_long(argc, argv, "-:r:j:f:s:q:c:vh",
+        c = getopt_long(argc, argv, "-:r:j:f:o:s:q:c:vh",
                         long_options, &option_index);
         
         if (c == -1) { // exit the loop if run out of options
@@ -170,8 +170,8 @@ int main(int argc, char **argv) {
                 break;
 
             case 'o':
-                
-
+                userInput.outFiles.push_back(optarg);
+                break;
                 
             case 'v': // software version
                 printf("rdeval v%s\n", version.c_str());

@@ -9,8 +9,16 @@
 #include "bed.h"
 #include "struct.h"
 #include "gfa-lines.h"
+#include "uid-generator.h"
+#include "gfa.h"
 #include "functions.h" // global functions
 #include "stream-obj.h"
+
+#include "zlib.h"
+#include "zstream/zstream_common.hpp"
+#include "zstream/ozstream.hpp"
+#include "zstream/ozstream_impl.hpp"
+#include "output.h"
 
 #include "reads.h"
 
@@ -161,14 +169,7 @@ void InReads::load() {
 void InReads::appendReads(Sequences* readBatch) { // read a collection of reads
     
     threadPool.queueJob([=]{ return traverseInReads(readBatch); });
-    std::unique_lock<std::mutex> lck (mtx);
-    
-    for (auto it = logs.begin(); it != logs.end(); it++) {
-     
-        it->print();
-        logs.erase(it--);
-        if(verbose_flag) {std::cerr<<"\n";};
-    }
+    writeToStream();
 }
 
 bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
@@ -179,22 +180,26 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     uint32_t readN = 0;
     std::vector<uint64_t> readLensBatch;
     InRead* read;
+
     uint64_t batchA = 0, batchT=0, batchC=0, batchG=0, batchN =0;
     // std::vector<long double> batchListA, batchListC, batchListT, batchListG, batchListN;
     std::vector<double> batchAvgQualities;
     uint64_t filterInt = 0;
+
     if (userInput.filter != "none")
         filterInt = stoi(userInput.filter.substr(1));
-                         
+    
     for (Sequence* sequence : readBatch->sequences) {
 
-        if (((userInput.filter[0] == '>') && (sequence->sequence->size() <= filterInt)) ||
-            ((userInput.filter[0] == '<') && (sequence->sequence->size() >= filterInt)) ||
-            ((userInput.filter[0] == '=') && (sequence->sequence->size() != filterInt))){
+        if (userInput.filter != "none" &&
+            (
+                ((userInput.filter[0] == '>') && (sequence->sequence->size() <= filterInt)) ||
+                ((userInput.filter[0] == '<') && (sequence->sequence->size() >= filterInt)) ||
+                ((userInput.filter[0] == '=') && (sequence->sequence->size() != filterInt))
+            )
+        ){
             
             lg.verbose("Sequence length (" + std::to_string(sequence->sequence->size()) + ") shorter than filter length. Filtering out (" + sequence->header + ").");
-            
-            sequence->deleteSequence();
             continue;
         }
         
@@ -211,18 +216,15 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
             batchAvgQualities.push_back(read->avgQuality);
         
         inReadsBatch.push_back(read);
-        
-        sequence->deleteSequence();
     }
-    
-    delete readBatch;
     
     std::unique_lock<std::mutex> lck(mtx);
     
-    inReads.insert(std::end(inReads), std::begin(inReadsBatch), std::end(inReadsBatch));
+    readBatches.emplace_back(inReadsBatch,readBatch->batchN);
+    delete readBatch;
     readLens.insert(std::end(readLens), std::begin(readLensBatch), std::end(readLensBatch));
     avgQualities.insert(std::end(avgQualities), std::begin(batchAvgQualities), std::end(batchAvgQualities));
-    // listA.insert(std::end(listA),std::begin(batchListA),std::end(batchListA));
+    totReads += inReadsBatch.size();
 
     totA+=batchA;
     totT+=batchT;
@@ -303,7 +305,8 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seq
     // operations on the segment
     InRead* inRead = new InRead;
     inRead->set(threadLog, 0, 0, sequence->header, &sequence->comment, sequence->sequence, &A, &C, &G, &T, &lowerCount, seqPos, sequence->sequenceQuality, &avgQuality, NULL, &N);
-
+    sequence->sequence = NULL;
+    sequence->sequenceQuality = NULL;
     return inRead;
 }
 
@@ -320,7 +323,7 @@ double InReads::computeGCcontent() {
 }
 
 double InReads::computeAvgReadLen() {
-    return (double) getTotReadLen()/inReads.size();
+    return (double) getTotReadLen()/totReads;
 }
 
 uint64_t InReads::getReadN50() {
@@ -363,11 +366,11 @@ double InReads::getAvgQualities(){
 
 void InReads::report() {
 
-    if (inReads.size() > 0) {
+    if (totReads > 0) {
         
         if (!tabular_flag)
             std::cout<<output("+++Read summary+++")<<"\n";
-        std::cout<<output("# reads")<<inReads.size()<<"\n";
+        std::cout<<output("# reads")<<totReads<<"\n";
         std::cout<<output("Total read length")<<getTotReadLen()<<"\n";
         std::cout<<output("Average read length") << gfa_round(computeAvgReadLen()) << "\n";
         evalNstars(); // read N* statistics
@@ -457,20 +460,71 @@ void InReads::printContent() {
     
     char content = userInput.content;
 
-    for (InRead* read : inReads){
-
-        long double readLen=read->getA()+read->getT()+read->getC()+read->getG()+read->getN();
-
-        if (content == 'g') {
-            std::cout << (read->getC()+read->getG())/readLen << "\n";
+    for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatches){
+        
+        for (InRead* read : inReads.first){
+            
+            long double readLen=read->getA()+read->getT()+read->getC()+read->getG()+read->getN();
+            
+            if (content == 'g') {
+                std::cout << (read->getC()+read->getG())/readLen << "\n";
+            }
+            
+            if (content == 't') {
+                std::cout << (read->getA()+read->getT())/readLen << "\n";
+            }
+            
+            if (content == 'n') {
+                std::cout << read->getN()/readLen << "\n";
+            }
         }
+    }
+}
 
-        if (content == 't') {
-            std::cout << (read->getA()+read->getT())/readLen << "\n";
-        }
-
-        if (content == 'n') {
-            std::cout << read->getN()/readLen << "\n";
+void InReads::writeToStream() {
+    
+    if (userInput.outFiles.size()) {
+        
+        std::string ext = getFileExt(outputStream.file); // variable to handle output path and extension
+        
+        const static phmap::flat_hash_map<std::string,int> string_to_case{
+            {"fasta",1},
+            {"fa",1},
+            {"fasta.gz",1},
+            {"fa.gz",1},
+            {"fastq",2},
+            {"fq",2},
+            {"fastq.gz",2},
+            {"fq.gz",2},
+            
+        };
+        
+        switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
+                
+            case 2:  {// fastq[.gz]
+                
+                std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
+                {
+                    std::unique_lock<std::mutex> lck(mtx);
+                    readBatchesCpy = {readBatches.begin() + batchCounter-1, readBatches.end()};
+                }
+                
+                for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatchesCpy) {
+                    
+                    if (inReads.second > batchCounter)
+                        continue;
+                    
+                    lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
+                        
+                        for (InRead* read : inReads.first){
+                            
+                            *outputStream.stream <<"@" << read->seqHeader << "\n" << *read->inSequence << "\n+\n" << (read->inSequenceQuality != NULL ? *read->inSequenceQuality : std::string('!', read->inSequence->size())) << '\n';
+                            delete read;
+                        }
+                    ++batchCounter;
+                }
+                break;
+            }
         }
     }
 }

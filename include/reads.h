@@ -1,6 +1,8 @@
 #ifndef READS_H
 #define READS_H
 
+#include "output.h"
+
 struct UserInputRdeval : UserInput {
 
     std::string filter = "none";
@@ -33,7 +35,8 @@ class InReads {
     std::shared_ptr<std::istream> stream;
     
     UserInputRdeval &userInput;
-    std::vector<InRead*> inReads;
+    std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatches;
+    uint64_t totReads = 0;
     
     //intermediates
     std::string h;
@@ -48,11 +51,15 @@ class InReads {
     std::vector<std::string> qualities;
     std::vector<double> avgQualities; 
     std::vector<std::vector<int>> qualitiesInts;
-
+    
+    OutputStream outputStream;
+    uint64_t batchCounter = 1;
     
 public:
     
-    InReads(UserInputRdeval &userInput) : userInput(userInput) {};
+    InReads(UserInputRdeval &userInput, std::string file) : userInput(userInput), outputStream(file) {};
+    
+    void openOutput(std::string file);
     
     void load();
     
@@ -87,6 +94,8 @@ public:
     void printContent();
     
     void evalNstars();
+    
+    void writeToStream();
     
 };
 
