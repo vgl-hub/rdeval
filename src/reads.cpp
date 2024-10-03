@@ -182,26 +182,19 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     uint64_t batchA = 0, batchT=0, batchC=0, batchG=0, batchN =0;
     // std::vector<long double> batchListA, batchListC, batchListT, batchListG, batchListN;
     std::vector<double> batchAvgQualities;
-    uint32_t filterInt = 0;
-    if (!(userInput.filter == "none")) {
+    uint64_t filterInt = 0;
+    if (userInput.filter != "none")
         filterInt = stoi(userInput.filter.substr(1));
-    }
-
-
-    // perhaps I need to hard code a small function because the filter is currently in the for-loop and basically requires re-parsing the filter operand each time
-
+                         
     for (Sequence* sequence : readBatch->sequences) {
 
-        if ((userInput.filter[0] == '>') && (sequence->sequence->size() <= filterInt)){
-            // std::cout << "Sequence shorter than filter length." << "\n"; // less compute time to assign to a variable or call like this? // would like to output sequence name here 
-            continue;
-        }
-        else if ((userInput.filter[0] == '<') && (sequence->sequence->size() >= filterInt)) {
-            // std::cout << "Sequence longer than filter length." << "\n"; 
-            continue;
-        }
-        else if ((userInput.filter[0] == '=') && (sequence->sequence->size() != filterInt)) {
-            // std::cout << "Sequence does not equal filter length." << "\n";
+        if (((userInput.filter[0] == '>') && (sequence->sequence->size() <= filterInt)) ||
+            ((userInput.filter[0] == '<') && (sequence->sequence->size() >= filterInt)) ||
+            ((userInput.filter[0] == '=') && (sequence->sequence->size() != filterInt))){
+            
+            lg.verbose("Sequence length (" + std::to_string(sequence->sequence->size()) + ") shorter than filter length. Filtering out (" + sequence->header + ").");
+            
+            sequence->deleteSequence();
             continue;
         }
         
@@ -216,16 +209,10 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
 
         if (read->inSequenceQuality != NULL) 
             batchAvgQualities.push_back(read->avgQuality);
-
-        // // check for flag such that if there isn't a flag it doesn't create these 
-        // batchListA.push_back(read -> getA()/float(sequence->sequence->size()));
-        // //batchListA.push_back(read->getA());
-        // batchListT.push_back(read -> getT()/float(sequence->sequence->size()));
-        // batchListC.push_back(read -> getC()/float(sequence->sequence->size()));
-        // batchListG.push_back(read -> getG()/float(sequence->sequence->size()));
-        // batchListN.push_back(read -> getN()/float(sequence->sequence->size()));
         
         inReadsBatch.push_back(read);
+        
+        sequence->deleteSequence();
     }
     
     delete readBatch;
