@@ -4,7 +4,9 @@
 #include <memory>
 #include <condition_variable>
 #include <mutex>
+#include <deque>
 
+#include "global.h"
 #include "log.h"
 #include "bed.h"
 #include "struct.h"
@@ -20,10 +22,22 @@ void Input::load(UserInputRdeval userInput) {
     
 }
 
-void Input::read(InReads& inReads) {
+void Input::read() {
     
-    if (userInput.inReads.empty()) {return;}
+    if (userInput.inFiles.empty()) {return;}
 
-    inReads.load(&userInput);
+    InReads inReads(userInput); // initialize sequence collection object
+    lg.verbose("Read object generated");
+    threadPool.init(maxThreads); // initialize threadpool
+    inReads.load();
+    jobWait(threadPool);
 
+    if (userInput.stats_flag) // output summary statistics
+        inReads.report();
+    else if (userInput.outSize_flag)
+        inReads.printReadLengths();
+    else if (userInput.quality_flag)
+        inReads.printQualities();
+    else if (userInput.content_flag)
+        inReads.printContent();
 }

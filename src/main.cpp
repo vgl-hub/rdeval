@@ -20,23 +20,14 @@ std::string version = "0.0.1";
 //global
 std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now(); // immediately start the clock when the program is run
 
-int hc_flag;
-int hc_cutoff;
-short int tabular_flag;
-int cmd_flag;
 int verbose_flag;
-int outBubbles_flag;
-int stats_flag;
-int outSize_flag;
-int filterInput = 0;
-int quality_flag;
-int content_flag;
-int maxThreads = 0;
-int discoverPaths_flag;
+Log lg;
+std::vector<Log> logs;
+int tabular_flag;
 
+int maxThreads = 0;
 std::mutex mtx;
 ThreadPool<std::function<bool()>> threadPool;
-Log lg;
 
 int main(int argc, char **argv) {
     
@@ -46,13 +37,7 @@ int main(int argc, char **argv) {
     bool arguments = true;
     bool isPipe = false; // to check if input is from pipe
     
-    uint64_t gSize = 0; // expected genome size, with 0 NG/LG* statistics are not computed
-    
     UserInputRdeval userInput; // initialize input object
-
-    char sizeOutType = 'u'; //default output from this flag is unsorted sizes 
-    char qualityOut = 'a'; // average quality per read 
-    char content = 'a'; // default output is to print the normalized ATCGN content for all sequences 
     
     std::string cmd;
 
@@ -77,7 +62,7 @@ int main(int argc, char **argv) {
         {"content",required_argument, 0, 'c'},
         
         {"verbose", no_argument, &verbose_flag, 1},
-        {"cmd", no_argument, &cmd_flag, 1},
+        {"cmd", no_argument, &userInput.cmd_flag, 1},
         {"version", no_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
         
@@ -118,11 +103,8 @@ int main(int argc, char **argv) {
             default: // handle positional arguments
                 
                 if (isInt(optarg)) { // if the positional argument is a number, it is likely the expected genome size
-                    
-                    gSize = atoll(optarg); pos_op++;
-                    
-                    break; 
-                    
+                    userInput.gSize = atoll(optarg); pos_op++;
+                    break;
                 }
                 /* fall through */
                 
@@ -138,11 +120,11 @@ int main(int argc, char **argv) {
                     for( ;optind < argc && *argv[optind] != '-' && !isInt(argv[optind]); optind++){
                         
                         ifFileExists(argv[optind]);
-                        userInput.inReads.push_back(argv[optind]);
+                        userInput.inFiles.push_back(argv[optind]);
                         
                     }
                     
-                    stats_flag = true;
+                    userInput.stats_flag = true;
                     
                 }
                     
@@ -150,7 +132,7 @@ int main(int argc, char **argv) {
                 
             case 'j': // max threads
                 maxThreads = atoi(optarg);
-                stats_flag = 1;
+                userInput.stats_flag = 1;
                 break;
 
             case 'f' : //filtering input
@@ -166,25 +148,25 @@ int main(int argc, char **argv) {
                 break;
 
             case 's':
-                sizeOutType = *optarg;
-                outSize_flag = 1;
-                stats_flag = false;
-                quality_flag = false;
+                userInput.sizeOutType = *optarg;
+                userInput.outSize_flag = 1;
+                userInput.stats_flag = false;
+                userInput.quality_flag = false;
                 break;
 
             case 'q':
-                qualityOut = *optarg;
-                quality_flag = 1;
-                stats_flag = false;
-                outSize_flag = false;
+                userInput.qualityOut = *optarg;
+                userInput.quality_flag = 1;
+                userInput.stats_flag = false;
+                userInput.outSize_flag = false;
                 break;
 
             case 'c':
-                content = *optarg;
-                content_flag = 1;
-                stats_flag = false;
-                outSize_flag = false; 
-                quality_flag = false;
+                userInput.content = *optarg;
+                userInput.content_flag = 1;
+                userInput.stats_flag = false;
+                userInput.outSize_flag = false;
+                userInput.quality_flag = false;
                 break;
 
             case 'o':
@@ -214,59 +196,19 @@ int main(int argc, char **argv) {
         if    (argc == 2 || // handle various cases in which the output should include summary stats
               (argc == 3 && pos_op == 2) ||
               (argc == 4 && pos_op == 3)) {
-            
         }
-        
     }
     
-    if (cmd_flag) { // print command line
+    if (userInput.cmd_flag) { // print command line
         for (unsigned short int arg_counter = 0; arg_counter < argc; arg_counter++) {
             printf("%s ", argv[arg_counter]);
         }
         printf("\n");
-        
     }
     Input in;
     in.load(userInput); // load user input
-
     lg.verbose("Loaded user input");
-    
-    InReads inReads; // initialize sequence collection object
-    lg.verbose("Read object generated");
-    
-    threadPool.init(maxThreads); // initialize threadpool
-
-    in.read(inReads); // read input content to inReads container
-    
-    jobWait(threadPool);
-
-    if (stats_flag) { // output summary statistics
-        
-
-        inReads.report(gSize);
-        
-    }
-
-    else if (outSize_flag) {
-        
-        inReads.printReadLengths(sizeOutType);
-    }
-    else if (quality_flag) {
-
-        inReads.printQualities(qualityOut);
-
-    }
-
-    else if (content_flag) {
-
-        inReads.printContent(content);
-
-    }
-
-
-    
+    in.read();
     threadPool.join(); // join threads
-    
     exit(EXIT_SUCCESS);
-    
 }

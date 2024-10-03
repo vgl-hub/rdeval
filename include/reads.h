@@ -4,20 +4,24 @@
 struct UserInputRdeval : UserInput {
 
     std::string filter = "none";
+    
+    char sizeOutType = 'u'; //default output from this flag is unsorted sizes
+    char qualityOut = 'a'; // average quality per read
+    char content = 'a'; // default output is to print the normalized ATCGN content for all sequences
+    int outSize_flag, quality_flag, content_flag, cmd_flag = 0;
 
 };
 
 class InRead : InSegment {
 
-private:
-    double avgQuality;
+double avgQuality;
         
 public:
     
     void set(Log* threadLog, uint32_t uId, uint32_t iId, std::string readHeader, std::string* readComment, std::string* read, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t readPos, std::string* sequenceQuality, double* avgQuality, std::vector<Tag>* inReadTags = NULL, uint64_t* N = NULL);
     
 friend class InReads;
-    
+
 };
 
 class InReads {
@@ -28,7 +32,7 @@ class InReads {
     
     std::shared_ptr<std::istream> stream;
     
-    UserInputRdeval userInput;
+    UserInputRdeval &userInput;
     std::vector<InRead*> inReads;
     
     //intermediates
@@ -48,15 +52,15 @@ class InReads {
     
 public:
     
-    ~InReads();
+    InReads(UserInputRdeval &userInput) : userInput(userInput) {};
     
-    void load(UserInputRdeval* userInput);
+    void load();
     
-    bool traverseInReads(Sequences* sequence, UserInputRdeval* userInput);
+    bool traverseInReads(Sequences* sequence);
     
     InRead* traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seqPos);
     
-    void appendReads(Sequences* readBatch, UserInputRdeval* userInput);
+    void appendReads(Sequences* readBatch);
     
     uint64_t getTotReadLen();
 
@@ -74,13 +78,13 @@ public:
 
     double getAvgQualities();
     
-    void report(uint64_t gSize);
+    void report();
 
-    void printReadLengths(char sizeOutType);
+    void printReadLengths();
 
-    void printQualities(char qualityOut);
+    void printQualities();
 
-    void printContent(char content);
+    void printContent();
     
     void evalNstars();
     

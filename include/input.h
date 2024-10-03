@@ -20,8 +20,8 @@ class Input {
 public:
     
     void load(UserInputRdeval userInput);
-    
-    void read(InReads& inReads);
+
+    void read();
     
 };
 
