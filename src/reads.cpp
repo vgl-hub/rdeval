@@ -499,15 +499,34 @@ void InReads::writeToStream() {
             
         };
         
+        std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
+        {
+            std::unique_lock<std::mutex> lck(mtx);
+            readBatchesCpy = {readBatches.begin() + batchCounter-1, readBatches.end()};
+        }
+        
         switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
                 
-            case 2:  {// fastq[.gz]
+            case 1:  {// fasta[.gz]
                 
-                std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
-                {
-                    std::unique_lock<std::mutex> lck(mtx);
-                    readBatchesCpy = {readBatches.begin() + batchCounter-1, readBatches.end()};
+                for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatchesCpy) {
+                    
+                    if (inReads.second > batchCounter)
+                        continue;
+                    
+                    lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
+                    
+                    for (InRead* read : inReads.first){
+                        
+                        *outputStream.stream << '>' << read->seqHeader << '\n' << *read->inSequence << '\n';
+                        delete read;
+                    }
+                    ++batchCounter;
                 }
+                break;
+            }
+            
+            case 2:  {// fastq[.gz]
                 
                 for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatchesCpy) {
                     
@@ -518,7 +537,7 @@ void InReads::writeToStream() {
                         
                         for (InRead* read : inReads.first){
                             
-                            *outputStream.stream <<"@" << read->seqHeader << "\n" << *read->inSequence << "\n+\n" << (read->inSequenceQuality != NULL ? *read->inSequenceQuality : std::string('!', read->inSequence->size())) << '\n';
+                            *outputStream.stream << '@' << read->seqHeader << '\n' << *read->inSequence << "\n+\n" << (read->inSequenceQuality != NULL ? *read->inSequenceQuality : std::string('!', read->inSequence->size())) << '\n';
                             delete read;
                         }
                     ++batchCounter;

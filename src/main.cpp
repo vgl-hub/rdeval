@@ -51,16 +51,13 @@ int main(int argc, char **argv) {
     }
     
     static struct option long_options[] = { // struct mapping long options
-        {"input-reads", required_argument, 0, 'r'},
-        
-        {"threads", required_argument, 0, 'j'},
-
-        {"filter", required_argument, 0, 'f'},
-        {"out-size", required_argument, 0, 's'},
-
-        {"quality", required_argument, 0, 'q'},
         {"content",required_argument, 0, 'c'},
-        
+        {"filter", required_argument, 0, 'f'},
+        {"threads", required_argument, 0, 'j'},
+        {"out-format", required_argument, 0, 'o'},
+        {"quality", required_argument, 0, 'q'},
+        {"input-reads", required_argument, 0, 'r'},
+        {"out-size", required_argument, 0, 's'},
         {"verbose", no_argument, &verbose_flag, 1},
         {"cmd", no_argument, &userInput.cmd_flag, 1},
         {"version", no_argument, 0, 'v'},
@@ -183,10 +180,11 @@ int main(int argc, char **argv) {
                 printf("\nOptions:\n");
                 printf("-j --threads <n> numbers of threads (default:max).\n");
                 printf("-f --filter <n> minimum length for retention (default:0).\n");
-                printf("-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cummulative table).\n");
-                printf("-q --quality a generates list of average quality for each read.\n");
                 printf("-c --content a|g|t|n generates a list of sequences and their ATCGN base content; all bases, GC content, AT content, Ns (default:a).\n");
-                printf("-r --reads <file1> <file2> <file n> input file (fasta, fastq [.gz]). Optional reads. Summary statistics will be generated.\n");
+                printf("-o --out-format <file> output file (fasta, fastq [.gz]). Optionally write reads to file.\n");
+                printf("-q --quality a generates list of average quality for each read.\n");
+                printf("-r --reads <file1> <file2> <file n> input file (fasta, fastq [.gz]).\n");
+                printf("-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cummulative table).\n");
                 printf("--verbose verbose output.\n");
                 printf("-v --version software version.\n");
                 printf("--cmd print $0 to stdout.\n");
