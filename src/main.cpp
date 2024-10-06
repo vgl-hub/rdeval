@@ -41,7 +41,7 @@ int main(int argc, char **argv) {
     
     std::string cmd;
 
-    char helpStr[] = "rdeval input.[fasta|fastq|gfa][.gz] [expected genome size]\n";
+    char helpStr[] = "rdeval input.[fasta|fastq|gfa][.gz] [expected genome size]";
     
     if (argc == 1) { // gfastats with no arguments
             
