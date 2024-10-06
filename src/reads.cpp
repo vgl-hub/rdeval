@@ -20,6 +20,8 @@
 #include "zstream/ozstream_impl.hpp"
 #include "output.h"
 
+#include <htslib/sam.h>
+
 #include "reads.h"
 
 void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHeader, std::string* seqComment, std::string* sequence, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t seqPos, std::string* sequenceQuality, double* avgQuality, std::vector<Tag>* inSequenceTags, uint64_t* N) {
@@ -70,98 +72,168 @@ void InReads::load() {
     std::size_t numFiles = userInput.inFiles.size();
     lg.verbose("Processing " + std::to_string(numFiles) + " files");
     
+    const static phmap::flat_hash_map<std::string,int> string_to_case{
+        {"fasta",1},
+        {"fa",1},
+        {"fasta.gz",1},
+        {"fa.gz",1},
+        {"fastq",1},
+        {"fq",1},
+        {"fastq.gz",1},
+        {"fq.gz",1},
+        {"bam",2},
+        {"cram",3},
+    };
+    
     for (uint32_t i = 0; i < numFiles; i++) {
         
         std::string ext = getFileExt(userInput.file('r', i));
         
-        if (ext == "bam") {
-            
-        }else if (ext == "fasta" || ext == "fastq" || ext == "fasta.gz" || ext == "fastq.gz") {
-            
-            StreamObj streamObj;
-            stream = streamObj.openStream(userInput, 'r', i);
-            Sequences* readBatch = new Sequences;
-            
-            if (stream) {
+        switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
                 
-                switch (stream->peek()) {
-                        
-                    case '>': {
-                        
-                        stream->get();
-                        
-                        while (getline(*stream, newLine)) {
+            case 1: { // fa*[.gz]
+                
+                StreamObj streamObj;
+                stream = streamObj.openStream(userInput, 'r', i);
+                Sequences* readBatch = new Sequences;
+                
+                if (stream) {
+                    
+                    switch (stream->peek()) {
                             
-                            h = std::string(strtok(strdup(newLine.c_str())," ")); //process header line
-                            c = strtok(NULL,""); //read comment
+                        case '>': {
                             
-                            seqHeader = h;
+                            stream->get();
                             
-                            if (c != NULL)
-                                seqComment = std::string(c);
-                            
-                            std::string* inSequence = new std::string;
-                            getline(*stream, *inSequence, '>');
-                            readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence});
-                            seqPos++;
-                            
-                            if (seqPos % batchSize == 0) {
+                            while (getline(*stream, newLine)) {
                                 
-                                readBatch->batchN = seqPos/batchSize;
-                                lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-                                appendReads(readBatch);
-                                readBatch = new Sequences;
-                            }
-                            lg.verbose("Individual fasta sequence read: " + seqHeader);
-                        }
-                        
-                        break;
-                    }
-                    case '@': {
-                        
-                        while (getline(*stream, newLine)) { // file input
-                            
-                            newLine.erase(0, 1);
-                            
-                            h = std::string(strtok(strdup(newLine.c_str())," ")); //process header line
-                            c = strtok(NULL,""); //read comment
-                            
-                            seqHeader = h;
-                            
-                            if (c != NULL)
-                                seqComment = std::string(c);
-                            
-                            std::string* inSequence = new std::string;
-                            getline(*stream, *inSequence);
-                            
-                            getline(*stream, newLine);
-                            
-                            std::string* inSequenceQuality = new std::string;
-                            getline(*stream, *inSequenceQuality);
-                            
-                            readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence, inSequenceQuality});
-                            seqPos++;
-                            
-                            if (seqPos % batchSize == 0) {
-                                readBatch->batchN = seqPos/batchSize;
-                                lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-                                appendReads(readBatch);
-                                readBatch = new Sequences;
+                                h = std::string(strtok(strdup(newLine.c_str())," ")); //process header line
+                                c = strtok(NULL,""); //read comment
                                 
+                                seqHeader = h;
+                                
+                                if (c != NULL)
+                                    seqComment = std::string(c);
+                                
+                                std::string* inSequence = new std::string;
+                                getline(*stream, *inSequence, '>');
+                                readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence});
+                                seqPos++;
+                                
+                                if (seqPos % batchSize == 0) {
+                                    
+                                    readBatch->batchN = seqPos/batchSize;
+                                    lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
+                                    appendReads(readBatch);
+                                    readBatch = new Sequences;
+                                }
+                                lg.verbose("Individual fasta sequence read: " + seqHeader);
                             }
-                            lg.verbose("Individual fastq sequence read: " + seqHeader);
+                            
+                            break;
                         }
-                        break;
+                        case '@': {
+                            
+                            while (getline(*stream, newLine)) { // file input
+                                
+                                newLine.erase(0, 1);
+                                
+                                h = std::string(strtok(strdup(newLine.c_str())," ")); //process header line
+                                c = strtok(NULL,""); //read comment
+                                
+                                seqHeader = h;
+                                
+                                if (c != NULL)
+                                    seqComment = std::string(c);
+                                
+                                std::string* inSequence = new std::string;
+                                getline(*stream, *inSequence);
+                                
+                                getline(*stream, newLine);
+                                
+                                std::string* inSequenceQuality = new std::string;
+                                getline(*stream, *inSequenceQuality);
+                                
+                                readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence, inSequenceQuality});
+                                seqPos++;
+                                
+                                if (seqPos % batchSize == 0) {
+                                    readBatch->batchN = seqPos/batchSize;
+                                    lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
+                                    appendReads(readBatch);
+                                    readBatch = new Sequences;
+                                    
+                                }
+                                lg.verbose("Individual fastq sequence read: " + seqHeader);
+                            }
+                            break;
+                        }
                     }
+                    
+                    readBatch->batchN = seqPos/batchSize + 1;
+                    lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
+                    appendReads(readBatch);
                 }
+                break;
+            }
+            case 2: { // bam
                 
+                Sequences* readBatch = new Sequences;
+                
+                samFile *fp_in = hts_open(userInput.file('r', i).c_str(),"r"); //open bam file
+                bam_hdr_t *bamHdr = sam_hdr_read(fp_in); //read header
+                bam1_t *bamdata = bam_init1(); //initialize an alignment
+
+//                char *tar = bamHdr->text;
+//                printf("%s\n",tar);
+                
+                while(sam_read1(fp_in,bamHdr,bamdata) > 0) {
+                    
+                    uint32_t len = bamdata->core.l_qseq; //length of the read.
+                    uint8_t *q = bam_get_seq(bamdata); //quality string
+                    char *qseq = (char *)malloc(len);
+                    char *qual = (char *)malloc(len);
+                    
+                    for(uint32_t i=0; i<len; ++i)
+                        qseq[i] = seq_nt16_str[bam_seqi(q,i)]; //gets nucleotide id and converts them into IUPAC id.
+                    
+                    std::string* inSequence = new std::string(qseq, len);
+                    free(qseq);
+                    
+                    for(int i=0; i<bamdata->core.l_qseq; ++i)
+                        qual[i] = (char) bam_get_qual(bamdata)[i] + 33;
+                    
+                    std::string* inSequenceQuality = new std::string(qual, len);
+                    free(qual);
+                    
+                    readBatch->sequences.push_back(new Sequence {bam_get_qname(bamdata), std::string(), inSequence, inSequenceQuality});
+                    seqPos++;
+                    
+                    if (seqPos % batchSize == 0) {
+                        readBatch->batchN = seqPos/batchSize;
+                        lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
+                        appendReads(readBatch);
+                        readBatch = new Sequences;
+                        
+                    }
+                    lg.verbose("Individual fastq sequence read: " + seqHeader);
+
+                }
                 readBatch->batchN = seqPos/batchSize + 1;
                 lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
                 appendReads(readBatch);
+                bam_destroy1(bamdata);
+                sam_close(fp_in);
+                
+                break;
             }
-        }else{
-            fprintf(stderr, "cannot recognize input (must be: fasta, fastq, bam, cram).\n");
-            exit(EXIT_FAILURE);
+            case 3: { // cram
+                break;
+            }
+            default: { // fasta[.gz]
+                fprintf(stderr, "cannot recognize input (must be: fasta, fastq, bam, cram).\n");
+                exit(EXIT_FAILURE);
+            }
         }
     }
 }
@@ -212,7 +284,7 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
         batchG += read->getG();
         batchN += read->getN();
 
-        if (read->inSequenceQuality != NULL) 
+        if (read->inSequenceQuality != NULL)
             batchAvgQualities.push_back(read->avgQuality);
         
         inReadsBatch.push_back(read);
@@ -393,7 +465,7 @@ void InReads::printReadLengths() {
 
     if (userInput.sizeOutType == 'h') {
 
-        int count = 1; 
+        int count = 1;
         for (uint64_t i = 0; i < readLens.size(); i++) {
             if (readLens[i] == readLens[i+1]) {
                 count += 1;
@@ -407,7 +479,7 @@ void InReads::printReadLengths() {
 
     if (userInput.sizeOutType == 'c') {
 
-        int count = 1; 
+        int count = 1;
         uint64_t sizexCount;
         std::vector<unsigned  int> counts;
         std::vector<uint64_t> sizexCounts;
@@ -416,7 +488,7 @@ void InReads::printReadLengths() {
 
         for (uint64_t i = 0; i < readLens.size(); i++) {
             if (readLens[i] == readLens[i+1]) {
-                count += 1; 
+                count += 1;
             }
             else if (readLens[i] != readLens[i+1]) {
                 sizexCount = (readLens[i] * count);
@@ -430,7 +502,7 @@ void InReads::printReadLengths() {
         }
         uint64_t sizexCountSums = 0;
         for (uint64_t i = 0; i < sizexCounts.size(); i++) {
-            std::cout << uniqReadLens[i] << "," << counts[i] << "," <<sizexCounts[i] << "," << sizexCountSum - sizexCountSums << "\n"; 
+            std::cout << uniqReadLens[i] << "," << counts[i] << "," <<sizexCounts[i] << "," << sizexCountSum - sizexCountSums << "\n";
             sizexCountSums += sizexCounts[i];
         }
     }
@@ -445,12 +517,12 @@ void InReads::printQualities() {
     
     char qualityOut = userInput.qualityOut;
 
-    if (qualityOut == 'c'){ 
+    if (qualityOut == 'c'){
         for (uint64_t i = 0; i < (avgQualities.size()); i++) {
-            std::cout << avgQualities[i] << "\n"; 
+            std::cout << avgQualities[i] << "\n";
         }
     }
-    else if (qualityOut == 'l') { // l prints read lengths and qualities 
+    else if (qualityOut == 'l') { // l prints read lengths and qualities
         for (uint64_t i = 0; i < (avgQualities.size()); i++) {
             std::cout << readLens[i] << "," << avgQualities[i] << "\n";
         }
@@ -547,3 +619,4 @@ void InReads::writeToStream() {
         }
     }
 }
+
