@@ -20,8 +20,6 @@
 #include "zstream/ozstream_impl.hpp"
 #include "output.h"
 
-#include <htslib/sam.h>
-
 #include "reads.h"
 
 void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHeader, std::string* seqComment, std::string* sequence, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t seqPos, std::string* sequenceQuality, double* avgQuality, std::vector<Tag>* inSequenceTags, uint64_t* N) {
@@ -178,53 +176,15 @@ void InReads::load() {
             }
             case 2: { // bam
                 
+                StreamObj streamObj;
+                stream = streamObj.openStream(userInput, 'r', i);
                 Sequences* readBatch = new Sequences;
                 
-                samFile *fp_in = hts_open(userInput.file('r', i).c_str(),"r"); //open bam file
-                bam_hdr_t *bamHdr = sam_hdr_read(fp_in); //read header
-                bam1_t *bamdata = bam_init1(); //initialize an alignment
-
-//                char *tar = bamHdr->text;
-//                printf("%s\n",tar);
-                
-                while(sam_read1(fp_in,bamHdr,bamdata) > 0) {
+                while (getline(*stream, newLine)) {
                     
-                    uint32_t len = bamdata->core.l_qseq; //length of the read.
-                    uint8_t *q = bam_get_seq(bamdata); //quality string
-                    char *qseq = (char *)malloc(len);
-                    char *qual = (char *)malloc(len);
+                    std::cout<<newLine<<std::endl;
                     
-                    for(uint32_t i=0; i<len; ++i)
-                        qseq[i] = seq_nt16_str[bam_seqi(q,i)]; //gets nucleotide id and converts them into IUPAC id.
-                    
-                    std::string* inSequence = new std::string(qseq, len);
-                    free(qseq);
-                    
-                    for(int i=0; i<bamdata->core.l_qseq; ++i)
-                        qual[i] = (char) bam_get_qual(bamdata)[i] + 33;
-                    
-                    std::string* inSequenceQuality = new std::string(qual, len);
-                    free(qual);
-                    
-                    readBatch->sequences.push_back(new Sequence {bam_get_qname(bamdata), std::string(), inSequence, inSequenceQuality});
-                    seqPos++;
-                    
-                    if (seqPos % batchSize == 0) {
-                        readBatch->batchN = seqPos/batchSize;
-                        lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-                        appendReads(readBatch);
-                        readBatch = new Sequences;
-                        
-                    }
-                    lg.verbose("Individual fastq sequence read: " + seqHeader);
-
                 }
-                readBatch->batchN = seqPos/batchSize + 1;
-                lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-                appendReads(readBatch);
-                bam_destroy1(bamdata);
-                sam_close(fp_in);
-                
                 break;
             }
             case 3: { // cram

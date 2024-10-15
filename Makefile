@@ -1,5 +1,5 @@
 CXX = g++
-INCLUDE_DIR = -I./include -I./gfalibs/include -I./htslib
+INCLUDE_DIR = -I./include -I./gfalibs/include
 WARNINGS = -Wall -Wextra
 
 CXXFLAGS = -g -std=gnu++14 -O3 $(INCLUDE_DIR) $(WARNINGS)
@@ -21,11 +21,8 @@ BINS := $(addprefix $(BINDIR)/, $(OBJS))
 #gfalibs
 GFALIBS_DIR := $(CURDIR)/gfalibs
 
-#htslib
-HTSLIB_DIR := $(CURDIR)/htslib
-
-head: $(BINS) gfalibs htslib | $(BUILD)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(BUILD)/$(TARGET) $(BINDIR)/* $(GFALIBS_DIR)/*.o -L/Users/gformenti/Documents/GitHub/rdeval/htslib/ -lhts $(LIBS)
+head: $(BINS) gfalibs | $(BUILD)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(BUILD)/$(TARGET) $(BINDIR)/* $(GFALIBS_DIR)/*.o $(LIBS)
 	
 all: head validate regenerate
 
@@ -35,10 +32,6 @@ $(BINDIR)%: $(SOURCE)/%.cpp $(INCLUDE)/%.h | $(BINDIR)
 .PHONY: gfalibs
 gfalibs:
 	$(MAKE) -j -C $(GFALIBS_DIR)
-	
-.PHONY: htslib
-htslib:
-	$(MAKE) -j -C $(HTSLIB_DIR)
 	
 validate: | $(BUILD)
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/$(TARGET)-$(TEST_TARGET) $(SOURCE)/$(TEST_TARGET).cpp $(LIBS)
@@ -55,5 +48,4 @@ $(BINDIR):
 	
 clean:
 	$(MAKE) -j -C $(GFALIBS_DIR) clean
-	$(MAKE) -j -C $(HTSLIB_DIR) clean
 	$(RM) -r build
