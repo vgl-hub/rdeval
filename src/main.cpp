@@ -184,7 +184,7 @@ int main(int argc, char **argv) {
                 printf("-o --out-format <file> output file (fasta, fastq [.gz]). Optionally write reads to file.\n");
                 printf("-q --quality a generates list of average quality for each read.\n");
                 printf("-r --reads <file1> <file2> <file n> input file (fasta, fastq [.gz]).\n");
-                printf("-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cummulative table).\n");
+                printf("-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cumulative table).\n");
                 printf("--verbose verbose output.\n");
                 printf("-v --version software version.\n");
                 printf("--cmd print $0 to stdout.\n");

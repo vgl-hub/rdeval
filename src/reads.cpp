@@ -420,9 +420,10 @@ void InReads::printReadLengths() {
 
     if (userInput.sizeOutType == 's' || userInput.sizeOutType == 'h' || userInput.sizeOutType == 'c') {
         sort(readLens.begin(), readLens.end());
-
+    }else{
+        for (auto i: readLens)
+            std::cout << i << "\n";
     }
-
     if (userInput.sizeOutType == 'h') {
 
         int count = 1;
@@ -436,7 +437,6 @@ void InReads::printReadLengths() {
             }
         }
     }
-
     if (userInput.sizeOutType == 'c') {
 
         int count = 1;
@@ -464,11 +464,6 @@ void InReads::printReadLengths() {
         for (uint64_t i = 0; i < sizexCounts.size(); i++) {
             std::cout << uniqReadLens[i] << "," << counts[i] << "," <<sizexCounts[i] << "," << sizexCountSum - sizexCountSums << "\n";
             sizexCountSums += sizexCounts[i];
-        }
-    }
-    else {
-        for (auto i: readLens) {
-            std::cout << i << "\n";
         }
     }
 }
