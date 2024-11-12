@@ -1,4 +1,4 @@
-CXX = g++
+CXX ?= g++
 INCLUDE_DIR = -I./include -I./gfalibs/include
 WARNINGS = -Wall -Wextra
 
