@@ -28,7 +28,7 @@ friend class InReads;
 
 class InReads {
     
-    uint32_t batchSize = 10000;
+    uint32_t batchSize = 1000000; // number of bases processed by a thread
     
     std::vector<Log> logs;
     

@@ -68,6 +68,8 @@ void InReads::load() {
     
     std::string newLine, seqHeader, seqComment, line, bedHeader;
     std::size_t numFiles = userInput.inFiles.size();
+    uint32_t batchN = 0;
+    uint64_t processedLength = 0;
     lg.verbose("Processing " + std::to_string(numFiles) + " files");
     
     const static phmap::flat_hash_map<std::string,int> string_to_case{
@@ -117,17 +119,17 @@ void InReads::load() {
                                 getline(*stream, *inSequence, '>');
                                 readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence});
                                 seqPos++;
+                                processedLength += inSequence->size();
                                 
-                                if (seqPos % batchSize == 0) {
-                                    
-                                    readBatch->batchN = seqPos/batchSize;
+                                if (processedLength > batchSize) {
+                                    readBatch->batchN = ++batchN;
                                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
                                     appendReads(readBatch);
                                     readBatch = new Sequences;
+                                    processedLength = 0;
                                 }
-                                lg.verbose("Individual fasta sequence read: " + seqHeader);
+                                //lg.verbose("Individual fasta sequence read: " + seqHeader);
                             }
-                            
                             break;
                         }
                         case '@': {
@@ -154,21 +156,21 @@ void InReads::load() {
                                 
                                 readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence, inSequenceQuality});
                                 seqPos++;
+                                processedLength += inSequence->size();
                                 
-                                if (seqPos % batchSize == 0) {
-                                    readBatch->batchN = seqPos/batchSize;
+                                if (processedLength > batchSize) {
+                                    readBatch->batchN = ++batchN;
                                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
                                     appendReads(readBatch);
                                     readBatch = new Sequences;
-                                    
+                                    processedLength = 0;
                                 }
-                                lg.verbose("Individual fastq sequence read: " + seqHeader);
+                                //lg.verbose("Individual fastq sequence read: " + seqHeader);
                             }
                             break;
                         }
                     }
-                    
-                    readBatch->batchN = seqPos/batchSize + 1;
+                    readBatch->batchN = ++batchN; // process residual reads
                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
                     appendReads(readBatch);
                 }
