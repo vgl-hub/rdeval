@@ -178,7 +178,7 @@ void InReads::load() {
                 
                 StreamObj streamObj;
                 stream = streamObj.openStream(userInput, 'r', i);
-                Sequences* readBatch = new Sequences;
+                //Sequences* readBatch = new Sequences;
                 
                 while (getline(*stream, newLine)) {
                     
@@ -247,22 +247,24 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
         if (read->inSequenceQuality != NULL)
             batchAvgQualities.push_back(read->avgQuality);
         
-        inReadsBatch.push_back(read);
+        if (userInput.outFiles.size())
+            inReadsBatch.push_back(read);
+        else
+            delete read;
     }
     
     std::unique_lock<std::mutex> lck(mtx);
-    
     readBatches.emplace_back(inReadsBatch,readBatch->batchN);
     delete readBatch;
     readLens.insert(std::end(readLens), std::begin(readLensBatch), std::end(readLensBatch));
     avgQualities.insert(std::end(avgQualities), std::begin(batchAvgQualities), std::end(batchAvgQualities));
-    totReads += inReadsBatch.size();
 
     totA+=batchA;
     totT+=batchT;
     totC+=batchC;
     totG+=batchG;
     totN+=batchN;
+    totReads += readN;
 
     logs.push_back(threadLog);
     return true;
