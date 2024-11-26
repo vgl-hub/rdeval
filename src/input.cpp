@@ -35,8 +35,8 @@ void Input::read() {
     InReads inReads(userInput, outFile); // initialize sequence collection object
     lg.verbose("Read object generated");
     threadPool.init(maxThreads); // initialize threadpool
-    
-    inReads.load();
+        
+    inReads.processReads();
     jobWait(threadPool);
     inReads.writeToStream(); // write last batch
 

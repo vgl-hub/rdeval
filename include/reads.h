@@ -32,15 +32,9 @@ class InReads {
     
     std::vector<Log> logs;
     
-    std::shared_ptr<std::istream> stream;
-    
     UserInputRdeval &userInput;
     std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatches;
     uint64_t totReads = 0;
-    
-    //intermediates
-    std::string h;
-    char* c;
     
     uint32_t seqPos = 0; // to keep track of the original sequence order
     
@@ -61,7 +55,9 @@ public:
     
     void openOutput(std::string file);
     
-    void load();
+    void processReads();
+    
+    bool load(uint16_t t);
     
     bool traverseInReads(Sequences* sequence);
     

@@ -3,6 +3,7 @@
 #include <vector>
 #include <fstream>
 #include <algorithm>
+#include <limits>
 
 #include "log.h"
 #include "global.h"
@@ -64,8 +65,19 @@ void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHead
     
 }
 
-void InReads::load() {
+
+void InReads::processReads() { // process reads
     
+    for (uint8_t t = 0; t < threadPool.totalThreads(); t++)
+        threadPool.queueJob([this, t]{ return load(t); });
+    
+}
+
+bool InReads::load(uint16_t t) {
+    
+    //intermediates
+    std::string h;
+    char* c;
     std::string newLine, seqHeader, seqComment, line, bedHeader;
     std::size_t numFiles = userInput.inFiles.size();
     uint32_t batchN = 0;
@@ -87,25 +99,44 @@ void InReads::load() {
     
     for (uint32_t i = 0; i < numFiles; i++) {
         
+        std::ifstream stream;
+        stream.open(userInput.file('r'));
+        
+        stream.seekg(0, std::ios::end);
+        std::streamsize fileSize = stream.tellg();
+        stream.seekg(0, std::ios::beg);
+        std::streamsize pos = fileSize / threadPool.totalThreads() * t;
+        std::cout<<+fileSize<<" "<<+pos<<std::endl;
+        stream.seekg(pos, std::ios::beg);
+        
+        stream.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        
+        switch (stream.peek()) {
+                
+            case '+':
+                stream.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                stream.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                break;
+        }
+        
+        
         std::string ext = getFileExt(userInput.file('r', i));
         
         switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
                 
             case 1: { // fa*[.gz]
                 
-                StreamObj streamObj;
-                stream = streamObj.openStream(userInput, 'r', i);
                 Sequences* readBatch = new Sequences;
                 
                 if (stream) {
                     
-                    switch (stream->peek()) {
+                    switch (stream.peek()) {
                             
                         case '>': {
                             
-                            stream->get();
+                            stream.get();
                             
-                            while (getline(*stream, newLine)) {
+                            while (getline(stream, newLine)) {
                                 
                                 h = std::string(strtok(strdup(newLine.c_str())," ")); //process header line
                                 c = strtok(NULL,""); //read comment
@@ -116,7 +147,7 @@ void InReads::load() {
                                     seqComment = std::string(c);
                                 
                                 std::string* inSequence = new std::string;
-                                getline(*stream, *inSequence, '>');
+                                getline(stream, *inSequence, '>');
                                 readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence});
                                 seqPos++;
                                 processedLength += inSequence->size();
@@ -134,7 +165,7 @@ void InReads::load() {
                         }
                         case '@': {
                             
-                            while (getline(*stream, newLine)) { // file input
+                            while (getline(stream, newLine)) { // file input
                                 
                                 newLine.erase(0, 1);
                                 
@@ -147,15 +178,15 @@ void InReads::load() {
                                     seqComment = std::string(c);
                                 
                                 std::string* inSequence = new std::string;
-                                getline(*stream, *inSequence);
+                                getline(stream, *inSequence);
                                 
-                                getline(*stream, newLine);
+                                getline(stream, newLine);
                                 
                                 std::string* inSequenceQuality = new std::string;
-                                getline(*stream, *inSequenceQuality);
+                                getline(stream, *inSequenceQuality);
                                 
                                 readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence, inSequenceQuality});
-                                seqPos++;
+//                                seqPos++;
                                 processedLength += inSequence->size();
                                 
                                 if (processedLength > batchSize) {
@@ -177,12 +208,10 @@ void InReads::load() {
                 break;
             }
             case 2: { // bam
-                
-                StreamObj streamObj;
-                stream = streamObj.openStream(userInput, 'r', i);
+
                 //Sequences* readBatch = new Sequences;
                 
-                while (getline(*stream, newLine)) {
+                while (getline(stream, newLine)) {
                     
                     std::cout<<newLine<<std::endl;
                     
@@ -198,12 +227,14 @@ void InReads::load() {
             }
         }
     }
+    return true;
 }
 
 void InReads::appendReads(Sequences* readBatch) { // read a collection of reads
     
-    threadPool.queueJob([=]{ return traverseInReads(readBatch); });
+    traverseInReads(readBatch);
     writeToStream();
+    //std::cout<<"running threads: "<<+threadPool.running()<<std::endl;
 }
 
 bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
@@ -239,7 +270,7 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
         
         read = traverseInRead(&threadLog, sequence, readBatch->batchN+readN++);
 
-        readLensBatch.push_back(read->inSequence->size());
+//        readLensBatch.push_back(read->inSequence->size());
         batchA += read->getA();
         batchT += read->getT();
         batchC += read->getC();
