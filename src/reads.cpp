@@ -83,6 +83,7 @@ void InReads::load() {
         {"fq.gz",1},
         {"bam",2},
         {"cram",3},
+        {"rd",4}
     };
     
     for (uint32_t i = 0; i < numFiles; i++) {
@@ -178,6 +179,9 @@ void InReads::load() {
             }
             case 2: { // bam
                 
+                fprintf(stderr, "bam currently not supported.\n");
+                exit(EXIT_FAILURE);
+                
                 StreamObj streamObj;
                 stream = streamObj.openStream(userInput, 'r', i);
                 //Sequences* readBatch = new Sequences;
@@ -190,6 +194,12 @@ void InReads::load() {
                 break;
             }
             case 3: { // cram
+                fprintf(stderr, "cram currently not supported.\n");
+                exit(EXIT_FAILURE);
+                break;
+            }
+            case 4: { // rd
+                    readTableCompressedBinary(userInput.inFiles[i]);
                 break;
             }
             default: { // fasta[.gz]
@@ -212,7 +222,7 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     threadLog.setId(readBatch->batchN);
     std::vector<InRead*> inReadsBatch;
     uint32_t readN = 0;
-    std::vector<uint64_t> readLensBatch;
+    LenVector readLensBatch;
     InRead* read;
 
     uint64_t batchA = 0, batchT=0, batchC=0, batchG=0, batchN =0;
@@ -238,7 +248,6 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
         }
         
         read = traverseInRead(&threadLog, sequence, readBatch->batchN+readN++);
-
         readLensBatch.push_back(read->inSequence->size());
         batchA += read->getA();
         batchT += read->getT();
@@ -258,7 +267,7 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     std::unique_lock<std::mutex> lck(mtx);
     readBatches.emplace_back(inReadsBatch,readBatch->batchN);
     delete readBatch;
-    readLens.insert(std::end(readLens), std::begin(readLensBatch), std::end(readLensBatch));
+    readLens.insert(readLensBatch);
     avgQualities.insert(std::end(avgQualities), std::begin(batchAvgQualities), std::end(batchAvgQualities));
 
     totA+=batchA;
@@ -367,7 +376,8 @@ uint64_t InReads::getReadN50() {
 }
 
 void InReads::evalNstars() {
-    computeNstars(readLens, readNstars, readLstars);
+    std::vector<uint64_t> allReadLens = readLens.all();
+    computeNstars(allReadLens, readNstars, readLstars);
 }
 
 uint64_t InReads::getSmallestRead() {
@@ -423,9 +433,9 @@ void InReads::report() {
 void InReads::printReadLengths() {
 
     if (userInput.sizeOutType == 's' || userInput.sizeOutType == 'h' || userInput.sizeOutType == 'c') {
-        sort(readLens.begin(), readLens.end());
+        readLens.sort();
     }else{
-        for (auto i: readLens)
+        for (auto i: readLens.all())
             std::cout << i << "\n";
     }
     if (userInput.sizeOutType == 'h') {
@@ -579,3 +589,70 @@ void InReads::writeToStream() {
     }
 }
 
+void InReads::printTableCompressedBinary(std::string outFile) {
+    
+    std::ofstream ofs(outFile, std::fstream::trunc | std::ios::out | std::ios::binary);
+    
+    // write summary statistics
+    ofs.write(reinterpret_cast<const char *>(&totA), sizeof(uint64_t));
+    ofs.write(reinterpret_cast<const char *>(&totC), sizeof(uint64_t));
+    ofs.write(reinterpret_cast<const char *>(&totG), sizeof(uint64_t));
+    ofs.write(reinterpret_cast<const char *>(&totT), sizeof(uint64_t));
+    ofs.write(reinterpret_cast<const char *>(&totN), sizeof(uint64_t));
+    
+    std::vector<uint8_t> &readLens8 = readLens.getReadLens8();
+    std::vector<uint16_t> &readLens16 = readLens.getReadLens16();
+    std::vector<uint64_t> &readLens64 = readLens.getReadLens64();
+    
+    // write vector lengths
+    uint64_t len8 = readLens8.size(), len16 = readLens16.size(), len64 = readLens64.size();
+    ofs.write(reinterpret_cast<const char *>(&len8), sizeof(uint64_t));
+    ofs.write(reinterpret_cast<const char *>(&len16), sizeof(uint64_t));
+    ofs.write(reinterpret_cast<const char *>(&len64), sizeof(uint64_t));
+ 
+    // write vectors
+
+    ofs.write(reinterpret_cast<const char*>(&readLens8[0]), len8 * sizeof(readLens8[0]));
+    ofs.write(reinterpret_cast<const char*>(&readLens16[0]), len16 * sizeof(readLens16[0]));
+    ofs.write(reinterpret_cast<const char*>(&readLens64[0]), len64 * sizeof(readLens64[0]));
+    ofs.close();
+}
+
+void InReads::readTableCompressedBinary(std::string inFile) {
+    
+    // read
+    std::ifstream ifs;
+    ifs.open(inFile, std::ifstream::binary);
+    
+    // read summary statistics
+    uint64_t A, C, G, T, N;
+    ifs.read(reinterpret_cast<char*> (&A), sizeof(uint64_t));
+    ifs.read(reinterpret_cast<char*> (&C), sizeof(uint64_t));
+    ifs.read(reinterpret_cast<char*> (&G), sizeof(uint64_t));
+    ifs.read(reinterpret_cast<char*> (&T), sizeof(uint64_t));
+    ifs.read(reinterpret_cast<char*> (&N), sizeof(uint64_t));
+    totA += A;
+    totC += C;
+    totG += G;
+    totT += T;
+    totN += N;
+    
+    uint64_t len8, len16, len64;
+    ifs.read(reinterpret_cast<char*> (&len8), sizeof(uint64_t));
+    ifs.read(reinterpret_cast<char*> (&len16), sizeof(uint64_t));
+    ifs.read(reinterpret_cast<char*> (&len64), sizeof(uint64_t));
+    
+    std::vector<uint8_t> &readLens8 = readLens.getReadLens8();
+    std::vector<uint16_t> &readLens16 = readLens.getReadLens16();
+    std::vector<uint64_t> &readLens64 = readLens.getReadLens64();
+    
+    readLens8.resize(len8);
+    readLens16.resize(len16);
+    readLens64.resize(len64);
+    
+    ifs.read(reinterpret_cast<char*> (&readLens8[0]), len8 * sizeof(readLens8[0]));
+    ifs.read(reinterpret_cast<char*> (&readLens16[0]), len16 * sizeof(readLens16[0]));
+    ifs.read(reinterpret_cast<char*> (&readLens64[0]), len64 * sizeof(readLens64[0]));
+    
+    totReads += len8 + len16 + len64;
+}
