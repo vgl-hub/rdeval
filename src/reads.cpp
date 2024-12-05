@@ -381,11 +381,11 @@ void InReads::evalNstars() {
 }
 
 uint64_t InReads::getSmallestRead() {
-    return readLens.back();
+    return readLens.front();
 }
 
 uint64_t InReads::getLargestRead() {
-    return readLens.front();
+    return readLens.back();
 }
 
 void InReads::getQualities(){

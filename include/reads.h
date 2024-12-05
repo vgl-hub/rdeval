@@ -57,30 +57,30 @@ public:
     
     uint64_t back() {
         
-        uint64_t smallest = 0;
-        
-        if (readLens8.size())
-            smallest = readLens8.back();
-        else if (readLens16.size())
-            smallest = readLens16.back();
-        else if (readLens64.size())
-            smallest = readLens64.back();
-        
-        return smallest;
-    }
-    
-    uint64_t front() {
-        
         uint64_t largest = 0;
         
         if (readLens64.size())
-            largest = readLens64.front();
+            largest = readLens64.back();
         else if (readLens16.size())
             largest = readLens16.back();
         else if (readLens8.size())
             largest = readLens8.back();
         
         return largest;
+    }
+    
+    uint64_t front() {
+        
+        uint64_t smallest = 0;
+        
+        if (readLens8.size())
+            smallest = readLens8.front();
+        else if (readLens16.size())
+            smallest = readLens16.front();
+        else if (readLens64.size())
+            smallest = readLens64.front();
+        
+        return smallest;
     }
     
     uint64_t operator[](uint64_t index) {
