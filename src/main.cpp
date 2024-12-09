@@ -58,6 +58,7 @@ int main(int argc, char **argv) {
         {"quality", required_argument, 0, 'q'},
         {"input-reads", required_argument, 0, 'r'},
         {"out-size", required_argument, 0, 's'},
+        {"tabular", no_argument, &tabular_flag, 1},
         {"verbose", no_argument, &verbose_flag, 1},
         {"cmd", no_argument, &userInput.cmd_flag, 1},
         {"version", no_argument, 0, 'v'},
@@ -185,6 +186,7 @@ int main(int argc, char **argv) {
                 printf("-q --quality c|l a generates list of average quality for each read (c) or both length and quality (c).\n");
                 printf("-r --reads <file1> <file2> <file n> input file (fasta, fastq [.gz]).\n");
                 printf("-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cumulative table).\n");
+                printf("--tabular tabular output.\n");
                 printf("--verbose verbose output.\n");
                 printf("-v --version software version.\n");
                 printf("--cmd print $0 to stdout.\n");
