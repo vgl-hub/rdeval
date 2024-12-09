@@ -13,6 +13,7 @@
 #include "gfa.h"
 #include "functions.h" // global functions
 #include "stream-obj.h"
+#include <iomanip>
 
 #include "zlib.h"
 #include "zstream/zstream_common.hpp"

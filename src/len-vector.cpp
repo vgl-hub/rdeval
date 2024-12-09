@@ -55,7 +55,7 @@ uint64_t LenVector::operator[](uint64_t index) {
     
     uint64_t value;
     
-    if (index < 0 || index >= (readLens8.size() + readLens16.size() + readLens64.size()))
+    if (index >= (readLens8.size() + readLens16.size() + readLens64.size()))
         throw std::out_of_range("Index out of bounds");
     
     if (index < readLens8.size())
