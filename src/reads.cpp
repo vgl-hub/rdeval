@@ -405,6 +405,8 @@ void InReads::report() {
 
     if (totReads > 0) {
         
+        readLens.sort();
+        
         std::cout << std::fixed; // disables scientific notation
         std::cout << std::setprecision(2); // 2 decimal points
         
@@ -429,8 +431,8 @@ void InReads::printReadLengths() {
     if (userInput.sizeOutType == 's' || userInput.sizeOutType == 'h' || userInput.sizeOutType == 'c') {
         readLens.sort();
     }else{
-        for (auto i: readLens.all())
-            std::cout << i.first << "\n";
+        for (auto read: readLens.all())
+            std::cout << read.first << "\n";
     }
     if (userInput.sizeOutType == 'h') {
 
@@ -481,14 +483,12 @@ void InReads::printQualities() {
     char qualityOut = userInput.qualityOut;
 
     if (qualityOut == 'c'){
-        for (uint64_t i = 0; i < (avgQualities.size()); i++) {
-            std::cout << avgQualities[i] << "\n";
-        }
+        for (auto read : readLens.all())
+            std::cout << read.second << "\n";
     }
     else if (qualityOut == 'l') { // l prints read lengths and qualities
-        for (uint64_t i = 0; i < (avgQualities.size()); i++) {
-            std::cout << readLens[i] << "," << avgQualities[i] << "\n";
-        }
+        for (auto read : readLens.all())
+            std::cout << read.first << "," << read.second << "\n";
     }
 }
 void InReads::printContent() {
