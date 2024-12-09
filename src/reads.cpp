@@ -389,14 +389,14 @@ uint64_t InReads::getLargestRead() {
     return readLens.back();
 }
 
-double InReads::getAvgQualities(){
+double InReads::getAvgQuality(){
 
     uint64_t sumQualities = 0, avgQualitiesSize=avgQualities.size();
 
     for (uint64_t i = 0; i < avgQualitiesSize; i++)
         sumQualities += avgQualities[i] * readLens[i];  // sum the qualities normalized by their read length
 
-    return sumQualities/getTotReadLen();
+    return (double) sumQualities/getTotReadLen();
 }
 
 void InReads::report() {
@@ -418,7 +418,7 @@ void InReads::report() {
         std::cout<<output("Coverage")<<gfa_round((double)getTotReadLen()/userInput.gSize)<<"\n";
         std::cout<<output("GC content %")<<gfa_round(computeGCcontent())<<"\n";
         std::cout<<output("Base composition (A:C:T:G)")<<totA<<":"<<totC<<":"<<totT<<":"<<totG<<"\n";
-        std::cout<<output("Average read quality")<<getAvgQualities()<<"\n";
+        std::cout<<output("Average read quality")<<getAvgQuality()<<"\n";
     }
 }
 

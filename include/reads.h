@@ -82,7 +82,7 @@ public:
 
     uint64_t getLargestRead();
 
-    double getAvgQualities();
+    double getAvgQuality();
     
     void report();
 
@@ -99,7 +99,6 @@ public:
     void printTableCompressedBinary(std::string outFile);
     
     void readTableCompressedBinary(std::string inFile);
-    
 };
 
 #endif /* READS_H */
