@@ -403,6 +403,9 @@ void InReads::report() {
 
     if (totReads > 0) {
         
+        std::cout << std::fixed; // disables scientific notation
+        std::cout << std::setprecision(2); // 2 decimal points
+        
         if (!tabular_flag)
             std::cout<<output("+++Read summary+++")<<"\n";
         std::cout<<output("# reads")<<totReads<<"\n";
@@ -413,7 +416,7 @@ void InReads::report() {
         std::cout<<output("Smallest read length")<<getSmallestRead()<<"\n";
         std::cout<<output("Largest read length")<<getLargestRead()<<"\n";
         std::cout<<output("Coverage")<<gfa_round((double)getTotReadLen()/userInput.gSize)<<"\n";
-        std::cout<<output("GC content %")<<computeGCcontent()<<"\n";
+        std::cout<<output("GC content %")<<gfa_round(computeGCcontent())<<"\n";
         std::cout<<output("Base composition (A:C:T:G)")<<totA<<":"<<totC<<":"<<totT<<":"<<totG<<"\n";
         std::cout<<output("Average read quality")<<getAvgQualities()<<"\n";
     }
@@ -525,8 +528,7 @@ void InReads::writeToStream() {
             {"fastq",2},
             {"fq",2},
             {"fastq.gz",2},
-            {"fq.gz",2},
-            
+            {"fq.gz",2}
         };
         
         std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
@@ -589,7 +591,6 @@ void InReads::printTableCompressedBinary(std::string outFile) {
     ofs.write(reinterpret_cast<const char*>(&totT), sizeof(uint64_t));
     ofs.write(reinterpret_cast<const char*>(&totN), sizeof(uint64_t));
     
-    
     std::vector<uint8_t> &readLens8 = readLens.getReadLens8();
     std::vector<uint16_t> &readLens16 = readLens.getReadLens16();
     std::vector<uint64_t> &readLens64 = readLens.getReadLens64();
@@ -601,7 +602,6 @@ void InReads::printTableCompressedBinary(std::string outFile) {
     ofs.write(reinterpret_cast<const char*>(&len64), sizeof(uint64_t));
  
     // write vectors
-
     ofs.write(reinterpret_cast<const char*>(&readLens8[0]), len8 * sizeof(readLens8[0]));
     ofs.write(reinterpret_cast<const char*>(&readLens16[0]), len16 * sizeof(readLens16[0]));
     ofs.write(reinterpret_cast<const char*>(&readLens64[0]), len64 * sizeof(readLens64[0]));
@@ -633,19 +633,27 @@ void InReads::readTableCompressedBinary(std::string inFile) {
     ifs.read(reinterpret_cast<char*> (&len16), sizeof(uint64_t));
     ifs.read(reinterpret_cast<char*> (&len64), sizeof(uint64_t));
     
-    std::vector<uint8_t> &readLens8 = readLens.getReadLens8();
-    std::vector<uint16_t> &readLens16 = readLens.getReadLens16();
-    std::vector<uint64_t> &readLens64 = readLens.getReadLens64();
+    // tmp vectors
+    LenVector readLensTmp;
+    std::vector<double> avgQualitiesTmp;
     
-    readLens8.resize(len8);
-    readLens16.resize(len16);
-    readLens64.resize(len64);
-    avgQualities.resize(len8 + len16 + len64);
+    std::vector<uint8_t> &readLensTmp8 = readLensTmp.getReadLens8();
+    std::vector<uint16_t> &readLensTmp16 = readLensTmp.getReadLens16();
+    std::vector<uint64_t> &readLensTmp64 = readLensTmp.getReadLens64();
     
-    ifs.read(reinterpret_cast<char*> (&readLens8[0]), len8 * sizeof(readLens8[0]));
-    ifs.read(reinterpret_cast<char*> (&readLens16[0]), len16 * sizeof(readLens16[0]));
-    ifs.read(reinterpret_cast<char*> (&readLens64[0]), len64 * sizeof(readLens64[0]));
-    ifs.read(reinterpret_cast<char*> (&avgQualities[0]), (len8 + len16 + len64) * sizeof(double));
+    readLensTmp8.resize(len8);
+    readLensTmp16.resize(len16);
+    readLensTmp64.resize(len64);
+    avgQualitiesTmp.resize(len8 + len16 + len64);
+    
+    ifs.read(reinterpret_cast<char*> (&readLensTmp8[0]), len8 * sizeof(readLensTmp8[0]));
+    ifs.read(reinterpret_cast<char*> (&readLensTmp16[0]), len16 * sizeof(readLensTmp16[0]));
+    ifs.read(reinterpret_cast<char*> (&readLensTmp64[0]), len64 * sizeof(readLensTmp64[0]));
+    ifs.read(reinterpret_cast<char*> (&avgQualitiesTmp[0]), (len8 + len16 + len64) * sizeof(double));
+    
+    // add to vector
+    readLens.insert(readLensTmp);
+    avgQualities.insert(std::end(avgQualities), std::begin(avgQualitiesTmp), std::end(avgQualitiesTmp));
     
     totReads += len8 + len16 + len64;
 }
