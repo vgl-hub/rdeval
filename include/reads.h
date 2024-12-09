@@ -54,11 +54,30 @@ class InReads {
     std::vector<double> avgQualities;
     
     OutputStream outputStream;
+    bool streamOutput = false;
     uint64_t batchCounter = 1;
     
 public:
     
-    InReads(UserInputRdeval &userInput, std::string file) : userInput(userInput), outputStream(file) {};
+    InReads(UserInputRdeval &userInput, std::string file) : userInput(userInput), outputStream(file) {
+        
+        const static phmap::flat_hash_map<std::string,int> string_to_case{ // supported read outputs
+            {"fasta",1},
+            {"fa",1},
+            {"fasta.gz",1},
+            {"fa.gz",1},
+            {"fastq",2},
+            {"fq",2},
+            {"fastq.gz",2},
+            {"fq.gz",2}
+        };
+        
+        if (userInput.outFiles.size()) {
+            for (std::string file : userInput.outFiles)
+                if (string_to_case.find(getFileExt(file)) != string_to_case.end())
+                    streamOutput = true;
+        }
+    };
     
     void openOutput(std::string file);
     

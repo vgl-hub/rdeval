@@ -260,7 +260,7 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
         if (read->inSequenceQuality != NULL)
             batchAvgQualities.push_back(read->avgQuality);
         
-        if (userInput.outFiles.size())
+        if (streamOutput)
             inReadsBatch.push_back(read);
         else
             delete read;
@@ -517,7 +517,7 @@ void InReads::printContent() {
 
 void InReads::writeToStream() {
     
-    if (userInput.outFiles.size()) {
+    if (streamOutput) {
         
         std::string ext = getFileExt(outputStream.file); // variable to handle output path and extension
         
