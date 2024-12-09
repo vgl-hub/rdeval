@@ -19,6 +19,7 @@
 #include "zstream/ozstream.hpp"
 #include "zstream/ozstream_impl.hpp"
 #include "output.h"
+#include "len-vector.h"
 
 #include "reads.h"
 
@@ -388,26 +389,14 @@ uint64_t InReads::getLargestRead() {
     return readLens.back();
 }
 
-void InReads::getQualities(){
-
-    for (const auto &item : qualities)
-        std::cout << item << "\n";
-
-    std::cout << std::endl;
-}
-
 double InReads::getAvgQualities(){
 
-    uint64_t sumQualities = 0;
-    uint64_t avgQualitiesSize=avgQualities.size();
-    double avgQuality = 0;
+    uint64_t sumQualities = 0, avgQualitiesSize=avgQualities.size();
 
-    for (uint64_t i=0; i < avgQualitiesSize; i++)
-        sumQualities += avgQualities[i]*readLens[i];  //sum the qualities normalized by their read length
+    for (uint64_t i = 0; i < avgQualitiesSize; i++)
+        sumQualities += avgQualities[i] * readLens[i];  // sum the qualities normalized by their read length
 
-    avgQuality = (sumQualities/getTotReadLen());
-    return avgQuality;
-
+    return sumQualities/getTotReadLen();
 }
 
 void InReads::report() {
@@ -594,11 +583,12 @@ void InReads::printTableCompressedBinary(std::string outFile) {
     std::ofstream ofs(outFile, std::fstream::trunc | std::ios::out | std::ios::binary);
     
     // write summary statistics
-    ofs.write(reinterpret_cast<const char *>(&totA), sizeof(uint64_t));
-    ofs.write(reinterpret_cast<const char *>(&totC), sizeof(uint64_t));
-    ofs.write(reinterpret_cast<const char *>(&totG), sizeof(uint64_t));
-    ofs.write(reinterpret_cast<const char *>(&totT), sizeof(uint64_t));
-    ofs.write(reinterpret_cast<const char *>(&totN), sizeof(uint64_t));
+    ofs.write(reinterpret_cast<const char*>(&totA), sizeof(uint64_t));
+    ofs.write(reinterpret_cast<const char*>(&totC), sizeof(uint64_t));
+    ofs.write(reinterpret_cast<const char*>(&totG), sizeof(uint64_t));
+    ofs.write(reinterpret_cast<const char*>(&totT), sizeof(uint64_t));
+    ofs.write(reinterpret_cast<const char*>(&totN), sizeof(uint64_t));
+    
     
     std::vector<uint8_t> &readLens8 = readLens.getReadLens8();
     std::vector<uint16_t> &readLens16 = readLens.getReadLens16();
@@ -606,15 +596,16 @@ void InReads::printTableCompressedBinary(std::string outFile) {
     
     // write vector lengths
     uint64_t len8 = readLens8.size(), len16 = readLens16.size(), len64 = readLens64.size();
-    ofs.write(reinterpret_cast<const char *>(&len8), sizeof(uint64_t));
-    ofs.write(reinterpret_cast<const char *>(&len16), sizeof(uint64_t));
-    ofs.write(reinterpret_cast<const char *>(&len64), sizeof(uint64_t));
+    ofs.write(reinterpret_cast<const char*>(&len8), sizeof(uint64_t));
+    ofs.write(reinterpret_cast<const char*>(&len16), sizeof(uint64_t));
+    ofs.write(reinterpret_cast<const char*>(&len64), sizeof(uint64_t));
  
     // write vectors
 
     ofs.write(reinterpret_cast<const char*>(&readLens8[0]), len8 * sizeof(readLens8[0]));
     ofs.write(reinterpret_cast<const char*>(&readLens16[0]), len16 * sizeof(readLens16[0]));
     ofs.write(reinterpret_cast<const char*>(&readLens64[0]), len64 * sizeof(readLens64[0]));
+    ofs.write(reinterpret_cast<const char*>(&avgQualities[0]), (len8 + len16 + len64) * sizeof(double));
     ofs.close();
 }
 
@@ -649,10 +640,12 @@ void InReads::readTableCompressedBinary(std::string inFile) {
     readLens8.resize(len8);
     readLens16.resize(len16);
     readLens64.resize(len64);
+    avgQualities.resize(len8 + len16 + len64);
     
     ifs.read(reinterpret_cast<char*> (&readLens8[0]), len8 * sizeof(readLens8[0]));
     ifs.read(reinterpret_cast<char*> (&readLens16[0]), len16 * sizeof(readLens16[0]));
     ifs.read(reinterpret_cast<char*> (&readLens64[0]), len64 * sizeof(readLens64[0]));
+    ifs.read(reinterpret_cast<char*> (&avgQualities[0]), (len8 + len16 + len64) * sizeof(double));
     
     totReads += len8 + len16 + len64;
 }
