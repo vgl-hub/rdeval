@@ -15,7 +15,7 @@ BINDIR := $(BUILD)/.o
 LDFLAGS := -pthread
 LIBS = -lz
 
-OBJS := main input reads len-vector
+OBJS := main input reads
 BINS := $(addprefix $(BINDIR)/, $(OBJS))
 
 #gfalibs
