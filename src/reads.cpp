@@ -431,7 +431,10 @@ void InReads::printReadLengths() {
     if (userInput.sizeOutType == 's' || userInput.sizeOutType == 'h' || userInput.sizeOutType == 'c') {
         readLens.sort();
     }else{
-        for (auto read: readLens.all())
+        
+        auto readLensTmp = readLens.all();
+        
+        for (auto read : readLensTmp)
             std::cout << read.first << "\n";
     }
     if (userInput.sizeOutType == 'h') {
@@ -481,13 +484,15 @@ void InReads::printReadLengths() {
 void InReads::printQualities() {
     
     char qualityOut = userInput.qualityOut;
+    
+    auto readLensTmp = readLens.all();
 
     if (qualityOut == 'c'){
-        for (auto read : readLens.all())
+        for (auto read : readLensTmp)
             std::cout << read.second << "\n";
     }
     else if (qualityOut == 'l') { // l prints read lengths and qualities
-        for (auto read : readLens.all())
+        for (auto read : readLensTmp)
             std::cout << read.first << "," << read.second << "\n";
     }
 }
