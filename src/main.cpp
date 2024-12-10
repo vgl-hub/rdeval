@@ -25,7 +25,7 @@ Log lg;
 std::vector<Log> logs;
 int tabular_flag;
 
-int maxThreads = 0;
+int maxThreads = 3;
 std::mutex mtx;
 ThreadPool<std::function<bool()>> threadPool;
 
@@ -179,7 +179,7 @@ int main(int argc, char **argv) {
             case 'h': // help
                 printf("%s", helpStr);
                 printf("\nOptions:\n");
-                printf("-j --threads <n> numbers of threads (default:max).\n");
+                printf("-j --threads <n> numbers of threads (default:3).\n");
                 printf("-f --filter <n> minimum length for retention (default:0).\n");
                 printf("-c --content a|g|t|n generates a list of sequences and their ATCGN base content; all bases, GC content, AT content, Ns (default:a).\n");
                 printf("-o --out-format <file> output file (fa*[.gz], rd). Optionally write reads to file or generate rd summary file.\n");
