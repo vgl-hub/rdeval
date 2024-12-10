@@ -344,7 +344,7 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seq
     if (sequence->sequenceQuality != NULL){
         for (char &quality : *sequence -> sequenceQuality)
             sumQuality += int(quality) - 33;
-        avgQuality = sumQuality/(sequence->sequenceQuality->size());
+        avgQuality = (double) sumQuality/(sequence->sequenceQuality->size());
     }
 
     // operations on the segment
