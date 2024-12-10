@@ -222,12 +222,11 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     threadLog.setId(readBatch->batchN);
     std::vector<InRead*> inReadsBatch;
     uint32_t readN = 0;
-    LenVector<double> readLensBatch;
+    LenVector<float> readLensBatch;
     InRead* read;
 
     uint64_t batchA = 0, batchT=0, batchC=0, batchG=0, batchN =0;
-    // std::vector<long double> batchListA, batchListC, batchListT, batchListG, batchListN;
-    std::vector<double> batchAvgQualities;
+    std::vector<float> batchAvgQualities;
     uint64_t filterInt = 0;
 
     if (userInput.filter != "none")
@@ -247,7 +246,7 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
         }
         
         read = traverseInRead(&threadLog, sequence, readBatch->batchN+readN++);
-        std::pair<uint64_t, double> lenQual(read->inSequence->size(), read->avgQuality);
+        std::pair<uint64_t, float> lenQual(read->inSequence->size(), read->avgQuality);
         readLensBatch.push_back(lenQual);
         batchA += read->getA();
         batchT += read->getT();
@@ -285,7 +284,7 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seq
 
     uint64_t A = 0, C = 0, G = 0, T = 0, N = 0, lowerCount = 0;
     uint64_t sumQuality = 0;
-    double avgQuality = 0;
+    float avgQuality = 0;
     
     for (char &base : *sequence->sequence) {
         
@@ -344,7 +343,7 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seq
     if (sequence->sequenceQuality != NULL){
         for (char &quality : *sequence -> sequenceQuality)
             sumQuality += int(quality) - 33;
-        avgQuality = (double) sumQuality/(sequence->sequenceQuality->size());
+        avgQuality = (float) sumQuality/(sequence->sequenceQuality->size());
     }
 
     // operations on the segment
@@ -376,7 +375,7 @@ uint64_t InReads::getReadN50() {
 }
 
 void InReads::evalNstars() { // not very efficient
-    std::vector<std::pair<uint64_t,double>> allReadLens = readLens.all();
+    std::vector<std::pair<uint64_t,float>> allReadLens = readLens.all();
     std::vector<uint64_t> tmpVector(allReadLens.size());
     for (uint64_t i = 0; i < allReadLens.size(); ++i)
         tmpVector[i] = allReadLens[i].first;
@@ -604,9 +603,9 @@ void InReads::printTableCompressedBinary(std::string outFile) {
     ofs.write(reinterpret_cast<const char*>(&totT), sizeof(uint64_t));
     ofs.write(reinterpret_cast<const char*>(&totN), sizeof(uint64_t));
     
-    std::vector<std::pair<uint8_t,double>> &readLens8 = readLens.getReadLens8();
-    std::vector<std::pair<uint16_t,double>> &readLens16 = readLens.getReadLens16();
-    std::vector<std::pair<uint64_t,double>> &readLens64 = readLens.getReadLens64();
+    std::vector<std::pair<uint8_t,float>> &readLens8 = readLens.getReadLens8();
+    std::vector<std::pair<uint16_t,float>> &readLens16 = readLens.getReadLens16();
+    std::vector<std::pair<uint64_t,float>> &readLens64 = readLens.getReadLens64();
     
     // write vector lengths
     uint64_t len8 = readLens8.size(), len16 = readLens16.size(), len64 = readLens64.size();
@@ -647,12 +646,12 @@ void InReads::readTableCompressedBinary(std::string inFile) {
     ifs.read(reinterpret_cast<char*> (&len64), sizeof(uint64_t));
     
     // tmp vectors
-    LenVector<double> readLensTmp;
-    std::vector<double> avgQualitiesTmp;
+    LenVector<float> readLensTmp;
+    std::vector<float> avgQualitiesTmp;
     
-    std::vector<std::pair<uint8_t,double>> &readLensTmp8 = readLensTmp.getReadLens8();
-    std::vector<std::pair<uint16_t,double>> &readLensTmp16 = readLensTmp.getReadLens16();
-    std::vector<std::pair<uint64_t,double>> &readLensTmp64 = readLensTmp.getReadLens64();
+    std::vector<std::pair<uint8_t,float>> &readLensTmp8 = readLensTmp.getReadLens8();
+    std::vector<std::pair<uint16_t,float>> &readLensTmp16 = readLensTmp.getReadLens16();
+    std::vector<std::pair<uint64_t,float>> &readLensTmp64 = readLensTmp.getReadLens64();
     
     readLensTmp8.resize(len8);
     readLensTmp16.resize(len16);
