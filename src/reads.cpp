@@ -617,7 +617,7 @@ void InReads::printTableCompressedBinary(std::string outFile) {
     ofs.write(reinterpret_cast<const char*>(&readLens8[0]), len8 * sizeof(readLens8[0]));
     ofs.write(reinterpret_cast<const char*>(&readLens16[0]), len16 * sizeof(readLens16[0]));
     ofs.write(reinterpret_cast<const char*>(&readLens64[0]), len64 * sizeof(readLens64[0]));
-    ofs.write(reinterpret_cast<const char*>(&avgQualities[0]), (len8 + len16 + len64) * sizeof(double));
+    ofs.write(reinterpret_cast<const char*>(&avgQualities[0]), (len8 + len16 + len64) * sizeof(float));
     ofs.close();
 }
 
@@ -661,7 +661,7 @@ void InReads::readTableCompressedBinary(std::string inFile) {
     ifs.read(reinterpret_cast<char*> (&readLensTmp8[0]), len8 * sizeof(readLensTmp8[0]));
     ifs.read(reinterpret_cast<char*> (&readLensTmp16[0]), len16 * sizeof(readLensTmp16[0]));
     ifs.read(reinterpret_cast<char*> (&readLensTmp64[0]), len64 * sizeof(readLensTmp64[0]));
-    ifs.read(reinterpret_cast<char*> (&avgQualitiesTmp[0]), (len8 + len16 + len64) * sizeof(double));
+    ifs.read(reinterpret_cast<char*> (&avgQualitiesTmp[0]), (len8 + len16 + len64) * sizeof(float));
     
     // add to vector
     readLens.insert(readLensTmp);
