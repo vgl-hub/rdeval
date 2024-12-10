@@ -427,6 +427,9 @@ void InReads::report() {
 }
 
 void InReads::printReadLengths() {
+    
+    std::cout << std::fixed; // disables scientific notation
+    std::cout << std::setprecision(2); // 2 decimal points
 
     if (userInput.sizeOutType == 's' || userInput.sizeOutType == 'h' || userInput.sizeOutType == 'c') {
         readLens.sort();
@@ -482,6 +485,9 @@ void InReads::printReadLengths() {
 }
 
 void InReads::printQualities() {
+    
+    std::cout << std::fixed; // disables scientific notation
+    std::cout << std::setprecision(2); // 2 decimal points
     
     char qualityOut = userInput.qualityOut;
     
