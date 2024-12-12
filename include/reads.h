@@ -115,9 +115,9 @@ public:
     
     void writeToStream();
     
-    void printTableCompressedBinary(std::string outFile);
+    void printTableCompressed(std::string outFile);
     
-    void readTableCompressedBinary(std::string inFile);
+    void readTableCompressed(std::string inFile);
     
     void sortReads();
 };

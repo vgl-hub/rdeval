@@ -53,6 +53,6 @@ void Input::read() {
     if (userInput.outFiles.size()) {
         for (std::string file : userInput.outFiles)
             if (getFileExt(file) == "rd")
-                inReads.printTableCompressedBinary(file);
+                inReads.printTableCompressed(file);
     }
 }

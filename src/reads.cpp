@@ -199,7 +199,7 @@ void InReads::load() {
                 break;
             }
             case 4: { // rd
-                    readTableCompressedBinary(userInput.inFiles[i]);
+                    readTableCompressed(userInput.inFiles[i]);
                 break;
             }
             default: { // fasta[.gz]
@@ -592,80 +592,128 @@ void InReads::writeToStream() {
     }
 }
 
-void InReads::printTableCompressedBinary(std::string outFile) {
+void InReads::printTableCompressed(std::string outFile) {
     
-    std::ofstream ofs(outFile, std::fstream::trunc | std::ios::out | std::ios::binary);
-    
-    // write summary statistics
-    ofs.write(reinterpret_cast<const char*>(&totA), sizeof(uint64_t));
-    ofs.write(reinterpret_cast<const char*>(&totC), sizeof(uint64_t));
-    ofs.write(reinterpret_cast<const char*>(&totG), sizeof(uint64_t));
-    ofs.write(reinterpret_cast<const char*>(&totT), sizeof(uint64_t));
-    ofs.write(reinterpret_cast<const char*>(&totN), sizeof(uint64_t));
-    
+    // compute buffer size
     std::vector<std::pair<uint8_t,float>> &readLens8 = readLens.getReadLens8();
     std::vector<std::pair<uint16_t,float>> &readLens16 = readLens.getReadLens16();
     std::vector<std::pair<uint64_t,float>> &readLens64 = readLens.getReadLens64();
+    uint64_t len8 = readLens8.size(), len16 = readLens16.size(), len64 = readLens64.size();
+    
+    uLong sourceLen = sizeof(uint64_t) * (5 + 3) + len8 * sizeof(readLens8[0]) + len16 * sizeof(readLens16[0]) + sizeof(readLens64[0]) + (len8 + len16 + len64) * sizeof(float);
+    Bytef source[sourceLen]; // ACGTN + len8,len16,len64 + vectors + qualities
+    uLong destLen = compressBound(sourceLen);
+    Bytef dest[destLen];
+
+    unsigned char* ptr = source;
+
+    // write ACGTN counts
+    memcpy(ptr, &totA, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(ptr, &totC, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(ptr, &totG, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(ptr, &totT, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(ptr, &totN, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
     
     // write vector lengths
-    uint64_t len8 = readLens8.size(), len16 = readLens16.size(), len64 = readLens64.size();
-    ofs.write(reinterpret_cast<const char*>(&len8), sizeof(uint64_t));
-    ofs.write(reinterpret_cast<const char*>(&len16), sizeof(uint64_t));
-    ofs.write(reinterpret_cast<const char*>(&len64), sizeof(uint64_t));
+    memcpy(ptr, &len8, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(ptr, &len16, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(ptr, &len64, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
  
     // write vectors
-    ofs.write(reinterpret_cast<const char*>(&readLens8[0]), len8 * sizeof(readLens8[0]));
-    ofs.write(reinterpret_cast<const char*>(&readLens16[0]), len16 * sizeof(readLens16[0]));
-    ofs.write(reinterpret_cast<const char*>(&readLens64[0]), len64 * sizeof(readLens64[0]));
-    ofs.write(reinterpret_cast<const char*>(&avgQualities[0]), (len8 + len16 + len64) * sizeof(float));
+    memcpy(ptr, &readLens8[0], len8 * sizeof(readLens8[0]));
+    ptr += len8 * sizeof(readLens8[0]);
+    memcpy(ptr, &readLens16[0], len16 * sizeof(readLens16[0]));
+    ptr += len16 * sizeof(readLens16[0]);
+    memcpy(ptr, &readLens64[0], len64 * sizeof(readLens64[0]));
+    ptr += len64 * sizeof(readLens64[0]);
+    memcpy(ptr, &avgQualities[0], (len8 + len16 + len64) * sizeof(float));
+    ptr += (len8 + len16 + len64) * sizeof(float);
+
+    compress(dest, &destLen, source, sourceLen);
+    
+    std::ofstream ofs(outFile, std::fstream::trunc | std::ios::out | std::ios::binary);
+    ofs.write(reinterpret_cast<const char*>(&sourceLen), sizeof(uint64_t)); // output the decompressed file size first
+    ofs.write(reinterpret_cast<const char*>(&dest), destLen * sizeof(Bytef));
     ofs.close();
 }
 
-void InReads::readTableCompressedBinary(std::string inFile) {
+void InReads::readTableCompressed(std::string inFile) {
     
     // read
-    std::ifstream ifs;
-    ifs.open(inFile, std::ifstream::binary);
+    std::ifstream ifs(inFile, std::ios::binary | std::ios::ate); // compute file size
+    std::streamsize fileSize = ifs.tellg();
+    ifs.seekg(0, std::ios::beg);
     
+    uLongf decompressedSize; // compute buffer size compressed/decompressed
+    ifs.read(reinterpret_cast<char*> (&decompressedSize), sizeof(uint64_t)); // read gz-uncompressed size
+    Bytef data[decompressedSize];
+    
+    uLong compressedSize = fileSize - sizeof(uint64_t);
+    Bytef gzData[compressedSize];
+    ifs.read(reinterpret_cast<char*> (&gzData), compressedSize * sizeof(Bytef)); // read gzipped data
+    uncompress(data, &decompressedSize, gzData, compressedSize);
+
     // read summary statistics
+    unsigned char* ptr = data;
+    
     uint64_t A, C, G, T, N;
-    ifs.read(reinterpret_cast<char*> (&A), sizeof(uint64_t));
-    ifs.read(reinterpret_cast<char*> (&C), sizeof(uint64_t));
-    ifs.read(reinterpret_cast<char*> (&G), sizeof(uint64_t));
-    ifs.read(reinterpret_cast<char*> (&T), sizeof(uint64_t));
-    ifs.read(reinterpret_cast<char*> (&N), sizeof(uint64_t));
+    memcpy(&A, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(&C, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(&G, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(&T, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(&N, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
     totA += A;
     totC += C;
     totG += G;
     totT += T;
     totN += N;
-    
+
     uint64_t len8, len16, len64;
-    ifs.read(reinterpret_cast<char*> (&len8), sizeof(uint64_t));
-    ifs.read(reinterpret_cast<char*> (&len16), sizeof(uint64_t));
-    ifs.read(reinterpret_cast<char*> (&len64), sizeof(uint64_t));
-    
+    memcpy(&len8, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(&len16, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(&len64, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+
     // tmp vectors
     LenVector<float> readLensTmp;
     std::vector<float> avgQualitiesTmp;
-    
+
     std::vector<std::pair<uint8_t,float>> &readLensTmp8 = readLensTmp.getReadLens8();
     std::vector<std::pair<uint16_t,float>> &readLensTmp16 = readLensTmp.getReadLens16();
     std::vector<std::pair<uint64_t,float>> &readLensTmp64 = readLensTmp.getReadLens64();
-    
+
     readLensTmp8.resize(len8);
     readLensTmp16.resize(len16);
     readLensTmp64.resize(len64);
     avgQualitiesTmp.resize(len8 + len16 + len64);
     
-    ifs.read(reinterpret_cast<char*> (&readLensTmp8[0]), len8 * sizeof(readLensTmp8[0]));
-    ifs.read(reinterpret_cast<char*> (&readLensTmp16[0]), len16 * sizeof(readLensTmp16[0]));
-    ifs.read(reinterpret_cast<char*> (&readLensTmp64[0]), len64 * sizeof(readLensTmp64[0]));
-    ifs.read(reinterpret_cast<char*> (&avgQualitiesTmp[0]), (len8 + len16 + len64) * sizeof(float));
+    memcpy(&readLensTmp8[0], ptr, len8 * sizeof(readLensTmp8[0]));
+    ptr += len8 * sizeof(uint64_t);
+    memcpy(&readLensTmp16[0], ptr, len16 * sizeof(readLensTmp16[0]));
+    ptr += len16 * sizeof(uint64_t);
+    memcpy(&readLensTmp64[0], ptr, len64 * sizeof(readLensTmp64[0]));
+    ptr += len64 * sizeof(uint64_t);
+    memcpy(&avgQualitiesTmp[0], ptr, (len8 + len16 + len64) * sizeof(float));
+    ptr += (len8 + len16 + len64) * sizeof(uint64_t);
     
     // add to vector
     readLens.insert(readLensTmp);
     avgQualities.insert(std::end(avgQualities), std::begin(avgQualitiesTmp), std::end(avgQualitiesTmp));
-    
+
     totReads += len8 + len16 + len64;
 }
