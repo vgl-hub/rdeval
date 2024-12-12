@@ -601,9 +601,9 @@ void InReads::printTableCompressed(std::string outFile) {
     uint64_t len8 = readLens8.size(), len16 = readLens16.size(), len64 = readLens64.size();
     
     uLong sourceLen = sizeof(uint64_t) * (5 + 3) + len8 * sizeof(readLens8[0]) + len16 * sizeof(readLens16[0]) + sizeof(readLens64[0]) + (len8 + len16 + len64) * sizeof(float);
-    Bytef source[sourceLen]; // ACGTN + len8,len16,len64 + vectors + qualities
+    Bytef *source = new Bytef[sourceLen]; // ACGTN + len8,len16,len64 + vectors + qualities
     uLong destLen = compressBound(sourceLen);
-    Bytef dest[destLen];
+    Bytef *dest = new Bytef[destLen];
 
     unsigned char* ptr = source;
 
@@ -638,11 +638,13 @@ void InReads::printTableCompressed(std::string outFile) {
     ptr += (len8 + len16 + len64) * sizeof(float);
 
     compress(dest, &destLen, source, sourceLen);
+    delete[] source;
     
     std::ofstream ofs(outFile, std::fstream::trunc | std::ios::out | std::ios::binary);
     ofs.write(reinterpret_cast<const char*>(&sourceLen), sizeof(uint64_t)); // output the decompressed file size first
-    ofs.write(reinterpret_cast<const char*>(&dest), destLen * sizeof(Bytef));
+    ofs.write(reinterpret_cast<const char*>(dest), destLen * sizeof(Bytef));
     ofs.close();
+    delete[] dest;
 }
 
 void InReads::readTableCompressed(std::string inFile) {
@@ -654,13 +656,14 @@ void InReads::readTableCompressed(std::string inFile) {
     
     uLongf decompressedSize; // compute buffer size compressed/decompressed
     ifs.read(reinterpret_cast<char*> (&decompressedSize), sizeof(uint64_t)); // read gz-uncompressed size
-    Bytef data[decompressedSize];
+    Bytef *data = new Bytef[decompressedSize];
     
     uLong compressedSize = fileSize - sizeof(uint64_t);
-    Bytef gzData[compressedSize];
-    ifs.read(reinterpret_cast<char*> (&gzData), compressedSize * sizeof(Bytef)); // read gzipped data
+    Bytef *gzData = new Bytef[compressedSize];
+    ifs.read(reinterpret_cast<char*> (gzData), compressedSize * sizeof(Bytef)); // read gzipped data
     uncompress(data, &decompressedSize, gzData, compressedSize);
-
+    delete[] gzData;
+    
     // read summary statistics
     unsigned char* ptr = data;
     
@@ -710,6 +713,8 @@ void InReads::readTableCompressed(std::string inFile) {
     ptr += len64 * sizeof(uint64_t);
     memcpy(&avgQualitiesTmp[0], ptr, (len8 + len16 + len64) * sizeof(float));
     ptr += (len8 + len16 + len64) * sizeof(uint64_t);
+    
+    delete[] data;
     
     // add to vector
     readLens.insert(readLensTmp);
