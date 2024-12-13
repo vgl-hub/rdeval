@@ -11,7 +11,7 @@ struct UserInputRdeval : UserInput {
     char sizeOutType = 'u'; //default output from this flag is unsorted sizes
     char qualityOut = 'a'; // average quality per read
     char content = 'a'; // default output is to print the normalized ATCGN content for all sequences
-    int outSize_flag, quality_flag, content_flag, cmd_flag = 0;
+    int outSize_flag = 0, quality_flag = 0, content_flag = 0, md5_flag = 0, cmd_flag = 0;
 
 };
 
@@ -57,6 +57,8 @@ class InReads {
     bool streamOutput = false;
     uint64_t batchCounter = 1;
     
+    std::vector<std::pair<std::string,std::string*>> md5s;
+    
 public:
     
     InReads(UserInputRdeval &userInput, std::string file) : userInput(userInput), outputStream(file) {
@@ -78,6 +80,11 @@ public:
                     streamOutput = true;
         }
     };
+    
+    ~InReads() {
+        for (auto md5 : md5s)
+            delete md5.second;
+    }
     
     void openOutput(std::string file);
     
@@ -119,7 +126,7 @@ public:
     
     void readTableCompressed(std::string inFile);
     
-    void sortReads();
+    void printMd5();
 };
 
 #endif /* READS_H */

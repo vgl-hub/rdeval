@@ -88,7 +88,13 @@ void InReads::load() {
     
     for (uint32_t i = 0; i < numFiles; i++) {
         
-        std::string ext = getFileExt(userInput.file('r', i));
+        std::string file = userInput.file('r', i);
+        std::string ext = getFileExt(file);
+        if (ext != "rd") {
+            std::string *md5 = new std::string;
+            md5s.push_back(std::make_pair(getFileName(file),md5));
+            threadPool.queueJob([=]{ return computeMd5(file, md5); });
+        }
         
         switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
                 
@@ -600,8 +606,8 @@ void InReads::printTableCompressed(std::string outFile) {
     std::vector<std::pair<uint64_t,float>> &readLens64 = readLens.getReadLens64();
     uint64_t len8 = readLens8.size(), len16 = readLens16.size(), len64 = readLens64.size();
     
-    uLong sourceLen = sizeof(uint64_t) * (5 + 3) + len8 * sizeof(readLens8[0]) + len16 * sizeof(readLens16[0]) + sizeof(readLens64[0]) + (len8 + len16 + len64) * sizeof(float);
-    Bytef *source = new Bytef[sourceLen]; // ACGTN + len8,len16,len64 + vectors + qualities
+    uLong sourceLen = sizeof(uint64_t) * (5 + 3) + len8 * sizeof(readLens8[0]) + len16 * sizeof(readLens16[0]) + sizeof(readLens64[0]) + (len8 + len16 + len64) * sizeof(float); // ACGTN + len8,len16,len64 + vectors + qualities
+    Bytef *source = new Bytef[sourceLen];
     uLong destLen = compressBound(sourceLen);
     Bytef *dest = new Bytef[destLen];
 
@@ -641,8 +647,21 @@ void InReads::printTableCompressed(std::string outFile) {
     delete[] source;
     
     std::ofstream ofs(outFile, std::fstream::trunc | std::ios::out | std::ios::binary);
-    ofs.write(reinterpret_cast<const char*>(&sourceLen), sizeof(uint64_t)); // output the decompressed file size first
-    ofs.write(reinterpret_cast<const char*>(dest), destLen * sizeof(Bytef));
+    
+    // write md5s
+    uint32_t md5sN = md5s.size();
+    uint16_t stringSize;
+    ofs.write(reinterpret_cast<const char*>(&md5sN), sizeof(uint32_t));
+    for (auto md5 : md5s) {
+        stringSize = md5.first.size();
+        ofs.write(reinterpret_cast<const char*>(&stringSize), sizeof(uint16_t));
+        ofs.write(reinterpret_cast<const char*>(md5.first.c_str()), sizeof(char) * stringSize);
+        stringSize = md5.second->size();
+        ofs.write(reinterpret_cast<const char*>(&stringSize), sizeof(uint16_t));
+        ofs.write(reinterpret_cast<const char*>(md5.second->c_str()), sizeof(char) * stringSize);
+    }
+    ofs.write(reinterpret_cast<const char*>(&sourceLen), sizeof(uint64_t)); // output the decompressed file size
+    ofs.write(reinterpret_cast<const char*>(dest), destLen * sizeof(Bytef)); // output compressed data
     ofs.close();
     delete[] dest;
 }
@@ -654,7 +673,23 @@ void InReads::readTableCompressed(std::string inFile) {
     std::streamsize fileSize = ifs.tellg();
     ifs.seekg(0, std::ios::beg);
     
-    uLongf decompressedSize; // compute buffer size compressed/decompressed
+    uint32_t md5sN;
+    uint16_t stringSize;
+    ifs.read(reinterpret_cast<char*>(&md5sN), sizeof(uint32_t));
+    
+    for (uint32_t i = 0; i < md5sN; ++i) {
+        std::string filename;
+        std::string *md5 = new std::string;
+        ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(uint16_t));
+        filename.resize(stringSize);
+        ifs.read(reinterpret_cast<char*>(&filename[0]), sizeof(char) * stringSize);
+        ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(uint16_t));
+        md5->resize(stringSize);
+        ifs.read(reinterpret_cast<char*>(&(*md5)[0]), sizeof(char) * stringSize);
+        md5s.push_back(std::make_pair(filename,md5));
+    }
+    
+    uLongf decompressedSize;
     ifs.read(reinterpret_cast<char*> (&decompressedSize), sizeof(uint64_t)); // read gz-uncompressed size
     Bytef *data = new Bytef[decompressedSize];
     
@@ -721,4 +756,9 @@ void InReads::readTableCompressed(std::string inFile) {
     avgQualities.insert(std::end(avgQualities), std::begin(avgQualitiesTmp), std::end(avgQualitiesTmp));
 
     totReads += len8 + len16 + len64;
+}
+
+void InReads::printMd5() {
+    for (auto md5 : md5s)
+        std::cout<<md5.first<<": "<<*md5.second<<std::endl;
 }
