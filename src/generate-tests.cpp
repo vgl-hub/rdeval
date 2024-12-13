@@ -38,7 +38,7 @@ int main(int, char **argv) {
 
     const std::map<std::set<std::string>, std::vector<std::string>> ext_args = {
         {{"fasta", "fasta.gz", "fastq", "fastq.gz"}, {"", "5", "-f \">10\"", "-f \"<10\"", "-f \"=10\""}},
-        {{"rd"}, {""}}
+        {{"rd"}, {"", "--md5"}}
         //  {{set of test file extensions}, {list of command line args to run with}}
     };
 
