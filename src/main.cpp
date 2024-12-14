@@ -15,7 +15,7 @@
 #include "stream-obj.h"
 #include "input.h"
 
-std::string version = "0.0.1";
+std::string version = "0.0.2";
 
 //global
 std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now(); // immediately start the clock when the program is run
@@ -25,7 +25,7 @@ Log lg;
 std::vector<Log> logs;
 int tabular_flag;
 
-int maxThreads = 0;
+int maxThreads = 3;
 std::mutex mtx;
 ThreadPool<std::function<bool()>> threadPool;
 
@@ -41,11 +41,11 @@ int main(int argc, char **argv) {
     
     std::string cmd;
 
-    char helpStr[] = "rdeval input.[fasta|fastq|gfa][.gz] [expected genome size]\n";
+    char helpStr[] = "rdeval input.[fasta|fastq][.gz] [expected genome size]";
     
     if (argc == 1) { // gfastats with no arguments
             
-        printf("%s", helpStr);
+        printf("%s\n", helpStr);
         exit(0);
         
     }
@@ -58,6 +58,8 @@ int main(int argc, char **argv) {
         {"quality", required_argument, 0, 'q'},
         {"input-reads", required_argument, 0, 'r'},
         {"out-size", required_argument, 0, 's'},
+        {"md5", no_argument, &userInput.md5_flag, 1},
+        {"tabular", no_argument, &tabular_flag, 1},
         {"verbose", no_argument, &verbose_flag, 1},
         {"cmd", no_argument, &userInput.cmd_flag, 1},
         {"version", no_argument, 0, 'v'},
@@ -105,7 +107,7 @@ int main(int argc, char **argv) {
                 }
                 /* fall through */
                 
-            case 'r': // input reads
+            case 'r': // input files
                 
                 if (isPipe && userInput.pipeType == 'n') { // check whether input is from pipe and that pipe input was not already set
                 
@@ -178,13 +180,15 @@ int main(int argc, char **argv) {
             case 'h': // help
                 printf("%s", helpStr);
                 printf("\nOptions:\n");
-                printf("-j --threads <n> numbers of threads (default:max).\n");
+                printf("-j --threads <n> numbers of threads (default:3).\n");
                 printf("-f --filter <n> minimum length for retention (default:0).\n");
                 printf("-c --content a|g|t|n generates a list of sequences and their ATCGN base content; all bases, GC content, AT content, Ns (default:a).\n");
-                printf("-o --out-format <file> output file (fasta, fastq [.gz]). Optionally write reads to file.\n");
-                printf("-q --quality a generates list of average quality for each read.\n");
+                printf("-o --out-format <file> output file (fa*[.gz], rd). Optionally write reads to file or generate rd summary file.\n");
+                printf("-q --quality c|l a generates list of average quality for each read (c) or both length and quality (c).\n");
                 printf("-r --reads <file1> <file2> <file n> input file (fasta, fastq [.gz]).\n");
-                printf("-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cummulative table).\n");
+                printf("-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cumulative table).\n");
+                printf("--md5 print md5 of .rd files.\n");
+                printf("--tabular tabular output.\n");
                 printf("--verbose verbose output.\n");
                 printf("-v --version software version.\n");
                 printf("--cmd print $0 to stdout.\n");

@@ -13,18 +13,18 @@
 #include "gfa.h"
 #include "functions.h" // global functions
 #include "stream-obj.h"
+#include <iomanip>
 
 #include "zlib.h"
 #include "zstream/zstream_common.hpp"
 #include "zstream/ozstream.hpp"
 #include "zstream/ozstream_impl.hpp"
 #include "output.h"
-
-#include <htslib/sam.h>
+#include "len-vector.h"
 
 #include "reads.h"
 
-void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHeader, std::string* seqComment, std::string* sequence, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t seqPos, std::string* sequenceQuality, double* avgQuality, std::vector<Tag>* inSequenceTags, uint64_t* N) {
+void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHeader, std::string* seqComment, std::string* sequence, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t seqPos, std::string* sequenceQuality, double avgQuality, std::vector<Tag>* inSequenceTags, uint64_t* N) {
     
     threadLog->add("Processing read: " + seqHeader + " (uId: " + std::to_string(uId) + ", iId: " + std::to_string(iId) + ")");
     uint64_t seqSize = 0;
@@ -47,7 +47,7 @@ void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHead
             
             this->setInSequenceQuality(sequenceQuality);
             threadLog->add("Segment sequence quality set");
-            this->avgQuality = *avgQuality;
+            this->avgQuality = avgQuality;
         }
         
         this->setACGT(A, C, G, T, N);
@@ -61,15 +61,15 @@ void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHead
         seqSize = *lowerCount;
         this->setLowerCount(&seqSize);
         threadLog->add("No seq input. Length (" + std::to_string(seqSize) + ") recorded in lower count");
-        
     }
-    
 }
 
 void InReads::load() {
     
     std::string newLine, seqHeader, seqComment, line, bedHeader;
     std::size_t numFiles = userInput.inFiles.size();
+    uint32_t batchN = 0;
+    uint64_t processedLength = 0;
     lg.verbose("Processing " + std::to_string(numFiles) + " files");
     
     const static phmap::flat_hash_map<std::string,int> string_to_case{
@@ -83,11 +83,18 @@ void InReads::load() {
         {"fq.gz",1},
         {"bam",2},
         {"cram",3},
+        {"rd",4}
     };
     
     for (uint32_t i = 0; i < numFiles; i++) {
         
-        std::string ext = getFileExt(userInput.file('r', i));
+        std::string file = userInput.file('r', i);
+        std::string ext = getFileExt(file);
+        if (ext != "rd") {
+            std::string *md5 = new std::string;
+            md5s.push_back(std::make_pair(getFileName(file),md5));
+            threadPool.queueJob([=]{ return computeMd5(file, md5); });
+        }
         
         switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
                 
@@ -119,17 +126,17 @@ void InReads::load() {
                                 getline(*stream, *inSequence, '>');
                                 readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence});
                                 seqPos++;
+                                processedLength += inSequence->size();
                                 
-                                if (seqPos % batchSize == 0) {
-                                    
-                                    readBatch->batchN = seqPos/batchSize;
+                                if (processedLength > batchSize) {
+                                    readBatch->batchN = ++batchN;
                                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
                                     appendReads(readBatch);
                                     readBatch = new Sequences;
+                                    processedLength = 0;
                                 }
-                                lg.verbose("Individual fasta sequence read: " + seqHeader);
+                                //lg.verbose("Individual fasta sequence read: " + seqHeader);
                             }
-                            
                             break;
                         }
                         case '@': {
@@ -156,21 +163,21 @@ void InReads::load() {
                                 
                                 readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence, inSequenceQuality});
                                 seqPos++;
+                                processedLength += inSequence->size();
                                 
-                                if (seqPos % batchSize == 0) {
-                                    readBatch->batchN = seqPos/batchSize;
+                                if (processedLength > batchSize) {
+                                    readBatch->batchN = ++batchN;
                                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
                                     appendReads(readBatch);
                                     readBatch = new Sequences;
-                                    
+                                    processedLength = 0;
                                 }
-                                lg.verbose("Individual fastq sequence read: " + seqHeader);
+                                //lg.verbose("Individual fastq sequence read: " + seqHeader);
                             }
                             break;
                         }
                     }
-                    
-                    readBatch->batchN = seqPos/batchSize + 1;
+                    readBatch->batchN = ++batchN; // process residual reads
                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
                     appendReads(readBatch);
                 }
@@ -178,56 +185,27 @@ void InReads::load() {
             }
             case 2: { // bam
                 
-                Sequences* readBatch = new Sequences;
+                fprintf(stderr, "bam currently not supported.\n");
+                exit(EXIT_FAILURE);
                 
-                samFile *fp_in = hts_open(userInput.file('r', i).c_str(),"r"); //open bam file
-                bam_hdr_t *bamHdr = sam_hdr_read(fp_in); //read header
-                bam1_t *bamdata = bam_init1(); //initialize an alignment
-
-//                char *tar = bamHdr->text;
-//                printf("%s\n",tar);
+                StreamObj streamObj;
+                stream = streamObj.openStream(userInput, 'r', i);
+                //Sequences* readBatch = new Sequences;
                 
-                while(sam_read1(fp_in,bamHdr,bamdata) > 0) {
+                while (getline(*stream, newLine)) {
                     
-                    uint32_t len = bamdata->core.l_qseq; //length of the read.
-                    uint8_t *q = bam_get_seq(bamdata); //quality string
-                    char *qseq = (char *)malloc(len);
-                    char *qual = (char *)malloc(len);
+                    std::cout<<newLine<<std::endl;
                     
-                    for(uint32_t i=0; i<len; ++i)
-                        qseq[i] = seq_nt16_str[bam_seqi(q,i)]; //gets nucleotide id and converts them into IUPAC id.
-                    
-                    std::string* inSequence = new std::string(qseq, len);
-                    free(qseq);
-                    
-                    for(int i=0; i<bamdata->core.l_qseq; ++i)
-                        qual[i] = (char) bam_get_qual(bamdata)[i] + 33;
-                    
-                    std::string* inSequenceQuality = new std::string(qual, len);
-                    free(qual);
-                    
-                    readBatch->sequences.push_back(new Sequence {bam_get_qname(bamdata), std::string(), inSequence, inSequenceQuality});
-                    seqPos++;
-                    
-                    if (seqPos % batchSize == 0) {
-                        readBatch->batchN = seqPos/batchSize;
-                        lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-                        appendReads(readBatch);
-                        readBatch = new Sequences;
-                        
-                    }
-                    lg.verbose("Individual fastq sequence read: " + seqHeader);
-
                 }
-                readBatch->batchN = seqPos/batchSize + 1;
-                lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-                appendReads(readBatch);
-                bam_destroy1(bamdata);
-                sam_close(fp_in);
-                
                 break;
             }
             case 3: { // cram
+                fprintf(stderr, "cram currently not supported.\n");
+                exit(EXIT_FAILURE);
+                break;
+            }
+            case 4: { // rd
+                    readTableCompressed(userInput.inFiles[i]);
                 break;
             }
             default: { // fasta[.gz]
@@ -250,12 +228,11 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     threadLog.setId(readBatch->batchN);
     std::vector<InRead*> inReadsBatch;
     uint32_t readN = 0;
-    std::vector<uint64_t> readLensBatch;
+    LenVector<float> readLensBatch;
     InRead* read;
 
     uint64_t batchA = 0, batchT=0, batchC=0, batchG=0, batchN =0;
-    // std::vector<long double> batchListA, batchListC, batchListT, batchListG, batchListN;
-    std::vector<double> batchAvgQualities;
+    std::vector<float> batchAvgQualities;
     uint64_t filterInt = 0;
 
     if (userInput.filter != "none")
@@ -270,14 +247,13 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
                 ((userInput.filter[0] == '=') && (sequence->sequence->size() != filterInt))
             )
         ){
-            
             lg.verbose("Sequence length (" + std::to_string(sequence->sequence->size()) + ") shorter than filter length. Filtering out (" + sequence->header + ").");
             continue;
         }
         
         read = traverseInRead(&threadLog, sequence, readBatch->batchN+readN++);
-
-        readLensBatch.push_back(read->inSequence->size());
+        std::pair<uint64_t, float> lenQual(read->inSequence->size(), read->avgQuality);
+        readLensBatch.push_back(lenQual);
         batchA += read->getA();
         batchT += read->getT();
         batchC += read->getC();
@@ -287,22 +263,24 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
         if (read->inSequenceQuality != NULL)
             batchAvgQualities.push_back(read->avgQuality);
         
-        inReadsBatch.push_back(read);
+        if (streamOutput)
+            inReadsBatch.push_back(read);
+        else
+            delete read;
     }
     
     std::unique_lock<std::mutex> lck(mtx);
-    
     readBatches.emplace_back(inReadsBatch,readBatch->batchN);
     delete readBatch;
-    readLens.insert(std::end(readLens), std::begin(readLensBatch), std::end(readLensBatch));
+    readLens.insert(readLensBatch);
     avgQualities.insert(std::end(avgQualities), std::begin(batchAvgQualities), std::end(batchAvgQualities));
-    totReads += inReadsBatch.size();
 
     totA+=batchA;
     totT+=batchT;
     totC+=batchC;
     totG+=batchG;
     totN+=batchN;
+    totReads += readN;
 
     logs.push_back(threadLog);
     return true;
@@ -311,8 +289,8 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
 InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seqPos) { // traverse a single read
 
     uint64_t A = 0, C = 0, G = 0, T = 0, N = 0, lowerCount = 0;
-    uint64_t sumQuality =0;
-    double avgQuality=0;
+    uint64_t sumQuality = 0;
+    float avgQuality = 0;
     
     for (char &base : *sequence->sequence) {
         
@@ -371,12 +349,12 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seq
     if (sequence->sequenceQuality != NULL){
         for (char &quality : *sequence -> sequenceQuality)
             sumQuality += int(quality) - 33;
-        avgQuality = sumQuality/(sequence->sequenceQuality->size());
+        avgQuality = (float) sumQuality/(sequence->sequenceQuality->size());
     }
 
     // operations on the segment
     InRead* inRead = new InRead;
-    inRead->set(threadLog, 0, 0, sequence->header, &sequence->comment, sequence->sequence, &A, &C, &G, &T, &lowerCount, seqPos, sequence->sequenceQuality, &avgQuality, NULL, &N);
+    inRead->set(threadLog, 0, 0, sequence->header, &sequence->comment, sequence->sequence, &A, &C, &G, &T, &lowerCount, seqPos, sequence->sequenceQuality, avgQuality, NULL, &N);
     sequence->sequence = NULL;
     sequence->sequenceQuality = NULL;
     return inRead;
@@ -402,43 +380,40 @@ uint64_t InReads::getReadN50() {
     return readNstars[4];
 }
 
-void InReads::evalNstars() {
-    computeNstars(readLens, readNstars, readLstars);
+void InReads::evalNstars() { // not very efficient
+    std::vector<std::pair<uint64_t,float>> allReadLens = readLens.all();
+    std::vector<uint64_t> tmpVector(allReadLens.size());
+    for (uint64_t i = 0; i < allReadLens.size(); ++i)
+        tmpVector[i] = allReadLens[i].first;
+    computeNstars(tmpVector, readNstars, readLstars);
 }
 
 uint64_t InReads::getSmallestRead() {
-    return readLens.back();
-}
-
-uint64_t InReads::getLargestRead() {
     return readLens.front();
 }
 
-void InReads::getQualities(){
-
-    for (const auto &item : qualities)
-        std::cout << item << "\n";
-
-    std::cout << std::endl;
+uint64_t InReads::getLargestRead() {
+    return readLens.back();
 }
 
-double InReads::getAvgQualities(){
+double InReads::getAvgQuality(){
 
-    uint64_t sumQualities = 0;
-    uint64_t avgQualitiesSize=avgQualities.size();
-    double avgQuality = 0;
+    uint64_t sumQualities = 0, avgQualitiesSize=avgQualities.size();
 
-    for (uint64_t i=0; i < avgQualitiesSize; i++)
-        sumQualities += avgQualities[i]*readLens[i];  //sum the qualities normalized by their read length
+    for (uint64_t i = 0; i < avgQualitiesSize; i++)
+        sumQualities += avgQualities[i] * readLens[i];  // sum the qualities normalized by their read length
 
-    avgQuality = (sumQualities/getTotReadLen());
-    return avgQuality;
-
+    return (double) sumQualities/getTotReadLen();
 }
 
 void InReads::report() {
 
     if (totReads > 0) {
+        
+        readLens.sort();
+        
+        std::cout << std::fixed; // disables scientific notation
+        std::cout << std::setprecision(2); // 2 decimal points
         
         if (!tabular_flag)
             std::cout<<output("+++Read summary+++")<<"\n";
@@ -450,19 +425,26 @@ void InReads::report() {
         std::cout<<output("Smallest read length")<<getSmallestRead()<<"\n";
         std::cout<<output("Largest read length")<<getLargestRead()<<"\n";
         std::cout<<output("Coverage")<<gfa_round((double)getTotReadLen()/userInput.gSize)<<"\n";
-        std::cout<<output("GC content %")<<computeGCcontent()<<"\n";
+        std::cout<<output("GC content %")<<gfa_round(computeGCcontent())<<"\n";
         std::cout<<output("Base composition (A:C:T:G)")<<totA<<":"<<totC<<":"<<totT<<":"<<totG<<"\n";
-        std::cout<<output("Average read quality")<<getAvgQualities()<<"\n";
+        std::cout<<output("Average read quality")<<getAvgQuality()<<"\n";
     }
 }
 
 void InReads::printReadLengths() {
+    
+    std::cout << std::fixed; // disables scientific notation
+    std::cout << std::setprecision(2); // 2 decimal points
 
     if (userInput.sizeOutType == 's' || userInput.sizeOutType == 'h' || userInput.sizeOutType == 'c') {
-        sort(readLens.begin(), readLens.end());
-
+        readLens.sort();
+    }else{
+        
+        auto readLensTmp = readLens.all();
+        
+        for (auto read : readLensTmp)
+            std::cout << read.first << "\n";
     }
-
     if (userInput.sizeOutType == 'h') {
 
         int count = 1;
@@ -476,7 +458,6 @@ void InReads::printReadLengths() {
             }
         }
     }
-
     if (userInput.sizeOutType == 'c') {
 
         int count = 1;
@@ -506,26 +487,24 @@ void InReads::printReadLengths() {
             sizexCountSums += sizexCounts[i];
         }
     }
-    else {
-        for (auto i: readLens) {
-            std::cout << i << "\n";
-        }
-    }
 }
 
 void InReads::printQualities() {
     
+    std::cout << std::fixed; // disables scientific notation
+    std::cout << std::setprecision(2); // 2 decimal points
+    
     char qualityOut = userInput.qualityOut;
+    
+    auto readLensTmp = readLens.all();
 
     if (qualityOut == 'c'){
-        for (uint64_t i = 0; i < (avgQualities.size()); i++) {
-            std::cout << avgQualities[i] << "\n";
-        }
+        for (auto read : readLensTmp)
+            std::cout << read.second << "\n";
     }
     else if (qualityOut == 'l') { // l prints read lengths and qualities
-        for (uint64_t i = 0; i < (avgQualities.size()); i++) {
-            std::cout << readLens[i] << "," << avgQualities[i] << "\n";
-        }
+        for (auto read : readLensTmp)
+            std::cout << read.first << "," << read.second << "\n";
     }
 }
 void InReads::printContent() {
@@ -555,7 +534,7 @@ void InReads::printContent() {
 
 void InReads::writeToStream() {
     
-    if (userInput.outFiles.size()) {
+    if (streamOutput) {
         
         std::string ext = getFileExt(outputStream.file); // variable to handle output path and extension
         
@@ -567,8 +546,7 @@ void InReads::writeToStream() {
             {"fastq",2},
             {"fq",2},
             {"fastq.gz",2},
-            {"fq.gz",2},
-            
+            {"fq.gz",2}
         };
         
         std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
@@ -620,3 +598,167 @@ void InReads::writeToStream() {
     }
 }
 
+void InReads::printTableCompressed(std::string outFile) {
+    
+    // compute buffer size
+    std::vector<std::pair<uint8_t,float>> &readLens8 = readLens.getReadLens8();
+    std::vector<std::pair<uint16_t,float>> &readLens16 = readLens.getReadLens16();
+    std::vector<std::pair<uint64_t,float>> &readLens64 = readLens.getReadLens64();
+    uint64_t len8 = readLens8.size(), len16 = readLens16.size(), len64 = readLens64.size();
+    
+    uLong sourceLen = sizeof(uint64_t) * (5 + 3) + len8 * sizeof(readLens8[0]) + len16 * sizeof(readLens16[0]) + sizeof(readLens64[0]) + (len8 + len16 + len64) * sizeof(float); // ACGTN + len8,len16,len64 + vectors + qualities
+    Bytef *source = new Bytef[sourceLen];
+    uLong destLen = compressBound(sourceLen);
+    Bytef *dest = new Bytef[destLen];
+
+    unsigned char* ptr = source;
+
+    // write ACGTN counts
+    memcpy(ptr, &totA, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(ptr, &totC, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(ptr, &totG, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(ptr, &totT, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(ptr, &totN, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    
+    // write vector lengths
+    memcpy(ptr, &len8, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(ptr, &len16, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(ptr, &len64, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+ 
+    // write vectors
+    memcpy(ptr, &readLens8[0], len8 * sizeof(readLens8[0]));
+    ptr += len8 * sizeof(readLens8[0]);
+    memcpy(ptr, &readLens16[0], len16 * sizeof(readLens16[0]));
+    ptr += len16 * sizeof(readLens16[0]);
+    memcpy(ptr, &readLens64[0], len64 * sizeof(readLens64[0]));
+    ptr += len64 * sizeof(readLens64[0]);
+    memcpy(ptr, &avgQualities[0], (len8 + len16 + len64) * sizeof(float));
+    ptr += (len8 + len16 + len64) * sizeof(float);
+
+    compress(dest, &destLen, source, sourceLen);
+    delete[] source;
+    
+    std::ofstream ofs(outFile, std::fstream::trunc | std::ios::out | std::ios::binary);
+    
+    // write md5s
+    uint32_t md5sN = md5s.size();
+    uint16_t stringSize;
+    ofs.write(reinterpret_cast<const char*>(&md5sN), sizeof(uint32_t));
+    for (auto md5 : md5s) {
+        stringSize = md5.first.size();
+        ofs.write(reinterpret_cast<const char*>(&stringSize), sizeof(uint16_t));
+        ofs.write(reinterpret_cast<const char*>(md5.first.c_str()), sizeof(char) * stringSize);
+        stringSize = md5.second->size();
+        ofs.write(reinterpret_cast<const char*>(&stringSize), sizeof(uint16_t));
+        ofs.write(reinterpret_cast<const char*>(md5.second->c_str()), sizeof(char) * stringSize);
+    }
+    ofs.write(reinterpret_cast<const char*>(&sourceLen), sizeof(uint64_t)); // output the decompressed file size
+    ofs.write(reinterpret_cast<const char*>(dest), destLen * sizeof(Bytef)); // output compressed data
+    ofs.close();
+    delete[] dest;
+}
+
+void InReads::readTableCompressed(std::string inFile) {
+    
+    // read
+    std::ifstream ifs(inFile, std::ios::binary | std::ios::ate); // compute file size
+    std::streamsize fileSize = ifs.tellg();
+    ifs.seekg(0, std::ios::beg);
+    
+    uint32_t md5sN;
+    uint16_t stringSize;
+    ifs.read(reinterpret_cast<char*>(&md5sN), sizeof(uint32_t));
+    
+    for (uint32_t i = 0; i < md5sN; ++i) {
+        std::string filename;
+        std::string *md5 = new std::string;
+        ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(uint16_t));
+        filename.resize(stringSize);
+        ifs.read(reinterpret_cast<char*>(&filename[0]), sizeof(char) * stringSize);
+        ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(uint16_t));
+        md5->resize(stringSize);
+        ifs.read(reinterpret_cast<char*>(&(*md5)[0]), sizeof(char) * stringSize);
+        md5s.push_back(std::make_pair(filename,md5));
+    }
+    
+    uLongf decompressedSize;
+    ifs.read(reinterpret_cast<char*> (&decompressedSize), sizeof(uint64_t)); // read gz-uncompressed size
+    Bytef *data = new Bytef[decompressedSize];
+    
+    uLong compressedSize = fileSize - sizeof(uint64_t);
+    Bytef *gzData = new Bytef[compressedSize];
+    ifs.read(reinterpret_cast<char*> (gzData), compressedSize * sizeof(Bytef)); // read gzipped data
+    uncompress(data, &decompressedSize, gzData, compressedSize);
+    delete[] gzData;
+    
+    // read summary statistics
+    unsigned char* ptr = data;
+    
+    uint64_t A, C, G, T, N;
+    memcpy(&A, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(&C, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(&G, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(&T, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(&N, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    totA += A;
+    totC += C;
+    totG += G;
+    totT += T;
+    totN += N;
+
+    uint64_t len8, len16, len64;
+    memcpy(&len8, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(&len16, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(&len64, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+
+    // tmp vectors
+    LenVector<float> readLensTmp;
+    std::vector<float> avgQualitiesTmp;
+
+    std::vector<std::pair<uint8_t,float>> &readLensTmp8 = readLensTmp.getReadLens8();
+    std::vector<std::pair<uint16_t,float>> &readLensTmp16 = readLensTmp.getReadLens16();
+    std::vector<std::pair<uint64_t,float>> &readLensTmp64 = readLensTmp.getReadLens64();
+
+    readLensTmp8.resize(len8);
+    readLensTmp16.resize(len16);
+    readLensTmp64.resize(len64);
+    avgQualitiesTmp.resize(len8 + len16 + len64);
+    
+    memcpy(&readLensTmp8[0], ptr, len8 * sizeof(readLensTmp8[0]));
+    ptr += len8 * sizeof(uint64_t);
+    memcpy(&readLensTmp16[0], ptr, len16 * sizeof(readLensTmp16[0]));
+    ptr += len16 * sizeof(uint64_t);
+    memcpy(&readLensTmp64[0], ptr, len64 * sizeof(readLensTmp64[0]));
+    ptr += len64 * sizeof(uint64_t);
+    memcpy(&avgQualitiesTmp[0], ptr, (len8 + len16 + len64) * sizeof(float));
+    ptr += (len8 + len16 + len64) * sizeof(uint64_t);
+    
+    delete[] data;
+    
+    // add to vector
+    readLens.insert(readLensTmp);
+    avgQualities.insert(std::end(avgQualities), std::begin(avgQualitiesTmp), std::end(avgQualitiesTmp));
+
+    totReads += len8 + len16 + len64;
+}
+
+void InReads::printMd5() {
+    for (auto md5 : md5s)
+        std::cout<<md5.first<<": "<<*md5.second<<std::endl;
+}

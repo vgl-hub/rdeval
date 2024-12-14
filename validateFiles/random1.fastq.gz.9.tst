@@ -1,13 +1,13 @@
-testFiles/random1.fastq.gz -f "=10"
+testFiles/random1.fastq.gz -f ">10"
 embedded
 +++Read summary+++: 
-# reads: 1
-Total read length: 10
-Average read length: 10
-Read N50: 10
-Smallest read length: 10
-Largest read length: 10
+# reads: 2
+Total read length: 30
+Average read length: 15.00
+Read N50: 15
+Smallest read length: 15
+Largest read length: 15
 Coverage: inf
-GC content %: 28.5714
-Base composition (A:C:T:G): 2:1:3:1
-Average read quality: 24
+GC content %: 54.17
+Base composition (A:C:T:G): 5:10:6:3
+Average read quality: 21.70

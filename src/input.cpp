@@ -13,6 +13,7 @@
 #include "gfa-lines.h"
 #include "uid-generator.h"
 #include "gfa.h"
+#include "functions.h" // global functions
 #include "reads.h"
 #include "stream-obj.h"
 
@@ -39,8 +40,10 @@ void Input::read() {
     inReads.load();
     jobWait(threadPool);
     inReads.writeToStream(); // write last batch
-
-    if (userInput.stats_flag) // output summary statistics
+    
+    if (userInput.md5_flag)
+       inReads.printMd5();
+    else if (userInput.stats_flag) // output summary statistics
         inReads.report();
     else if (userInput.outSize_flag)
         inReads.printReadLengths();
@@ -48,4 +51,10 @@ void Input::read() {
         inReads.printQualities();
     else if (userInput.content_flag)
         inReads.printContent();
+    
+    if (userInput.outFiles.size()) {
+        for (std::string file : userInput.outFiles)
+            if (getFileExt(file) == "rd")
+                inReads.printTableCompressed(file);
+    }
 }
