@@ -32,10 +32,10 @@ jobs:
       name: Build
       run: |
         make all -j
-        
-        export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/htslib/
     - name: Validate
       run: |
+        export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/htslib/
+        echo $LD_LIBRARY_PATH
         chmod +x .github/workflows/val.sh
         ${{ matrix.command }}
 
