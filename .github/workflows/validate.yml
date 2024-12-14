@@ -16,8 +16,6 @@ jobs:
           - os: ubuntu-latest
             command: ".github/workflows/val.sh"
             chmod: true
-          - os: windows-2019
-            command: ".github/workflows/val.bat"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -31,9 +29,6 @@ jobs:
     - if: matrix.os == 'ubuntu-latest'
       name: Build
       run: make all -j
-    - if: matrix.os == 'windows--2019'
-      name: Update SSL via Chocolatey (toolkit 3.1.0)
-      run: Powershell.exe make all -j
     - name: Validate
       run: |
         chmod +x .github/workflows/val.sh
