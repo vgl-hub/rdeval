@@ -216,13 +216,15 @@ void InReads::load() {
                     
                     readBatch->sequences.push_back(new Sequence {bam_get_qname(bamdata), std::string(), inSequence, inSequenceQuality});
                     seqPos++;
+                    processedLength += inSequence->size();
                     
-                    if (seqPos % batchSize == 0) {
+                    if (processedLength > batchSize) {
                         readBatch->batchN = seqPos/batchSize;
                         lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
                         appendReads(readBatch);
                         readBatch = new Sequences;
-                        
+                        processedLength = 0;
+
                     }
                     lg.verbose("Individual fastq sequence read: " + seqHeader);
 
