@@ -568,7 +568,7 @@ void InReads::printContent() {
 
 void dump_read(bam1_t* b) {
     printf("->core.tid:(%d)\n", b->core.tid);
-    printf("->core.pos:(%lld)\n", b->core.pos);
+    printf("->core.pos:(%ld)\n", static_cast<unsigned long>(b->core.pos));
     printf("->core.bin:(%d)\n", b->core.bin);
     printf("->core.qual:(%d)\n", b->core.qual);
     printf("->core.l_qname:(%d)\n", b->core.l_qname);
@@ -576,8 +576,8 @@ void dump_read(bam1_t* b) {
     printf("->core.n_cigar:(%d)\n", b->core.n_cigar);
     printf("->core.l_qseq:(%d)\n", b->core.l_qseq);
     printf("->core.mtid:(%d)\n", b->core.mtid);
-    printf("->core.mpos:(%lld)\n", b->core.mpos);
-    printf("->core.isize:(%lld)\n", b->core.isize);
+    printf("->core.mpos:(%ld)\n", static_cast<unsigned long>(b->core.mpos));
+    printf("->core.isize:(%ld)\n", static_cast<unsigned long>(b->core.isize));
     if (b->data) {
         printf("->data:");
         int i;
@@ -696,7 +696,7 @@ void InReads::writeToStream() {
                 hdr->l_text = strlen(init_header);
                 hdr->text = strdup(init_header);
                 hdr->n_targets = 0;
-                sam_hdr_write(fp,hdr);
+                std::ignore = sam_hdr_write(fp,hdr);
                 
                 for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatchesCpy) {
                     
@@ -733,12 +733,12 @@ void InReads::writeToStream() {
                         memcpy(q->data, read->seqHeader.c_str(), q->core.l_qname); // first set qname
                         uint8_t *s = bam_get_seq(q);
                         for (int i = 0; i < q->core.l_qseq; ++i)
-                            bam1_seq_seti(s, i, seq_nt16_table[read->inSequence->at(i)]);
+                            bam1_seq_seti(s, i, seq_nt16_table[(unsigned char)read->inSequence->at(i)]);
                         s = bam_get_qual(q);
                         for (size_t i = 0; i < quality->size(); ++i)
                             s[i] = quality->at(i) - 33;
-                        dump_read(q);
-                        int ret = sam_write1(fp, hdr, q);
+                        // dump_read(q);
+                        std::ignore = sam_write1(fp, hdr, q);
                         bam_destroy1(q);
                         if (read->inSequenceQuality != NULL)
                             delete quality;
