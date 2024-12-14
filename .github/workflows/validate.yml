@@ -34,7 +34,7 @@ jobs:
         make all -j
     - name: Validate
       run: |
-        export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/htslib/
+        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$(pwd)/htslib/"
         echo $LD_LIBRARY_PATH
         chmod +x .github/workflows/val.sh
         ${{ matrix.command }}
