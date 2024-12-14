@@ -43,6 +43,7 @@ int main(int, char **argv) {
     };
 
     const std::map<std::set<std::string>, std::vector<std::string>> file_args = {
+    {{"random3.bam"}, {""}}
     //     {{"random1.fasta", "random1.fasta.gz", "random1.fastq", "random1.fastq.gz", "random1.gfa"}, {"-r testFiles/random1.fastq.gz", "-a testFiles/random1.agp --stats", "-a testFiles/random1.agp --stats -ofa"}},
     //     {{"random1.fasta"}, {"-k testFiles/random1.instructions.sak", "-ofa -k testFiles/random1.instructions.sak", "-ofa -k testFiles/random1.hc.sak", "-ofa -k testFiles/random1.hdc.sak"}},
     //     {{"random2.noseq.gfa"}, {""}},
