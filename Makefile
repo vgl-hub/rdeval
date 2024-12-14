@@ -37,7 +37,6 @@ gfalibs:
 	
 .PHONY: htslib
 htslib:
-	cd $(HTSLIB_DIR) && autoreconf -i && ./configure
 	$(MAKE) -j -C $(HTSLIB_DIR)
 	
 validate: | $(BUILD)

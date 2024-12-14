@@ -27,15 +27,15 @@ jobs:
       name: Build
       run: |
         brew install automake
+        mkdir -p /usr/local/lib
+        cd htslib && autoreconf -i && ./configure
         INCLUDE_DIR="-I/opt/homebrew/opt/openssl@3/include/" LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.4.0/lib" make all -j
-        ls /usr/local/
     - if: matrix.os == 'ubuntu-latest'
       name: Build
       run: make all -j
     - name: Validate
       run: |
         export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$(pwd)/htslib/"
-        echo "this is library path: $LD_LIBRARY_PATH"
         chmod +x .github/workflows/val.sh
         ${{ matrix.command }}
 
