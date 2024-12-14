@@ -1,5 +1,5 @@
 CXX ?= g++
-INCLUDE_DIR += -I./include -I./gfalibs/include
+INCLUDE_DIR += -I./include -I./gfalibs/include -I./htslib
 WARNINGS = -Wall -Wextra
 
 CXXFLAGS = -g -std=gnu++14 -O3 $(INCLUDE_DIR) $(WARNINGS) $(CFLAGS)
@@ -13,7 +13,7 @@ INCLUDE = include
 BINDIR := $(BUILD)/.o
 
 LDFLAGS += -pthread
-LIBS = -lz -lcrypto
+LIBS = -lz -lcrypto -L./htslib -lhts
 
 OBJS := main input reads
 BINS := $(addprefix $(BINDIR)/, $(OBJS))
