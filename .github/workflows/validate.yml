@@ -22,7 +22,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
       with:
-            submodules: true
+            submodules: recursive
     - if: matrix.os == 'macos-latest'
       name: Build
       run: INCLUDE_DIR="-I/opt/homebrew/opt/openssl@3/include/" LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.4.0/lib" make all -j
