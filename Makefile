@@ -39,6 +39,7 @@ gfalibs:
 htslib:
 	cd $(HTSLIB_DIR) && autoreconf -i && ./configure
 	$(MAKE) -j -C $(HTSLIB_DIR)
+	$(MAKE) -j -C $(HTSLIB_DIR) install
 	
 validate: | $(BUILD)
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/$(TARGET)-$(TEST_TARGET) $(SOURCE)/$(TEST_TARGET).cpp

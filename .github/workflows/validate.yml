@@ -29,7 +29,6 @@ jobs:
         brew install automake
         sudo mkdir -p /usr/local/lib
         INCLUDE_DIR="-I/opt/homebrew/opt/openssl@3/include/" LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.4.0/lib" make all -j
-        make install
     - if: matrix.os == 'ubuntu-latest'
       name: Build
       run: make all -j
