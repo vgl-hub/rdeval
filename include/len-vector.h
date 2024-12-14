@@ -24,7 +24,7 @@ public:
     
     uint64_t front();
     
-    uint64_t operator[](uint64_t index);
+    std::pair<uint64_t,T> operator[](uint64_t index);
     
     uint64_t size();
     
@@ -96,21 +96,17 @@ uint64_t LenVector<T>::front() {
 }
 
 template<typename T>
-uint64_t LenVector<T>::operator[](uint64_t index) {
-    
-    uint64_t value;
+std::pair<uint64_t,T> LenVector<T>::operator[](uint64_t index) {
     
     if (index >= (readLens8.size() + readLens16.size() + readLens64.size()))
         throw std::out_of_range("Index out of bounds");
     
     if (index < readLens8.size())
-        value = readLens8[index].first;
+        return readLens8[index];
     else if (index < (readLens8.size() + readLens16.size()))
-        value = readLens16[index-readLens8.size()].first;
+        return readLens16[index-readLens8.size()];
     else
-        value = readLens64[index-readLens8.size()-readLens16.size()].first;
-    
-    return value;
+        return readLens64[index-readLens8.size()-readLens16.size()];
 }
 
 template<typename T>

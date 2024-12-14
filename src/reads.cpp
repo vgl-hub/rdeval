@@ -269,7 +269,6 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     InRead* read;
 
     uint64_t batchA = 0, batchT=0, batchC=0, batchG=0, batchN =0;
-    std::vector<float> batchAvgQualities;
     uint64_t filterInt = 0;
 
     if (userInput.filter != "none")
@@ -297,9 +296,6 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
         batchG += read->getG();
         batchN += read->getN();
 
-        if (read->inSequenceQuality != NULL)
-            batchAvgQualities.push_back(read->avgQuality);
-        
         if (streamOutput)
             inReadsBatch.push_back(read);
         else
@@ -310,15 +306,12 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     readBatches.emplace_back(inReadsBatch,readBatch->batchN);
     delete readBatch;
     readLens.insert(readLensBatch);
-    avgQualities.insert(std::end(avgQualities), std::begin(batchAvgQualities), std::end(batchAvgQualities));
-
     totA+=batchA;
     totT+=batchT;
     totC+=batchC;
     totG+=batchG;
     totN+=batchN;
     totReads += readN;
-
     logs.push_back(threadLog);
     return true;
 }
@@ -435,10 +428,10 @@ uint64_t InReads::getLargestRead() {
 
 double InReads::getAvgQuality(){
 
-    uint64_t sumQualities = 0, avgQualitiesSize=avgQualities.size();
+    uint64_t sumQualities = 0, avgQualitiesSize=readLens.size();
 
     for (uint64_t i = 0; i < avgQualitiesSize; i++)
-        sumQualities += avgQualities[i] * readLens[i];  // sum the qualities normalized by their read length
+        sumQualities += readLens[i].first * readLens[i].second;  // sum the qualities normalized by their read length
 
     return (double) sumQualities/getTotReadLen();
 }
@@ -486,11 +479,11 @@ void InReads::printReadLengths() {
 
         int count = 1;
         for (uint64_t i = 0; i < readLens.size(); i++) {
-            if (readLens[i] == readLens[i+1]) {
+            if (readLens[i].first == readLens[i+1].first) {
                 count += 1;
             }
-            else if (readLens[i] != readLens[i+1]) {
-                std::cout << readLens[i] << "," << count << "\n";
+            else if (readLens[i].first != readLens[i+1].first) {
+                std::cout << readLens[i].first << "," << count << "\n";
                 count = 1;
             }
         }
@@ -505,14 +498,14 @@ void InReads::printReadLengths() {
         std::vector<uint64_t> uniqReadLens;
 
         for (uint64_t i = 0; i < readLens.size(); i++) {
-            if (readLens[i] == readLens[i+1]) {
+            if (readLens[i].first == readLens[i+1].first) {
                 count += 1;
             }
-            else if (readLens[i] != readLens[i+1]) {
-                sizexCount = (readLens[i] * count);
+            else if (readLens[i].first != readLens[i+1].first) {
+                sizexCount = (readLens[i].first * count);
                 counts.push_back(count);
                 sizexCounts.push_back(sizexCount);
-                uniqReadLens.push_back(readLens[i]);
+                uniqReadLens.push_back(readLens[i].first);
                 sizexCountSum += sizexCount;
 
                 count = 1;
@@ -677,8 +670,6 @@ void InReads::printTableCompressed(std::string outFile) {
     ptr += len16 * sizeof(readLens16[0]);
     memcpy(ptr, &readLens64[0], len64 * sizeof(readLens64[0]));
     ptr += len64 * sizeof(readLens64[0]);
-    memcpy(ptr, &avgQualities[0], (len8 + len16 + len64) * sizeof(float));
-    ptr += (len8 + len16 + len64) * sizeof(float);
 
     compress(dest, &destLen, source, sourceLen);
     delete[] source;
@@ -766,7 +757,6 @@ void InReads::readTableCompressed(std::string inFile) {
 
     // tmp vectors
     LenVector<float> readLensTmp;
-    std::vector<float> avgQualitiesTmp;
 
     std::vector<std::pair<uint8_t,float>> &readLensTmp8 = readLensTmp.getReadLens8();
     std::vector<std::pair<uint16_t,float>> &readLensTmp16 = readLensTmp.getReadLens16();
@@ -775,7 +765,6 @@ void InReads::readTableCompressed(std::string inFile) {
     readLensTmp8.resize(len8);
     readLensTmp16.resize(len16);
     readLensTmp64.resize(len64);
-    avgQualitiesTmp.resize(len8 + len16 + len64);
     
     memcpy(&readLensTmp8[0], ptr, len8 * sizeof(readLensTmp8[0]));
     ptr += len8 * sizeof(uint64_t);
@@ -783,14 +772,11 @@ void InReads::readTableCompressed(std::string inFile) {
     ptr += len16 * sizeof(uint64_t);
     memcpy(&readLensTmp64[0], ptr, len64 * sizeof(readLensTmp64[0]));
     ptr += len64 * sizeof(uint64_t);
-    memcpy(&avgQualitiesTmp[0], ptr, (len8 + len16 + len64) * sizeof(float));
-    ptr += (len8 + len16 + len64) * sizeof(uint64_t);
     
     delete[] data;
     
     // add to vector
     readLens.insert(readLensTmp);
-    avgQualities.insert(std::end(avgQualities), std::begin(avgQualitiesTmp), std::end(avgQualitiesTmp));
 
     totReads += len8 + len16 + len64;
 }

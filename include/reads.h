@@ -47,11 +47,8 @@ class InReads {
     
     std::vector<uint64_t> readNstars    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     std::vector<uint32_t> readLstars     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    
     LenVector<float> readLens;
-    
     uint64_t totA=0, totT=0, totC=0, totG=0, totN=0;
-    std::vector<float> avgQualities; // this is redundant now (already part of the read lens vector), should be removed
     
     OutputStream outputStream;
     bool streamOutput = false;
