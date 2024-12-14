@@ -1,5 +1,5 @@
 CXX ?= g++
-INCLUDE_DIR = -I./include -I./gfalibs/include
+INCLUDE_DIR += -I./include -I./gfalibs/include
 WARNINGS = -Wall -Wextra
 
 CXXFLAGS = -g -std=gnu++14 -O3 $(INCLUDE_DIR) $(WARNINGS) $(CFLAGS)
@@ -12,7 +12,7 @@ SOURCE = src
 INCLUDE = include
 BINDIR := $(BUILD)/.o
 
-LDFLAGS := -pthread
+LDFLAGS += -pthread
 LIBS = -lz -lcrypto
 
 OBJS := main input reads
@@ -27,17 +27,17 @@ head: $(BINS) gfalibs | $(BUILD)
 all: head validate regenerate
 
 $(BINDIR)%: $(SOURCE)/%.cpp $(INCLUDE)/%.h | $(BINDIR)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -c $(SOURCE)/$(notdir $@).cpp -o $@
+	$(CXX) $(CXXFLAGS) -c $(SOURCE)/$(notdir $@).cpp -o $@
 
 .PHONY: gfalibs
 gfalibs:
 	$(MAKE) -j -C $(GFALIBS_DIR)
 	
 validate: | $(BUILD)
-	$(CXX) $(CXXFLAGS) -o $(BUILD)/$(TARGET)-$(TEST_TARGET) $(SOURCE)/$(TEST_TARGET).cpp $(LIBS)
+	$(CXX) $(CXXFLAGS) -o $(BUILD)/$(TARGET)-$(TEST_TARGET) $(SOURCE)/$(TEST_TARGET).cpp
 
 regenerate: | $(BUILD)
-	$(CXX) $(CXXFLAGS) -o $(BUILD)/$(TARGET)-$(GENERATE_TARGET) $(SOURCE)/$(GENERATE_TARGET).cpp $(LIBS)
+	$(CXX) $(CXXFLAGS) -o $(BUILD)/$(TARGET)-$(GENERATE_TARGET) $(SOURCE)/$(GENERATE_TARGET).cpp
 	
 $(BUILD):
 	-mkdir -p $@
