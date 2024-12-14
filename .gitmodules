@@ -5,5 +5,5 @@
     ignore = dirty
     
 [submodule "htslib"]
-    path = htslib
-    url = https://github.com/samtools/htslib.git
+	path = htslib
+	url = https://github.com/samtools/htslib.git
