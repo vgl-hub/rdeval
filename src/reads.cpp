@@ -23,6 +23,10 @@
 #include "len-vector.h"
 
 #include <htslib/sam.h>
+#include <htslib/bgzf.h>
+#include <htslib/hts.h>
+#define bam1_seq_seti(s, i, c) ( (s)[(i)>>1] = ((s)[(i)>>1] & 0xf<<(((i)&1)<<2)) | (c)<<((~(i)&1)<<2) )
+
 
 #include "reads.h"
 
@@ -562,6 +566,64 @@ void InReads::printContent() {
     }
 }
 
+void dump_read(bam1_t* b) {
+    printf("->core.tid:(%d)\n", b->core.tid);
+    printf("->core.pos:(%lld)\n", b->core.pos);
+    printf("->core.bin:(%d)\n", b->core.bin);
+    printf("->core.qual:(%d)\n", b->core.qual);
+    printf("->core.l_qname:(%d)\n", b->core.l_qname);
+    printf("->core.flag:(%d)\n", b->core.flag);
+    printf("->core.n_cigar:(%d)\n", b->core.n_cigar);
+    printf("->core.l_qseq:(%d)\n", b->core.l_qseq);
+    printf("->core.mtid:(%d)\n", b->core.mtid);
+    printf("->core.mpos:(%lld)\n", b->core.mpos);
+    printf("->core.isize:(%lld)\n", b->core.isize);
+    if (b->data) {
+        printf("->data:");
+        int i;
+        for (i = 0; i < b->l_data; ++i) {
+            printf("%x ", b->data[i]);
+        }
+        printf("\n");
+    }
+    if (b->core.l_qname) {
+        printf("qname: %s\n",bam_get_qname(b));
+    }
+    if (b->core.l_qseq) {
+        printf("qseq:");
+        int i;
+        for (i = 0; i < b->core.l_qseq; ++i) {
+            printf("%c", seq_nt16_str[bam_seqi(bam_get_seq(b),i)]);
+        }
+        printf("\n");
+        printf("qual:");
+        uint8_t *s = bam_get_qual(b);
+        for (i = 0; i < b->core.l_qseq; ++i) {
+            printf("%c",s[i] + 33);
+        }
+        printf("\n");
+
+    }
+
+    if (bam_get_l_aux(b)) {
+        uint32_t i = 0;
+        uint8_t* aux = bam_get_aux(b);
+
+        while (i < bam_get_l_aux(b)) {
+            printf("%.2s:%c:",aux+i,*(aux+i+2));
+            i += 2;
+            switch (*(aux+i)) {
+                case 'Z':
+                    while (*(aux+1+i) != '\0') { putc(*(aux+1+i), stdout); ++i; }
+                    break;
+            }
+            putc('\n',stdout);
+            ++i;++i;
+        }
+    }
+    printf("\n");
+}
+
 void InReads::writeToStream() {
     
     if (streamOutput) {
@@ -576,7 +638,8 @@ void InReads::writeToStream() {
             {"fastq",2},
             {"fq",2},
             {"fastq.gz",2},
-            {"fq.gz",2}
+            {"fq.gz",2},
+            {"bam",3}
         };
         
         std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
@@ -587,7 +650,7 @@ void InReads::writeToStream() {
         
         switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
                 
-            case 1:  {// fasta[.gz]
+            case 1:  { // fasta[.gz]
                 
                 for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatchesCpy) {
                     
@@ -605,8 +668,7 @@ void InReads::writeToStream() {
                 }
                 break;
             }
-            
-            case 2:  {// fastq[.gz]
+            case 2:  { // fastq[.gz]
                 
                 for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatchesCpy) {
                     
@@ -622,6 +684,68 @@ void InReads::writeToStream() {
                         }
                     ++batchCounter;
                 }
+                break;
+            }
+            case 3: { // bam
+                
+                const char init_header[] = "@HD\tVN:1.4\tSO:unknown\n";
+                htsFile *fp = sam_open(outputStream.file.c_str(),"wb");
+
+                // write header
+                bam_hdr_t *hdr = bam_hdr_init();
+                hdr->l_text = strlen(init_header);
+                hdr->text = strdup(init_header);
+                hdr->n_targets = 0;
+                sam_hdr_write(fp,hdr);
+                
+                for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatchesCpy) {
+                    
+                    if (inReads.second > batchCounter)
+                        continue;
+                    
+                    lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
+                        
+                    for (InRead* read : inReads.first) { // main loop, iter through each fastq records
+                        
+                        std::string *quality;
+                        if (read->inSequenceQuality != NULL)
+                            quality = read->inSequenceQuality;
+                        else
+                            quality = new std::string('!', read->inSequence->size());
+                        
+                        bam1_t *q = bam_init1();
+                        //`q->data` structure: qname-cigar-seq-qual-aux
+                        q->l_data = read->seqHeader.size()+1+(int)(1.5*read->inSequence->size()+(read->inSequence->size() % 2 != 0)); // +1 includes the tailing '\0'
+                        if (q->m_data < (uint32_t)q->l_data) {
+                            q->m_data = q->l_data;
+                            kroundup32(q->m_data);
+                            q->data = (uint8_t*)realloc(q->data, q->m_data);
+                        }
+                        q->core.flag = BAM_FMUNMAP;
+                        q->core.l_qname = read->seqHeader.size()+1; // +1 includes the tailing '\0'
+                        q->core.l_qseq = read->inSequence->size();
+                        q->core.n_cigar = 0; // we have no cigar sequence
+                        // no flags for unaligned reads
+                        q->core.tid = -1;
+                        q->core.pos = -1;
+                        q->core.mtid = -1;
+                        q->core.mpos = -1;
+                        memcpy(q->data, read->seqHeader.c_str(), q->core.l_qname); // first set qname
+                        uint8_t *s = bam_get_seq(q);
+                        for (int i = 0; i < q->core.l_qseq; ++i)
+                            bam1_seq_seti(s, i, seq_nt16_table[read->inSequence->at(i)]);
+                        s = bam_get_qual(q);
+                        for (size_t i = 0; i < quality->size(); ++i)
+                            s[i] = quality->at(i) - 33;
+                        dump_read(q);
+                        int ret = sam_write1(fp, hdr, q);
+                        bam_destroy1(q);
+                        if (read->inSequenceQuality != NULL)
+                            delete quality;
+                    }
+                    ++batchCounter;
+                }
+                sam_close(fp); // close bam file
                 break;
             }
         }

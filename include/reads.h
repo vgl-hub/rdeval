@@ -68,7 +68,8 @@ public:
             {"fastq",2},
             {"fq",2},
             {"fastq.gz",2},
-            {"fq.gz",2}
+            {"fq.gz",2},
+            {"bam",3}
         };
         
         if (userInput.outFiles.size()) {

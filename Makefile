@@ -37,7 +37,9 @@ gfalibs:
 	
 .PHONY: htslib
 htslib:
+ifneq ("$(wildcard $($(HTSLIB_DIR)/configure))","")
 	cd $(HTSLIB_DIR) && autoreconf -i && ./configure
+endif
 	$(MAKE) -j -C $(HTSLIB_DIR)
 	$(MAKE) -j -C $(HTSLIB_DIR) install
 	
