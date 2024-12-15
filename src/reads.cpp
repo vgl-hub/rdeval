@@ -23,8 +23,6 @@
 #include "len-vector.h"
 
 #include <htslib/sam.h>
-#include <htslib/bgzf.h>
-#include <htslib/hts.h>
 #define bam1_seq_seti(s, i, c) ( (s)[(i)>>1] = ((s)[(i)>>1] & 0xf<<(((i)&1)<<2)) | (c)<<((~(i)&1)<<2) )
 
 
@@ -688,16 +686,6 @@ void InReads::writeToStream() {
             }
             case 3: { // bam
                 
-                const char init_header[] = "@HD\tVN:1.4\tSO:unknown\n";
-                htsFile *fp = sam_open(outputStream.file.c_str(),"wb");
-
-                // write header
-                bam_hdr_t *hdr = bam_hdr_init();
-                hdr->l_text = strlen(init_header);
-                hdr->text = strdup(init_header);
-                hdr->n_targets = 0;
-                std::ignore = sam_hdr_write(fp,hdr);
-                
                 for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatchesCpy) {
                     
                     if (inReads.second > batchCounter)
@@ -738,14 +726,13 @@ void InReads::writeToStream() {
                         for (size_t i = 0; i < quality->size(); ++i)
                             s[i] = quality->at(i) - 33;
                         // dump_read(q);
-                        std::ignore = sam_write1(fp, hdr, q);
+                        std::ignore = sam_write1(outputStream.fp, outputStream.hdr, q);
                         bam_destroy1(q);
                         if (read->inSequenceQuality != NULL)
                             delete quality;
                     }
                     ++batchCounter;
                 }
-                sam_close(fp); // close bam file
                 break;
             }
         }
