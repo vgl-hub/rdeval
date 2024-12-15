@@ -33,7 +33,7 @@ $(BINDIR)%: $(SOURCE)/%.cpp $(INCLUDE)/%.h | $(BINDIR)
 
 .PHONY: gfalibs
 gfalibs:
-	$(MAKE) -j -C $(GFALIBS_DIR)
+	$(MAKE) -j -C $(GFALIBS_DIR) -I./htslib
 	
 .PHONY: htslib
 htslib:
