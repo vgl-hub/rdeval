@@ -726,7 +726,7 @@ void InReads::writeToStream() {
                         for (size_t i = 0; i < quality->size(); ++i)
                             s[i] = quality->at(i) - 33;
                         // dump_read(q);
-                        std::ignore = sam_write1(outputStream.fp, outputStream.hdr, q);
+                        std::ignore = sam_write1(fp, hdr, q);
                         bam_destroy1(q);
                         if (read->inSequenceQuality != NULL)
                             delete quality;
@@ -895,4 +895,26 @@ void InReads::readTableCompressed(std::string inFile) {
 void InReads::printMd5() {
     for (auto md5 : md5s)
         std::cout<<md5.first<<": "<<*md5.second<<std::endl;
+}
+
+bool InReads::isOutputBam() {
+    return bam;
+}
+
+void InReads::writeBamHeader() {
+    
+    const char init_header[] = "@HD\tVN:1.4\tSO:unknown\n";
+    fp = sam_open(outputStream.file.c_str(),"wb");
+    
+    // write header
+    hdr = bam_hdr_init();
+    hdr->l_text = strlen(init_header);
+    hdr->text = strdup(init_header);
+    hdr->n_targets = 0;
+    std::ignore = sam_hdr_write(fp,hdr);
+}
+
+void InReads::closeBam() {
+    bam_hdr_destroy(hdr);
+    sam_close(fp); // close bam file
 }

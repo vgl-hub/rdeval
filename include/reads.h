@@ -1,6 +1,10 @@
 #ifndef READS_H
 #define READS_H
 
+#include <htslib/sam.h>
+#include <htslib/bgzf.h>
+#include <htslib/hts.h>
+
 #include "len-vector.h"
 #include "output.h"
 
@@ -52,6 +56,11 @@ class InReads {
     
     OutputStream outputStream;
     bool streamOutput = false;
+    
+    htsFile *fp; // htslib file pointer
+    bam_hdr_t *hdr; // htslib sam header pointer
+    bool bam = false;
+    
     uint64_t batchCounter = 1;
     
     std::vector<std::pair<std::string,std::string*>> md5s;
@@ -73,9 +82,13 @@ public:
         };
         
         if (userInput.outFiles.size()) {
-            for (std::string file : userInput.outFiles)
+            for (std::string file : userInput.outFiles) {
                 if (string_to_case.find(getFileExt(file)) != string_to_case.end())
                     streamOutput = true;
+                
+                if (getFileExt(file) == "bam")
+                    bam = true;
+            }
         }
     };
     
@@ -125,6 +138,12 @@ public:
     void readTableCompressed(std::string inFile);
     
     void printMd5();
+    
+    bool isOutputBam();
+    
+    void writeBamHeader();
+    
+    void closeBam();
 };
 
 #endif /* READS_H */

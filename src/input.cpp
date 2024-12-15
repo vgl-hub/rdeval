@@ -37,9 +37,15 @@ void Input::read() {
     lg.verbose("Read object generated");
     threadPool.init(maxThreads); // initialize threadpool
     
+    if (inReads.isOutputBam())
+        inReads.writeBamHeader();
+    
     inReads.load();
     jobWait(threadPool);
     inReads.writeToStream(); // write last batch
+    
+    if (inReads.isOutputBam())
+        inReads.closeBam();
     
     if (userInput.md5_flag)
        inReads.printMd5();
