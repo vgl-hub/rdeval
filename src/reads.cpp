@@ -187,7 +187,7 @@ void InReads::load() {
                 }
                 break;
             }
-            case 2: { // bam
+            case 2: { // bam, cram
                 
                 Sequences* readBatch = new Sequences;
                 samFile *fp_in = hts_open(userInput.file('r', i).c_str(),"r"); //open bam file
@@ -315,6 +315,13 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
 
 InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seqPos) { // traverse a single read
 
+    std::vector<std::pair<uint64_t, uint64_t>> bedCoords;
+    if(userInput.hc_cutoff != -1) {
+        homopolymerCompress(sequence->sequence, bedCoords, userInput.hc_cutoff);
+        delete sequence->sequenceQuality; // sequence quality not meaningful when compressed
+        sequence->sequenceQuality = NULL;
+    }
+    
     uint64_t A = 0, C = 0, G = 0, T = 0, N = 0, lowerCount = 0;
     uint64_t sumQuality = 0;
     float avgQuality = 0;
