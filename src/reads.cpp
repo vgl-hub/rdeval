@@ -86,8 +86,8 @@ void InReads::load() {
         {"fastq.gz",1},
         {"fq.gz",1},
         {"bam",2},
-        {"cram",3},
-        {"rd",4}
+        {"cram",2},
+        {"rd",3}
     };
     
     for (uint32_t i = 0; i < numFiles; i++) {
@@ -238,12 +238,7 @@ void InReads::load() {
                 sam_close(fp_in);
                 break;
             }
-            case 3: { // cram
-                fprintf(stderr, "cram currently not supported.\n");
-                exit(EXIT_FAILURE);
-                break;
-            }
-            case 4: { // rd
+            case 3: { // rd
                     readTableCompressed(userInput.inFiles[i]);
                 break;
             }
@@ -709,7 +704,7 @@ void InReads::writeToStream() {
                             kroundup32(q->m_data);
                             q->data = (uint8_t*)realloc(q->data, q->m_data);
                         }
-                        q->core.flag = BAM_FMUNMAP;
+                        q->core.flag = BAM_FUNMAP;
                         q->core.l_qname = read->seqHeader.size()+1; // +1 includes the tailing '\0'
                         q->core.l_qseq = read->inSequence->size();
                         q->core.n_cigar = 0; // we have no cigar sequence
