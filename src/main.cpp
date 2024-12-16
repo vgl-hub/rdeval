@@ -140,11 +140,6 @@ int main(int argc, char **argv) {
                 userInput.filter = optarg;
                 
                 rmChrFromStr(userInput.filter, "'\\");
-
-                if (!(userInput.filter[0] == '>' || userInput.filter[0] == '<' || userInput.filter[0] == '=') || !isInt(userInput.filter.substr(1))) {
-                    printf ("Could not parse filter: %s \n", userInput.filter.c_str());
-                    exit(0);
-                }
                 break;
 
             case 's':
@@ -182,7 +177,7 @@ int main(int argc, char **argv) {
                 printf("%s", helpStr);
                 printf("\nOptions:\n");
                 printf("\t-j --threads <n> numbers of threads (default:3).\n");
-                printf("\t-f --filter <n> minimum length for retention (default:0).\n");
+                printf("\t-f --filter <exp> filter reads using <exp> in quotes, e.g. 'l>10' for longer than 10bp or 'l>10 & q>10' to further exclude reads by quality (default: none).\n");
                 printf("\t-c --content a|g|t|n generates a list of sequences and their ATCGN base content; all bases, GC content, AT content, Ns (default:a).\n");
                 printf("\t-o --out-format <file> output file (fa*[.gz], rd). Optionally write reads to file or generate rd summary file.\n");
                 printf("\t-q --quality c|l a generates list of average quality for each read (c) or both length and quality (c).\n");

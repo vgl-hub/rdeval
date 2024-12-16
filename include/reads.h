@@ -65,6 +65,10 @@ class InReads {
     
     std::vector<std::pair<std::string,std::string*>> md5s;
     
+    // filters
+    char lSign = '0', qSign = '0', logicalOperator = '0';
+    uint64_t l = 0, q = 0;
+    
 public:
     
     InReads(UserInputRdeval &userInput, std::string file) : userInput(userInput), outputStream(file) {
@@ -90,6 +94,8 @@ public:
                     bam = true;
             }
         }
+        if(userInput.filter != "none")
+            initFilters();
     };
     
     ~InReads() {
@@ -101,7 +107,13 @@ public:
     
     void load();
     
-    bool traverseInReads(Sequences* sequence);
+    void initFilters();
+    
+    float computeAvgQuality(std::string &sequenceQuality);
+    
+    inline bool filterRead(Sequence* sequence);
+    
+    bool traverseInReads(Sequences* readBatch);
     
     InRead* traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seqPos);
     

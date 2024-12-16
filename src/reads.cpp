@@ -4,6 +4,8 @@
 #include <fstream>
 #include <algorithm>
 
+#include <htslib/sam.h>
+
 #include "log.h"
 #include "global.h"
 #include "bed.h"
@@ -22,11 +24,9 @@
 #include "output.h"
 #include "len-vector.h"
 
-#include <htslib/sam.h>
-#define bam1_seq_seti(s, i, c) ( (s)[(i)>>1] = ((s)[(i)>>1] & 0xf<<(((i)&1)<<2)) | (c)<<((~(i)&1)<<2) )
-
-
 #include "reads.h"
+
+#define bam1_seq_seti(s, i, c) ( (s)[(i)>>1] = ((s)[(i)>>1] & 0xf<<(((i)&1)<<2)) | (c)<<((~(i)&1)<<2) )
 
 void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHeader, std::string* seqComment, std::string* sequence, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t seqPos, std::string* sequenceQuality, double avgQuality, std::vector<Tag>* inSequenceTags, uint64_t* N) {
     
@@ -256,6 +256,92 @@ void InReads::appendReads(Sequences* readBatch) { // read a collection of reads
     writeToStream();
 }
 
+float InReads::computeAvgQuality(std::string &sequenceQuality) {
+    uint64_t sumQuality = 0;
+    for (char &quality : sequenceQuality)
+        sumQuality += int(quality) - 33;
+    return sumQuality/(sequenceQuality.size());
+}
+
+void InReads::initFilters() {
+    
+    bool cannotParse = false;
+    
+    std::istringstream stream(userInput.filter); // get l,q and logical operator in between
+    std::string token1;
+    std::string token2;
+    std::string token3;
+    stream >> token1 >> token2 >> token3;
+
+    if ((userInput.filter.find('l') == std::string::npos && userInput.filter.find('q') == std::string::npos) || // no filter found
+        (token1.size() < 3) || // first filter too short
+        (token2.size() != 0 && token3.size() == 0) || // second filter missing
+        (token2.size() == 0 && token3.size() != 0) || // missing operator
+        (token2.size() > 1) // malformatted operator
+    )
+        cannotParse = true;
+    
+    if (cannotParse){
+        fprintf(stderr, "Could not parse filter. Terminating.\n");
+        exit(EXIT_FAILURE);
+    }
+    
+    std::string lFilter, qFilter;
+    if (token2.size())
+        logicalOperator = token2[0];
+    
+    if (token1[0] == 'l') {
+        lFilter = token1;
+        lSign = lFilter[1];
+        l = stoi(lFilter.substr(2));
+    } else if (token1[0] == 'q') {
+        qFilter = token1;
+        qSign = qFilter[1];
+        q = stoi(qFilter.substr(2));
+    }
+    
+    if (token3.size() != 0) {
+        if (token3[0] == 'l') {
+            lFilter = token3;
+            lSign = lFilter[1];
+            l = stoi(lFilter.substr(2));
+        }else if (token3[0] == 'q') {
+            qFilter = token3;
+            qSign = qFilter[1];
+            q = stoi(qFilter.substr(2));
+        }
+    }
+}
+
+inline bool InReads::filterRead(Sequence* sequence) {
+    
+    uint64_t size = sequence->sequence->size();
+    float avgQuality = 0;
+    if (sequence->sequenceQuality != NULL)
+        avgQuality = computeAvgQuality(*sequence->sequenceQuality);
+    
+    bool lFilter = ((lSign == '0') ||
+                    ((lSign == '>') && (size > l)) ||
+                    ((lSign == '<') && (size < l)) ||
+                    ((lSign == '=') && (size == l))
+                    );
+    
+    bool qFilter = ((qSign == '0') ||
+                    ((qSign == '>') && (avgQuality > q)) ||
+                    ((qSign == '<') && (avgQuality < q)) ||
+                    ((qSign == '=') && (avgQuality == q))
+                    );
+    
+    if ((logicalOperator == '0' && (lSign != '0' && lFilter)) ||
+        (logicalOperator == '0' && (qSign != '0' && qFilter)) ||
+        (logicalOperator == '|' && (lFilter || qFilter)) ||
+        (logicalOperator == '&' && (lFilter && qFilter))
+       )
+        return false;
+    lg.verbose("Sequence length (" + std::to_string(sequence->sequence->size()) + ") shorter than filter length. Filtering out (" + sequence->header + ").");
+    return true;
+}
+
 bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
 
     Log threadLog;
@@ -266,24 +352,15 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     InRead* read;
 
     uint64_t batchA = 0, batchT=0, batchC=0, batchG=0, batchN =0;
-    uint64_t filterInt = 0;
-
-    if (userInput.filter != "none")
-        filterInt = stoi(userInput.filter.substr(1));
+    bool filter = userInput.filter != "none" ? true : false;
     
     for (Sequence* sequence : readBatch->sequences) {
-
-        if (userInput.filter != "none" &&
-            (
-                ((userInput.filter[0] == '>') && (sequence->sequence->size() <= filterInt)) ||
-                ((userInput.filter[0] == '<') && (sequence->sequence->size() >= filterInt)) ||
-                ((userInput.filter[0] == '=') && (sequence->sequence->size() != filterInt))
-            )
-        ){
-            lg.verbose("Sequence length (" + std::to_string(sequence->sequence->size()) + ") shorter than filter length. Filtering out (" + sequence->header + ").");
-            continue;
-        }
         
+        if (filter) {
+            bool filtered = filterRead(sequence);
+            if (filtered)
+                continue;
+        }
         read = traverseInRead(&threadLog, sequence, readBatch->batchN+readN++);
         std::pair<uint64_t, float> lenQual(read->inSequence->size(), read->avgQuality);
         readLensBatch.push_back(lenQual);
@@ -323,16 +400,12 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seq
     }
     
     uint64_t A = 0, C = 0, G = 0, T = 0, N = 0, lowerCount = 0;
-    uint64_t sumQuality = 0;
     float avgQuality = 0;
     
     for (char &base : *sequence->sequence) {
         
-        if (islower(base)) {
-            
-            lowerCount++;
-            
-        }
+        if (islower(base))
+            ++lowerCount;
                 
         switch (base) {
             case 'A':
@@ -380,11 +453,8 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seq
         }
     }
 
-    if (sequence->sequenceQuality != NULL){
-        for (char &quality : *sequence -> sequenceQuality)
-            sumQuality += int(quality) - 33;
-        avgQuality = (float) sumQuality/(sequence->sequenceQuality->size());
-    }
+    if (sequence->sequenceQuality != NULL)
+        avgQuality = computeAvgQuality(*sequence->sequenceQuality);
 
     // operations on the segment
     InRead* inRead = new InRead;

@@ -37,13 +37,14 @@ int main(int, char **argv) {
     std::string exePath = getExePath(argv[0]);
 
     const std::map<std::set<std::string>, std::vector<std::string>> ext_args = {
-        {{"fasta", "fasta.gz", "fastq", "fastq.gz"}, {"", "5", "-f \">10\"", "-f \"<10\"", "-f \"=10\""}},
+        {{"fasta", "fasta.gz", "fastq", "fastq.gz"}, {"", "5", "-f \"l>10\"", "-f \"l<10\"", "-f \"l=10\""}},
         {{"rd"}, {"", "--md5"}}
         //  {{set of test file extensions}, {list of command line args to run with}}
     };
 
     const std::map<std::set<std::string>, std::vector<std::string>> file_args = {
-    {{"random3.bam"}, {""}}
+    {{"random3.bam"}, {""}},
+    {{"testFiles/random2.fastq"}, {"-f 'l>10000' -ql", "-f 'l<9000 & q>10' -ql", "-f 'l>9000 & q>90' -ql", "-f 'q>89' -ql"}}
     //     {{"random1.fasta", "random1.fasta.gz", "random1.fastq", "random1.fastq.gz", "random1.gfa"}, {"-r testFiles/random1.fastq.gz", "-a testFiles/random1.agp --stats", "-a testFiles/random1.agp --stats -ofa"}},
     //     {{"random1.fasta"}, {"-k testFiles/random1.instructions.sak", "-ofa -k testFiles/random1.instructions.sak", "-ofa -k testFiles/random1.hc.sak", "-ofa -k testFiles/random1.hdc.sak"}},
     //     {{"random2.noseq.gfa"}, {""}},
