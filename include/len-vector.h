@@ -68,31 +68,31 @@ void LenVector<T>::insert(const LenVector &vector) {
 template<typename T>
 uint64_t LenVector<T>::back() {
     
-    uint64_t largest = 0;
+    uint64_t smallest = 0;
     
-    if (readLens64.size())
-        largest = readLens64.back().first;
+    if (readLens8.size())
+        smallest = readLens8.back().first;
     else if (readLens16.size())
-        largest = readLens16.back().first;
-    else if (readLens8.size())
-        largest = readLens8.back().first;
+        smallest = readLens16.back().first;
+    else if (readLens64.size())
+        smallest = readLens64.back().first;
     
-    return largest;
+    return smallest;
 }
 
 template<typename T>
 uint64_t LenVector<T>::front() {
     
-    uint64_t smallest = 0;
+    uint64_t largest = 0;
     
-    if (readLens8.size())
-        smallest = readLens8.front().first;
+    if (readLens64.size())
+        largest = readLens64.front().first;
     else if (readLens16.size())
-        smallest = readLens16.front().first;
-    else if (readLens64.size())
-        smallest = readLens64.front().first;
+        largest = readLens16.front().first;
+    else if (readLens8.size())
+        largest = readLens8.front().first;
     
-    return smallest;
+    return largest;
 }
 
 template<typename T>
@@ -114,11 +114,20 @@ uint64_t LenVector<T>::size() {
     return (readLens8.size() + readLens16.size() + readLens64.size());
 }
 
+template <class T1, class T2, class Pred = std::less<T2> >
+struct sort_pair_first {
+    bool operator()(const std::pair<T1,T2>&left, const std::pair<T1,T2>&right) {
+        Pred p;
+        return p(left.first, right.first);
+    }
+};
+
 template<typename T>
-void LenVector<T>::sort() {
-    std::sort(readLens8.begin(), readLens8.end());
-    std::sort(readLens16.begin(), readLens16.end());
-    std::sort(readLens64.begin(), readLens64.end());
+void LenVector<T>::sort() { // sort reads by length ([0])
+    
+    std::sort(readLens8.begin(), readLens8.end(), sort_pair_first<uint8_t, float, std::greater<uint8_t>>());
+    std::sort(readLens16.begin(), readLens16.end(), sort_pair_first<uint16_t, float, std::greater<uint16_t>>());
+    std::sort(readLens64.begin(), readLens64.end(), sort_pair_first<uint64_t, float, std::greater<uint64_t>>());
 }
 
 template<typename T>
