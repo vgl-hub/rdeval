@@ -125,9 +125,9 @@ struct sort_pair_first {
 template<typename T>
 void LenVector<T>::sort() { // sort reads by length ([0])
     
-    std::sort(readLens8.begin(), readLens8.end(), sort_pair_first<uint8_t, float, std::greater<uint8_t>>());
-    std::sort(readLens16.begin(), readLens16.end(), sort_pair_first<uint16_t, float, std::greater<uint16_t>>());
-    std::sort(readLens64.begin(), readLens64.end(), sort_pair_first<uint64_t, float, std::greater<uint64_t>>());
+    std::sort(readLens8.begin(), readLens8.end(), sort_pair_first<uint8_t, T, std::greater<uint8_t>>());
+    std::sort(readLens16.begin(), readLens16.end(), sort_pair_first<uint16_t, T, std::greater<uint16_t>>());
+    std::sort(readLens64.begin(), readLens64.end(), sort_pair_first<uint64_t, T, std::greater<uint64_t>>());
 }
 
 template<typename T>
