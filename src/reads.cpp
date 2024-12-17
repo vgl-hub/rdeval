@@ -487,7 +487,6 @@ uint64_t InReads::getReadN50() {
 void InReads::evalNstars() { // clean up once len-vector iterator is available
 
     uint64_t sum = 0, totLen = getTotReadLen();
-    readLens.sort();
     std::vector<std::pair<uint64_t,float>> &readLens64 = readLens.getReadLens64();
     std::vector<std::pair<uint16_t,float>> &readLens16 = readLens.getReadLens16();
     std::vector<std::pair<uint8_t,float>> &readLens8 = readLens.getReadLens8();
