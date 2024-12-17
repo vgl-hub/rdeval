@@ -260,7 +260,7 @@ float InReads::computeAvgQuality(std::string &sequenceQuality) {
     uint64_t sumQuality = 0;
     for (char &quality : sequenceQuality)
         sumQuality += int(quality) - 33;
-    return sumQuality/(sequenceQuality.size());
+    return (float) sumQuality/(sequenceQuality.size());
 }
 
 void InReads::initFilters() {
@@ -523,7 +523,7 @@ double InReads::getAvgQuality(){
 
     uint64_t sumQualities = 0, avgQualitiesSize=readLens.size();
 
-    for (uint64_t i = 0; i < avgQualitiesSize; i++)
+    for (uint64_t i = 0; i < avgQualitiesSize; ++i)
         sumQualities += readLens[i].first * readLens[i].second;  // sum the qualities normalized by their read length
 
     return (double) sumQualities/getTotReadLen();
