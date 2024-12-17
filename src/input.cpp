@@ -44,8 +44,12 @@ void Input::read() {
     jobWait(threadPool);
     inReads.writeToStream(); // write last batch
     
+    lg.verbose("Data loaded");
+    
     if (inReads.isOutputBam())
         inReads.closeBam();
+    
+    lg.verbose("Generating output");
     
     if (userInput.md5_flag)
        inReads.printMd5();
@@ -59,6 +63,7 @@ void Input::read() {
         inReads.printContent();
     
     if (userInput.outFiles.size()) {
+        lg.verbose("Writing rd file(s)");
         for (std::string file : userInput.outFiles)
             if (getFileExt(file) == "rd")
                 inReads.printTableCompressed(file);
