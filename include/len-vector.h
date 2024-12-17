@@ -114,20 +114,22 @@ uint64_t LenVector<T>::size() {
     return (readLens8.size() + readLens16.size() + readLens64.size());
 }
 
-template <class T1, class T2, class Pred = std::less<T2> >
+template <class T1, class T2>
 struct sort_pair_first {
-    bool operator()(const std::pair<T1,T2>&left, const std::pair<T1,T2>&right) {
-        Pred p;
-        return p(left.first, right.first);
+    bool operator()(const std::pair<T1,T2>&a, const std::pair<T1,T2>&b) {
+        if (a.first != b.first)
+             return a.first > b.first; // Sort by first element descending
+         else
+             return a.second > b.second; // If first elements are equal, sort by second element descending
     }
 };
 
 template<typename T>
 void LenVector<T>::sort() { // sort reads by length ([0])
     
-    std::sort(readLens8.begin(), readLens8.end(), sort_pair_first<uint8_t, T, std::greater<uint8_t>>());
-    std::sort(readLens16.begin(), readLens16.end(), sort_pair_first<uint16_t, T, std::greater<uint16_t>>());
-    std::sort(readLens64.begin(), readLens64.end(), sort_pair_first<uint64_t, T, std::greater<uint64_t>>());
+    std::sort(readLens8.begin(), readLens8.end(), sort_pair_first<uint8_t, T>());
+    std::sort(readLens16.begin(), readLens16.end(), sort_pair_first<uint16_t, T>());
+    std::sort(readLens64.begin(), readLens64.end(), sort_pair_first<uint64_t, T>());
 }
 
 template<typename T>
