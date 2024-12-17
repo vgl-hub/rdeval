@@ -21,7 +21,7 @@ struct UserInputRdeval : UserInput {
 
 class InRead : InSegment {
 
-double avgQuality;
+float avgQuality = 0;
         
 public:
     
