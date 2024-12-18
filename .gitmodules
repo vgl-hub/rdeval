@@ -3,7 +3,3 @@
 	url = https://github.com/vgl-hub/gfalibs.git
     ignore = untracked
     ignore = dirty
-    
-[submodule "htslib"]
-	path = htslib
-	url = https://github.com/samtools/htslib.git

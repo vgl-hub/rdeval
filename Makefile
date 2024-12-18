@@ -13,17 +13,15 @@ INCLUDE = include
 BINDIR := $(BUILD)/.o
 
 LDFLAGS += -pthread
-LIBS = -lz -lcrypto -L./htslib -lhts
+LIBS = -lz -lcrypto -lhts
 
 OBJS := main input reads
 BINS := $(addprefix $(BINDIR)/, $(OBJS))
 
 #gfalibs
 GFALIBS_DIR := $(CURDIR)/gfalibs
-#htslib
-HTSLIB_DIR := $(CURDIR)/htslib
 
-head: $(BINS) gfalibs htslib | $(BUILD)
+head: $(BINS) gfalibs | $(BUILD)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(BUILD)/$(TARGET) $(BINDIR)/* $(GFALIBS_DIR)/*.o $(LIBS)
 	
 all: head validate regenerate
@@ -34,14 +32,6 @@ $(BINDIR)%: $(SOURCE)/%.cpp $(INCLUDE)/%.h | $(BINDIR)
 .PHONY: gfalibs
 gfalibs:
 	$(MAKE) -j -C $(GFALIBS_DIR) -I../htslib
-	
-.PHONY: htslib
-htslib:
-ifeq ($(wildcard $(HTSLIB_DIR)/configure),)
-	cd $(HTSLIB_DIR) && autoreconf -i && ./configure
-endif
-	$(MAKE) -j -C $(HTSLIB_DIR)
-	$(MAKE) -j -C $(HTSLIB_DIR) install
 	
 validate: | $(BUILD)
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/$(TARGET)-$(TEST_TARGET) $(SOURCE)/$(TEST_TARGET).cpp
@@ -58,5 +48,4 @@ $(BINDIR):
 	
 clean:
 	$(MAKE) -j -C $(GFALIBS_DIR) clean
-	$(MAKE) -j -C $(HTSLIB_DIR) clean
 	$(RM) -r build
