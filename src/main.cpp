@@ -41,7 +41,7 @@ int main(int argc, char **argv) {
     
     std::string cmd;
 
-    char helpStr[] = "rdeval input.[fasta|fastq][.gz] [expected genome size]";
+    char helpStr[] = "rdeval input.fa*[.gz]|bam|cram [expected genome size]";
     
     if (argc == 1) { // gfastats with no arguments
             
@@ -51,6 +51,7 @@ int main(int argc, char **argv) {
     }
     
     static struct option long_options[] = { // struct mapping long options
+        {"homopolymer-compress", required_argument, 0, 0},
         {"content",required_argument, 0, 'c'},
         {"filter", required_argument, 0, 'f'},
         {"threads", required_argument, 0, 'j'},
@@ -94,8 +95,8 @@ int main(int argc, char **argv) {
                 
             case 0: // case for long options without short options
                 
-//                if (strcmp(long_options[option_index].name,"line-length") == 0)
-//                  splitLength = atoi(optarg);
+                if(strcmp(long_options[option_index].name,"homopolymer-compress") == 0)
+                    userInput.hc_cutoff = atoi(optarg);
                 
                 break;
             
@@ -139,11 +140,6 @@ int main(int argc, char **argv) {
                 userInput.filter = optarg;
                 
                 rmChrFromStr(userInput.filter, "'\\");
-
-                if (!(userInput.filter[0] == '>' || userInput.filter[0] == '<' || userInput.filter[0] == '=') || !isInt(userInput.filter.substr(1))) {
-                    printf ("Could not parse filter: %s \n", userInput.filter.c_str());
-                    exit(0);
-                }
                 break;
 
             case 's':
@@ -180,18 +176,19 @@ int main(int argc, char **argv) {
             case 'h': // help
                 printf("%s", helpStr);
                 printf("\nOptions:\n");
-                printf("-j --threads <n> numbers of threads (default:3).\n");
-                printf("-f --filter <n> minimum length for retention (default:0).\n");
-                printf("-c --content a|g|t|n generates a list of sequences and their ATCGN base content; all bases, GC content, AT content, Ns (default:a).\n");
-                printf("-o --out-format <file> output file (fa*[.gz], rd). Optionally write reads to file or generate rd summary file.\n");
-                printf("-q --quality c|l a generates list of average quality for each read (c) or both length and quality (c).\n");
-                printf("-r --reads <file1> <file2> <file n> input file (fasta, fastq [.gz]).\n");
-                printf("-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cumulative table).\n");
-                printf("--md5 print md5 of .rd files.\n");
-                printf("--tabular tabular output.\n");
-                printf("--verbose verbose output.\n");
-                printf("-v --version software version.\n");
-                printf("--cmd print $0 to stdout.\n");
+                printf("\t-j --threads <n> numbers of threads (default:3).\n");
+                printf("\t-f --filter <exp> filter reads using <exp> in quotes, e.g. 'l>10' for longer than 10bp or 'l>10 & q>10' to further exclude reads by quality (default: none).\n");
+                printf("\t-c --content a|g|t|n generates a list of sequences and their ATCGN base content; all bases, GC content, AT content, Ns (default:a).\n");
+                printf("\t-o --out-format <file> output file (fa*[.gz], rd). Optionally write reads to file or generate rd summary file.\n");
+                printf("\t-q --quality c|l a generates list of average quality for each read (c) or both length and quality (c).\n");
+                printf("\t-r --reads <file1> <file2> <file n> input file (fasta|fastq [.gz], bam, cram).\n");
+                printf("\t-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cumulative table).\n");
+                printf("\t--homopolymer-compress <n> compress all the homopolymers longer than n in the input.\n");
+                printf("\t--md5 print md5 of .rd files.\n");
+                printf("\t--tabular tabular output.\n");
+                printf("\t--verbose verbose output.\n");
+                printf("\t-v --version software version.\n");
+                printf("\t--cmd print $0 to stdout.\n");
                 exit(0);
         }
         

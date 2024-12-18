@@ -24,7 +24,7 @@ public:
     
     uint64_t front();
     
-    uint64_t operator[](uint64_t index);
+    std::pair<uint64_t,T> operator[](uint64_t index);
     
     uint64_t size();
     
@@ -68,49 +68,45 @@ void LenVector<T>::insert(const LenVector &vector) {
 template<typename T>
 uint64_t LenVector<T>::back() {
     
-    uint64_t largest = 0;
-    
-    if (readLens64.size())
-        largest = readLens64.back().first;
-    else if (readLens16.size())
-        largest = readLens16.back().first;
-    else if (readLens8.size())
-        largest = readLens8.back().first;
-    
-    return largest;
-}
-
-template<typename T>
-uint64_t LenVector<T>::front() {
-    
     uint64_t smallest = 0;
     
     if (readLens8.size())
-        smallest = readLens8.front().first;
+        smallest = readLens8.back().first;
     else if (readLens16.size())
-        smallest = readLens16.front().first;
+        smallest = readLens16.back().first;
     else if (readLens64.size())
-        smallest = readLens64.front().first;
+        smallest = readLens64.back().first;
     
     return smallest;
 }
 
 template<typename T>
-uint64_t LenVector<T>::operator[](uint64_t index) {
+uint64_t LenVector<T>::front() {
     
-    uint64_t value;
+    uint64_t largest = 0;
+    
+    if (readLens64.size())
+        largest = readLens64.front().first;
+    else if (readLens16.size())
+        largest = readLens16.front().first;
+    else if (readLens8.size())
+        largest = readLens8.front().first;
+    
+    return largest;
+}
+
+template<typename T>
+std::pair<uint64_t,T> LenVector<T>::operator[](uint64_t index) {
     
     if (index >= (readLens8.size() + readLens16.size() + readLens64.size()))
         throw std::out_of_range("Index out of bounds");
     
     if (index < readLens8.size())
-        value = readLens8[index].first;
-    else if (index < (readLens8.size() + readLens16.size()))
-        value = readLens16[index-readLens8.size()].first;
+        return readLens8[index];
+    else if (index < readLens16.size())
+        return readLens16[index-readLens8.size()];
     else
-        value = readLens64[index-readLens8.size()-readLens16.size()].first;
-    
-    return value;
+        return readLens64[index-readLens8.size()-readLens16.size()];
 }
 
 template<typename T>
@@ -118,11 +114,22 @@ uint64_t LenVector<T>::size() {
     return (readLens8.size() + readLens16.size() + readLens64.size());
 }
 
+template <class T1, class T2>
+struct sort_pair_first {
+    bool operator()(const std::pair<T1,T2>&a, const std::pair<T1,T2>&b) {
+        if (a.first != b.first)
+             return a.first > b.first; // Sort by first element descending
+         else
+             return a.second > b.second; // If first elements are equal, sort by second element descending
+    }
+};
+
 template<typename T>
-void LenVector<T>::sort() {
-    std::sort(readLens8.begin(), readLens8.end());
-    std::sort(readLens16.begin(), readLens16.end());
-    std::sort(readLens64.begin(), readLens64.end());
+void LenVector<T>::sort() { // sort reads by length ([0])
+    
+    std::sort(readLens8.begin(), readLens8.end(), sort_pair_first<uint8_t, T>());
+    std::sort(readLens16.begin(), readLens16.end(), sort_pair_first<uint16_t, T>());
+    std::sort(readLens64.begin(), readLens64.end(), sort_pair_first<uint64_t, T>());
 }
 
 template<typename T>

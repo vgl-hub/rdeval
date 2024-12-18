@@ -13,7 +13,7 @@ INCLUDE = include
 BINDIR := $(BUILD)/.o
 
 LDFLAGS += -pthread
-LIBS = -lz -lcrypto
+LIBS = -lz -lcrypto -lhts
 
 OBJS := main input reads
 BINS := $(addprefix $(BINDIR)/, $(OBJS))

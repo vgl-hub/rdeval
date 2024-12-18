@@ -1,4 +1,4 @@
-testFiles/random1.fasta.gz -f "<10"
+testFiles/random1.fasta.gz -f "l<10"
 embedded
 +++Read summary+++: 
 # reads: 2
@@ -10,4 +10,4 @@ Largest read length: 5
 Coverage: inf
 GC content %: 55.56
 Base composition (A:C:T:G): 2:3:2:2
-Average read quality: 0.00
+Average per base quality: 0.00

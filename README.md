@@ -18,7 +18,7 @@ Typical fast\* metrics include:
 
 ## Installation
 
-Either download one of the releases or `git clone https://github.com/vgl-hub/rdeval.git --recursive` and `make -j` in the `rdeval` folder.
+Either download one of the releases or `git clone https://github.com/vgl-hub/rdeval.git --recurse-submodules` and `make -j` in the `rdeval` folder.
 
 ## Usage
 
