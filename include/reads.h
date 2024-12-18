@@ -1,6 +1,10 @@
 #ifndef READS_H
 #define READS_H
 
+#include <htslib/sam.h>
+#include <htslib/bgzf.h>
+#include <htslib/hts.h>
+
 #include "len-vector.h"
 #include "output.h"
 
@@ -17,11 +21,11 @@ struct UserInputRdeval : UserInput {
 
 class InRead : InSegment {
 
-double avgQuality;
+float avgQuality = 0;
         
 public:
     
-    void set(Log* threadLog, uint32_t uId, uint32_t iId, std::string readHeader, std::string* readComment, std::string* read, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t readPos, std::string* sequenceQuality, double avgQuality, std::vector<Tag>* inReadTags = NULL, uint64_t* N = NULL);
+    void set(Log* threadLog, uint32_t uId, uint32_t iId, std::string readHeader, std::string* readComment, std::string* read, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t readPos, std::string* sequenceQuality, float avgQuality, std::vector<Tag>* inReadTags = NULL, uint64_t* N = NULL);
     
 friend class InReads;
 
@@ -47,17 +51,23 @@ class InReads {
     
     std::vector<uint64_t> readNstars    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     std::vector<uint32_t> readLstars     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    
     LenVector<float> readLens;
-    
     uint64_t totA=0, totT=0, totC=0, totG=0, totN=0;
-    std::vector<float> avgQualities; // this is redundant now (already part of the read lens vector), should be removed
     
     OutputStream outputStream;
     bool streamOutput = false;
+    
+    htsFile *fp; // htslib file pointer
+    bam_hdr_t *hdr; // htslib sam header pointer
+    bool bam = false;
+    
     uint64_t batchCounter = 1;
     
     std::vector<std::pair<std::string,std::string*>> md5s;
+    
+    // filters
+    char lSign = '0', qSign = '0', logicalOperator = '0';
+    uint64_t l = 0, q = 0;
     
 public:
     
@@ -71,14 +81,21 @@ public:
             {"fastq",2},
             {"fq",2},
             {"fastq.gz",2},
-            {"fq.gz",2}
+            {"fq.gz",2},
+            {"bam",3}
         };
         
         if (userInput.outFiles.size()) {
-            for (std::string file : userInput.outFiles)
+            for (std::string file : userInput.outFiles) {
                 if (string_to_case.find(getFileExt(file)) != string_to_case.end())
                     streamOutput = true;
+                
+                if (getFileExt(file) == "bam")
+                    bam = true;
+            }
         }
+        if(userInput.filter != "none")
+            initFilters();
     };
     
     ~InReads() {
@@ -90,7 +107,13 @@ public:
     
     void load();
     
-    bool traverseInReads(Sequences* sequence);
+    void initFilters();
+    
+    float computeAvgQuality(std::string &sequenceQuality);
+    
+    inline bool filterRead(Sequence* sequence);
+    
+    bool traverseInReads(Sequences* readBatch);
     
     InRead* traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seqPos);
     
@@ -127,6 +150,12 @@ public:
     void readTableCompressed(std::string inFile);
     
     void printMd5();
+    
+    bool isOutputBam();
+    
+    void writeBamHeader();
+    
+    void closeBam();
 };
 
 #endif /* READS_H */

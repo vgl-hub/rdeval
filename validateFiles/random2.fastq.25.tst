@@ -1,2 +1,2 @@
-testFiles/random2.fastq -f "<10"
+testFiles/random2.fastq -f "l<10"
 embedded

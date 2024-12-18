@@ -35,14 +35,12 @@ jobs:
     name: Add Resources
     strategy:
       matrix:
-        OS: [macos-13, ubuntu-latest, windows-2019]
+        OS: [macos-13, ubuntu-latest]
         include:
         - OS: macos-13
           OS_NAME: macOS
         - OS: ubuntu-latest
           OS_NAME: linux
-        - OS: windows-2019
-          OS_NAME: win
     runs-on: ${{ matrix.OS }}
     steps:
       - name: Checkout code
@@ -86,7 +84,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
         with:
-            submodules: true
+            submodules: recursive
       - name: Zip
         uses: papeloto/action-zip@v1
         with:

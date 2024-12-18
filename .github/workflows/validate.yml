@@ -22,13 +22,21 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
       with:
-            submodules: true
+            submodules: recursive
     - if: matrix.os == 'macos-latest'
       name: Build
-      run: INCLUDE_DIR="-I/opt/homebrew/opt/openssl@3/include/" LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.4.0/lib" make all -j
+      run: |
+        brew install htslib
+        INCLUDE_DIR="-I/opt/homebrew/opt/openssl@3/include/ \
+                     -I/opt/homebrew/Cellar/htslib/1.21/include/" \
+            LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.4.0/lib \
+                     -L/opt/homebrew/Cellar/htslib/1.21/lib" \
+            make all -j
     - if: matrix.os == 'ubuntu-latest'
       name: Build
-      run: make all -j
+      run: |
+        sudo apt-get install libhts-dev
+        make all -j
     - name: Validate
       run: |
         chmod +x .github/workflows/val.sh
