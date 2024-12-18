@@ -10,4 +10,4 @@ Largest read length: 15
 Coverage: inf
 GC content %: 50.00
 Base composition (A:C:T:G): 9:14:11:6
-Average read quality: 21.92
+Average per base quality: 21.92
