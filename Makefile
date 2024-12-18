@@ -1,5 +1,5 @@
 CXX ?= g++
-INCLUDE_DIR += -I./include -I./gfalibs/include -I./htslib
+INCLUDE_DIR += -I./include -I./gfalibs/include
 WARNINGS = -Wall -Wextra
 
 CXXFLAGS = -g -std=gnu++14 -O3 $(INCLUDE_DIR) $(WARNINGS) $(CFLAGS)
@@ -31,7 +31,7 @@ $(BINDIR)%: $(SOURCE)/%.cpp $(INCLUDE)/%.h | $(BINDIR)
 
 .PHONY: gfalibs
 gfalibs:
-	$(MAKE) -j -C $(GFALIBS_DIR) -I../htslib
+	$(MAKE) -j -C $(GFALIBS_DIR)
 	
 validate: | $(BUILD)
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/$(TARGET)-$(TEST_TARGET) $(SOURCE)/$(TEST_TARGET).cpp
