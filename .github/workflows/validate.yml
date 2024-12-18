@@ -27,8 +27,8 @@ jobs:
       name: Build
       run: |
         brew install htslib
-        ls /opt/homebrew/Cellar/htslib/1.21/
-        INCLUDE_DIR="-I/opt/homebrew/opt/openssl@3/include/ -I/opt/homebrew/Cellar/htslib/include/" LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.4.0/lib" make all -j
+        ls /opt/homebrew/Cellar/htslib/1.21/include/
+        INCLUDE_DIR="-I/opt/homebrew/opt/openssl@3/include/ -I/opt/homebrew/Cellar/htslib/1.21/include/" LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.4.0/lib" make all -j
     - if: matrix.os == 'ubuntu-latest'
       name: Build
       run: |
