@@ -29,8 +29,8 @@ jobs:
         INCLUDE_DIR="-I/opt/homebrew/opt/openssl@3/include/ \
                      -I/opt/homebrew/Cellar/htslib/1.21/include/" \
             LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.4.0/lib \
-                     -L/opt/homebrew/Cellar/htslib/1.21/lib" \
-                     -L/opt/homebrew/Cellar/htslib/ \
+                     -L/opt/homebrew/Cellar/htslib/1.21/lib \
+                     -L/opt/homebrew/Cellar/htslib/" \
             make all -j
     - if: matrix.os == 'ubuntu-latest'
       name: Build
