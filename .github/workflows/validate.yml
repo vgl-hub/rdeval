@@ -35,7 +35,7 @@ jobs:
     - if: matrix.os == 'ubuntu-latest'
       name: Build
       run: |
-        apt-get install
+        apt-get install libhts-dev
         make all -j
     - name: Validate
       run: |
