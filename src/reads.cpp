@@ -728,7 +728,8 @@ void InReads::writeToStream() {
             {"fq",2},
             {"fastq.gz",2},
             {"fq.gz",2},
-            {"bam",3}
+            {"bam",3},
+            {"cram",3}
         };
         
         std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
@@ -775,7 +776,7 @@ void InReads::writeToStream() {
                 }
                 break;
             }
-            case 3: { // bam
+            case 3: { // bam&cram
                 
                 for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatchesCpy) {
                     
@@ -994,10 +995,15 @@ bool InReads::isOutputBam() {
 
 void InReads::writeBamHeader() {
     
-    const char init_header[] = "@HD\tVN:1.4\tSO:unknown\n";
-    fp = sam_open(outputStream.file.c_str(),"wb");
-    
+    if (getFileExt(outputStream.file) == "bam") {
+        fp = sam_open(outputStream.file.c_str(),"wb");
+    }else if(getFileExt(outputStream.file) == "cram") {
+        htsFormat fmt4 = {sequence_data, cram, {3, 1}, gzip, 6, NULL};
+        hts_parse_format(&fmt4, "cram,no_ref=1");
+        fp = sam_open_format(outputStream.file.c_str(), "wc", &fmt4);
+    }
     // write header
+    const char init_header[] = "@HD\tVN:1.4\tSO:unknown\n";
     hdr = bam_hdr_init();
     hdr->l_text = strlen(init_header);
     hdr->text = strdup(init_header);

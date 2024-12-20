@@ -82,7 +82,8 @@ public:
             {"fq",2},
             {"fastq.gz",2},
             {"fq.gz",2},
-            {"bam",3}
+            {"bam",3},
+            {"cram",3}
         };
         
         if (userInput.outFiles.size()) {
@@ -90,7 +91,7 @@ public:
                 if (string_to_case.find(getFileExt(file)) != string_to_case.end())
                     streamOutput = true;
                 
-                if (getFileExt(file) == "bam")
+                if (getFileExt(file) == "bam" || getFileExt(file) == "cram")
                     bam = true;
             }
         }
