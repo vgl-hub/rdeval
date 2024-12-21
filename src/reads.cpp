@@ -839,7 +839,7 @@ void InReads::printTableCompressed(std::string outFile) {
     std::vector<std::pair<uint64_t,float>> &readLens64 = readLens.getReadLens64();
     uint64_t len8 = readLens8.size(), len16 = readLens16.size(), len64 = readLens64.size();
     
-    uLong sourceLen = sizeof(uint64_t) * (5 + 3) + len8 * sizeof(readLens8[0]) + len16 * sizeof(readLens16[0]) + len64 * sizeof(readLens64[0]) + (len8 + len16 + len64) * sizeof(float); // ACGTN + len8,len16,len64 + vectors + qualities
+    uLong sourceLen = sizeof(uint64_t) * (5 + 3) + len8 * sizeof(readLens8[0]) + len16 * sizeof(readLens16[0]) + len64 * sizeof(readLens64[0]); // ACGTN + len8,len16,len64 + vectors
     Bytef *source = new Bytef[sourceLen];
     uLong destLen = compressBound(sourceLen);
     Bytef *dest = new Bytef[destLen];
