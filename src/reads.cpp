@@ -487,28 +487,17 @@ uint64_t InReads::getReadN50() {
 void InReads::evalNstars() { // clean up once len-vector iterator is available, still expensive
 
     uint64_t sum = 0, totLen = getTotReadLen();
-    std::vector<std::pair<uint64_t,float>> &readLens64 = readLens.getReadLens64();
-    std::vector<std::pair<uint16_t,float>> &readLens16 = readLens.getReadLens16();
-    std::vector<std::pair<uint8_t,float>> &readLens8 = readLens.getReadLens8();
+    uint8_t N = 1;
     
-    short int N = 1;
-    
-    auto findNstars = [this, &sum, &N, &totLen] (uint64_t len, uint64_t i)
-    {
-        sum += len; // increase sum
+    for(unsigned int i = 0; i < readLens.size(); ++i) { // for each length
+        sum += readLens[i].first; // increase sum
         while (sum >= ((double) totLen / 10 * N) && N<= 10) { // conditionally add length.at or pos to each N/L* bin
             
-            readNstars[N-1] = len;
+            readNstars[N-1] = readLens[i].first;
             readLstars[N-1] = i + 1;
-            N = N + 1;
+            N += 1;
         }
-    };
-    for(unsigned int i = 0; i < readLens64.size(); i++) // for each length
-        findNstars(readLens64[i].first, i);
-    for(unsigned int i = 0; i < readLens16.size(); i++)
-        findNstars(readLens16[i].first, i);
-    for(unsigned int i = 0; i < readLens8.size(); i++)
-        findNstars(readLens8[i].first, i);
+    }
 }
 
 uint64_t InReads::getSmallestRead() {
