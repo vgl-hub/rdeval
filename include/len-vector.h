@@ -30,8 +30,6 @@ public:
     
     void sort();
     
-    std::vector<std::pair<uint64_t,T>> all();
-    
     std::vector<std::pair<uint8_t,T>>& getReadLens8();
 
     std::vector<std::pair<uint16_t,T>>& getReadLens16();
@@ -101,12 +99,12 @@ std::pair<uint64_t,T> LenVector<T>::operator[](uint64_t index) {
     if (index >= (readLens8.size() + readLens16.size() + readLens64.size()))
         throw std::out_of_range("Index out of bounds");
     
-    if (index < readLens8.size())
-        return readLens8[index];
-    else if (index < readLens8.size() + readLens16.size())
-        return readLens16[index-readLens8.size()];
+    if (index < readLens64.size())
+        return readLens64[index];
+    else if (index < readLens64.size() + readLens16.size())
+        return readLens16[index-readLens64.size()];
     else
-        return readLens64[index-readLens8.size()-readLens16.size()];
+        return readLens8[index-readLens64.size()-readLens16.size()];
 }
 
 template<typename T>
@@ -130,16 +128,6 @@ void LenVector<T>::sort() { // sort reads by length ([0])
     std::sort(readLens8.begin(), readLens8.end(), sort_pair_first<uint8_t, T>());
     std::sort(readLens16.begin(), readLens16.end(), sort_pair_first<uint16_t, T>());
     std::sort(readLens64.begin(), readLens64.end(), sort_pair_first<uint64_t, T>());
-}
-
-template<typename T>
-std::vector<std::pair<uint64_t,T>> LenVector<T>::all() { // far from optimal implementation, but needed without iterator
-    std::vector<std::pair<uint64_t,T>> allReadLens;
-    allReadLens.reserve(readLens8.size() + readLens16.size() + readLens8.size()); // preallocate memory
-    allReadLens.insert(allReadLens.end(), readLens8.begin(), readLens8.end());
-    allReadLens.insert(allReadLens.end(), readLens16.begin(), readLens16.end());
-    allReadLens.insert(allReadLens.end(), readLens64.begin(), readLens64.end());
-    return allReadLens;
 }
 
 template<typename T>

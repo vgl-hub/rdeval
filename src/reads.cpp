@@ -547,23 +547,22 @@ void InReads::printReadLengths() {
     
     std::cout << std::fixed; // disables scientific notation
     std::cout << std::setprecision(2); // 2 decimal points
+    
+    uint64_t readCount = readLens.size();
 
     if (userInput.sizeOutType == 's' || userInput.sizeOutType == 'h' || userInput.sizeOutType == 'c') {
         readLens.sort();
     }else{
         
-        auto readLensTmp = readLens.all();
-        
-        for (auto read : readLensTmp)
-            std::cout << read.first << "\n";
+        for (uint64_t i = 0; i < readCount; ++i)
+            std::cout << readLens[i].first << "\n";
     }
     if (userInput.sizeOutType == 'h') {
 
         int count = 1;
-        for (uint64_t i = 0; i < readLens.size(); i++) {
-            if (readLens[i].first == readLens[i+1].first) {
+        for (uint64_t i = 0; i < readCount; ++i) {
+            if (readLens[i].first == readLens[i+1].first)
                 count += 1;
-            }
             else if (readLens[i].first != readLens[i+1].first) {
                 std::cout << readLens[i].first << "," << count << "\n";
                 count = 1;
@@ -579,10 +578,9 @@ void InReads::printReadLengths() {
         uint64_t sizexCountSum = 0;
         std::vector<uint64_t> uniqReadLens;
 
-        for (uint64_t i = 0; i < readLens.size(); i++) {
-            if (readLens[i].first == readLens[i+1].first) {
+        for (uint64_t i = 0; i < readCount; ++i) {
+            if (readLens[i].first == readLens[i+1].first)
                 count += 1;
-            }
             else if (readLens[i].first != readLens[i+1].first) {
                 sizexCount = (readLens[i].first * count);
                 counts.push_back(count);
@@ -606,17 +604,17 @@ void InReads::printQualities() {
     std::cout << std::fixed; // disables scientific notation
     std::cout << std::setprecision(2); // 2 decimal points
     
-    char qualityOut = userInput.qualityOut;
+    uint64_t readCount = readLens.size();
     
-    auto readLensTmp = readLens.all();
+    char qualityOut = userInput.qualityOut;
 
     if (qualityOut == 'c'){
-        for (auto read : readLensTmp)
-            std::cout << read.second << "\n";
+        for (uint64_t i = 0; i < readCount; ++i)
+            std::cout << readLens[i].second << "\n";
     }
     else if (qualityOut == 'l') { // l prints read lengths and qualities
-        for (auto read : readLensTmp)
-            std::cout << read.first << "," << read.second << "\n";
+        for (uint64_t i = 0; i < readCount; ++i)
+            std::cout << readLens[i].first << "," << readLens[i].second << "\n";
     }
 }
 void InReads::printContent() {
