@@ -49,8 +49,8 @@ class InReads {
     
     uint32_t seqPos = 0; // to keep track of the original sequence order
     
-    std::vector<uint64_t> readNstars    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    std::vector<uint32_t> readLstars     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<uint64_t> readNstars{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<uint32_t> readLstars{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     LenVector<float> readLens;
     uint64_t totA=0, totT=0, totC=0, totG=0, totN=0;
     

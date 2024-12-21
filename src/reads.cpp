@@ -529,16 +529,16 @@ void InReads::report() {
         
         if (!tabular_flag)
             std::cout<<output("+++Read summary+++")<<"\n";
-        std::cout<<output("# reads")<<totReads<<"\n";
-        std::cout<<output("Total read length")<<getTotReadLen()<<"\n";
+        std::cout<<output("# reads")<<totReads<<std::endl;
+        std::cout<<output("Total read length")<<getTotReadLen()<<std::endl;
         std::cout<<output("Average read length") << gfa_round(computeAvgReadLen())<<std::endl;
         evalNstars(); // read N* statistics
-        std::cout<<output("Read N50")<<getReadN50()<<"\n";
-        std::cout<<output("Smallest read length")<<getSmallestRead()<<"\n";
-        std::cout<<output("Largest read length")<<getLargestRead()<<"\n";
-        std::cout<<output("Coverage")<<gfa_round((double)getTotReadLen()/userInput.gSize)<<"\n";
-        std::cout<<output("GC content %")<<gfa_round(computeGCcontent())<<"\n";
-        std::cout<<output("Base composition (A:C:T:G)")<<totA<<":"<<totC<<":"<<totT<<":"<<totG<<"\n";
+        std::cout<<output("Read N50")<<getReadN50()<<std::endl;
+        std::cout<<output("Smallest read length")<<getSmallestRead()<<std::endl;
+        std::cout<<output("Largest read length")<<getLargestRead()<<std::endl;
+        std::cout<<output("Coverage")<<gfa_round((double)getTotReadLen()/userInput.gSize)<<std::endl;
+        std::cout<<output("GC content %")<<gfa_round(computeGCcontent())<<std::endl;
+        std::cout<<output("Base composition (A:C:T:G)")<<totA<<":"<<totC<<":"<<totT<<":"<<totG<<std::endl;
         std::cout<<output("Average per base quality")<<getAvgQuality()<<std::endl;
     }
 }
