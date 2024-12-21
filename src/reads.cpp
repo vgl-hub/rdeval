@@ -968,13 +968,16 @@ void InReads::readTableCompressed(std::string inFile) {
     readLensTmp8.resize(len8);
     readLensTmp16.resize(len16);
     readLensTmp64.resize(len64);
-    
-    memcpy(readLensTmp8.data(), ptr, len8 * sizeof(readLensTmp8[0]));
-    ptr += len8 * sizeof(uint64_t);
-    memcpy(readLensTmp16.data(), ptr, len16 * sizeof(readLensTmp16[0]));
-    ptr += len16 * sizeof(uint64_t);
-    memcpy(readLensTmp64.data(), ptr, len64 * sizeof(readLensTmp64[0]));
-    ptr += len64 * sizeof(uint64_t);
+    // prefer this to memcpy as std::copy is safer
+    std::pair<uint8_t,float>* p8 = reinterpret_cast<std::pair<uint8_t,float>*>(ptr);
+    std::copy(p8, p8+len8, readLensTmp8.begin());
+    ptr += len8 * sizeof(readLensTmp8[0]);
+    std::pair<uint16_t,float>* p16 = reinterpret_cast<std::pair<uint16_t,float>*>(ptr);
+    std::copy(p16, p16+len16, readLensTmp16.begin());
+    ptr += len16 * sizeof(readLensTmp16[0]);
+    std::pair<uint64_t,float>* p64 = reinterpret_cast<std::pair<uint64_t,float>*>(ptr);
+    std::copy(p64, p64+len64, readLensTmp64.begin());
+    ptr += len64 * sizeof(readLensTmp64[0]);
     
     delete[] data;
     
