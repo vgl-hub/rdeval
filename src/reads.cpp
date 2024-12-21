@@ -969,11 +969,11 @@ void InReads::readTableCompressed(std::string inFile) {
     readLensTmp16.resize(len16);
     readLensTmp64.resize(len64);
     
-    memcpy(&readLensTmp8[0], ptr, len8 * sizeof(readLensTmp8[0]));
+    memcpy(readLensTmp8.data(), ptr, len8 * sizeof(readLensTmp8[0]));
     ptr += len8 * sizeof(uint64_t);
-    memcpy(&readLensTmp16[0], ptr, len16 * sizeof(readLensTmp16[0]));
+    memcpy(readLensTmp16.data(), ptr, len16 * sizeof(readLensTmp16[0]));
     ptr += len16 * sizeof(uint64_t);
-    memcpy(&readLensTmp64[0], ptr, len64 * sizeof(readLensTmp64[0]));
+    memcpy(readLensTmp64.data(), ptr, len64 * sizeof(readLensTmp64[0]));
     ptr += len64 * sizeof(uint64_t);
     
     delete[] data;
