@@ -118,9 +118,9 @@ template <class T1, class T2>
 struct sort_pair_first {
     bool operator()(const std::pair<T1,T2>&a, const std::pair<T1,T2>&b) {
         if (a.first != b.first)
-             return a.first > b.first; // Sort by first element descending
-         else
-             return a.second > b.second; // If first elements are equal, sort by second element descending
+            return a.first > b.first; // Sort by first element descending
+        else
+            return a.second > b.second; // If first elements are equal, sort by second element descending
     }
 };
 
