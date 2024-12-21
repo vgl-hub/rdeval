@@ -103,7 +103,7 @@ std::pair<uint64_t,T> LenVector<T>::operator[](uint64_t index) {
     
     if (index < readLens8.size())
         return readLens8[index];
-    else if (index < readLens16.size())
+    else if (index < readLens8.size() + readLens16.size())
         return readLens16[index-readLens8.size()];
     else
         return readLens64[index-readLens8.size()-readLens16.size()];
