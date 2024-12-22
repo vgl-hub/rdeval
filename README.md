@@ -1,4 +1,4 @@
-<p style="text-align:center;"><img src="docs/images/gfastar_logo_thumbnail.png" alt="gfastar_logo_thumbnail" width="250"></p>
+<p align="center"><img src="docs/images/gfastar_logo_thumbnail.png" alt="gfastar_logo_thumbnail" width="100" /></p>
 
 # rdeval
 
