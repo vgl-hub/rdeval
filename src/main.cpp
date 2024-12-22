@@ -15,7 +15,7 @@
 #include "stream-obj.h"
 #include "input.h"
 
-std::string version = "0.0.2";
+std::string version = "0.0.3";
 
 //global
 std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now(); // immediately start the clock when the program is run
@@ -41,7 +41,7 @@ int main(int argc, char **argv) {
     
     std::string cmd;
 
-    char helpStr[] = "rdeval input.fa*[.gz]|bam|cram [expected genome size]";
+    char helpStr[] = "rdeval input.fa*[.gz]|bam|cram|rd [expected genome size]";
     
     if (argc == 1) { // gfastats with no arguments
             
@@ -179,9 +179,9 @@ int main(int argc, char **argv) {
                 printf("\t-j --threads <n> numbers of threads (default:3).\n");
                 printf("\t-f --filter <exp> filter reads using <exp> in quotes, e.g. 'l>10' for longer than 10bp or 'l>10 & q>10' to further exclude reads by quality (default: none).\n");
                 printf("\t-c --content a|g|t|n generates a list of sequences and their ATCGN base content; all bases, GC content, AT content, Ns (default:a).\n");
-                printf("\t-o --out-format <file> output file (fa*[.gz], rd). Optionally write reads to file or generate rd summary file.\n");
+                printf("\t-o --out-format <file> output file (fa*[.gz], bam, cram, rd). Optionally write reads to file or generate rd summary file.\n");
                 printf("\t-q --quality c|l a generates list of average quality for each read (c) or both length and quality (c).\n");
-                printf("\t-r --reads <file1> <file2> <file n> input file (fasta|fastq [.gz], bam, cram).\n");
+                printf("\t-r --reads <file1> <file2> <file n> input file (fa*[.gz], bam, cram, rd).\n");
                 printf("\t-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cumulative table).\n");
                 printf("\t--homopolymer-compress <n> compress all the homopolymers longer than n in the input.\n");
                 printf("\t--md5 print md5 of .rd files.\n");

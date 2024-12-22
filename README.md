@@ -1,10 +1,12 @@
+<p style="text-align:center;"><img src="docs/images/gfastar_logo_thumbnail.png" alt="gfastar_logo_thumbnail" width="250"></p>
+
 # rdeval
 
 A general purpose, multithreaded read analysis and manipulation tool.
 
-**rdeval** is a single, fast and exhaustive tool for **summary statistics** and simultaneous \*fa\* (fasta, fastq [.gz]) read file **manipulation**. **rdeval** also allows seamless fasta<>fastq[.gz] conversion.
+**rdeval** is a single, fast and exhaustive tool for **summary statistics** and simultaneous **manipulation** of sequence read files in fa\*[.gz], bam, cram, and formats. **rdeval** also allows seamless file conversion conversion between formats.
 
-Typical fast\* metrics include:
+Typical metrics include:
 
 - number of reads
 - total read length
@@ -18,11 +20,11 @@ Typical fast\* metrics include:
 
 ## Installation
 
-Either download one of the releases or `git clone https://github.com/vgl-hub/rdeval.git --recurse-submodules` and `make -j` in the `rdeval` folder.
+Either download one of the releases or `git clone https://github.com/vgl-hub/rdeval.git --recursive` and `make -j` in the `rdeval` folder.
 
 ## Usage
 
-`rdeval input.[fasta|fastq][.gz] [expected genome size]
+`rdeval input.fa*[.gz]|bam|cram|rd [expected genome size]`
 
 To check out all options and flags use `rdeval -h`.
 
@@ -34,7 +36,7 @@ rdeval testFiles/random1.fastq 10 // computes summary statistics, including cove
 
 ## How to cite
 
-If you use **rdeval** in your work, please cite:
+**Rdeval** is part of the gfastar tool suite. If you use **rdeval** in your work, please cite:
 
 Gfastats: conversion, evaluation and manipulation of genome sequences using assembly graphs
 
