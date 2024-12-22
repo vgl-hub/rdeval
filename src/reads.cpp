@@ -549,52 +549,46 @@ void InReads::printReadLengths() {
     std::cout << std::setprecision(2); // 2 decimal points
     
     uint64_t readCount = readLens.size();
-
-    if (userInput.sizeOutType == 's' || userInput.sizeOutType == 'h' || userInput.sizeOutType == 'c') {
-        readLens.sort();
-    }else{
+    
+    if (userInput.sizeOutType == 'u') {
         
         for (uint64_t i = 0; i < readCount; ++i)
             std::cout << readLens[i].first << "\n";
-    }
-    if (userInput.sizeOutType == 'h') {
+        
+    }else if(userInput.sizeOutType == 's') {
+        
+        readLens.sort();
+        for (uint64_t i = 0; i < readCount; ++i)
+            std::cout << readLens[i].first << "\n";
+        
+    }else if(userInput.sizeOutType == 'h') {
+        
+        phmap::parallel_flat_hash_map<uint64_t, uint64_t> hist;
+        
+        for (uint64_t i = 0; i < readCount; ++i)
+            ++hist[readLens[i].first];
+        
+        std::vector<std::pair<uint64_t, uint64_t>> table(hist.begin(), hist.end()); // converts the hashmap to a table
+        std::sort(table.begin(), table.end());
+        
+        for (auto pair : table)
+            std::cout<<pair.first<<"\t"<<pair.second<<"\n";
+        
+    } else if (userInput.sizeOutType == 'c') {
 
-        int count = 1;
-        for (uint64_t i = 0; i < readCount; ++i) {
-            if (readLens[i].first == readLens[i+1].first)
-                count += 1;
-            else if (readLens[i].first != readLens[i+1].first) {
-                std::cout << readLens[i].first << "," << count << "\n";
-                count = 1;
-            }
-        }
-    }
-    if (userInput.sizeOutType == 'c') {
-
-        int count = 1;
-        uint64_t sizexCount;
-        std::vector<unsigned  int> counts;
-        std::vector<uint64_t> sizexCounts;
-        uint64_t sizexCountSum = 0;
-        std::vector<uint64_t> uniqReadLens;
-
-        for (uint64_t i = 0; i < readCount; ++i) {
-            if (readLens[i].first == readLens[i+1].first)
-                count += 1;
-            else if (readLens[i].first != readLens[i+1].first) {
-                sizexCount = (readLens[i].first * count);
-                counts.push_back(count);
-                sizexCounts.push_back(sizexCount);
-                uniqReadLens.push_back(readLens[i].first);
-                sizexCountSum += sizexCount;
-
-                count = 1;
-            }
-        }
-        uint64_t sizexCountSums = 0;
-        for (uint64_t i = 0; i < sizexCounts.size(); i++) {
-            std::cout << uniqReadLens[i] << "," << counts[i] << "," <<sizexCounts[i] << "," << sizexCountSum - sizexCountSums << "\n";
-            sizexCountSums += sizexCounts[i];
+        phmap::parallel_flat_hash_map<uint64_t, uint64_t> hist;
+        
+        for (uint64_t i = 0; i < readCount; ++i)
+            ++hist[readLens[i].first];
+        
+        std::vector<std::pair<uint64_t, uint64_t>> table(hist.begin(), hist.end());
+        std::sort(table.begin(), table.end());
+        
+        uint64_t totReadLen = getTotReadLen(), sum = 0;
+        
+        for (auto pair : table) {
+            std::cout<<+pair.first<<"\t"<<+pair.second<<"\t"<<+pair.first*pair.second<<"\t"<<+(totReadLen - sum)<<"\n";
+            sum += pair.first*pair.second;
         }
     }
 }
