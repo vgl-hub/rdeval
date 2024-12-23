@@ -1,216 +1,124 @@
 ---
-title: "rdeval_plots"
-author: "Nadolina"
-date: '2023-03-28'
+title: "Plots"
 output: html_document
+date: "2024-12-06"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = "/Users/nadolinabrajuka/Documents/ROCKU/rdeval_test")
-```
-
-```{r, echo = FALSE, include = FALSE}
-library(ggplot2)
+knitr::opts_chunk$set(echo = FALSE, fig.align = 'center')
 library(tidyverse)
+library(ggExtra)
+library(ggiraph)
 library(plotly)
-library(psych)
-library(Hmisc)
-library(gridExtra)
-library(grid)
-library(vtable)
 ```
 
+```{r}
+# Set color palette (Okabe-Ito)
+palette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
-### Data overview 
-
-```{r, echo = FALSE, comment=""}
-
-filename="bGalGal1_PAK10959_09282022.concat.qual_lengths.txt"
-ql <- read.csv(file=filename, header = FALSE)
-colnames(ql) <- c("Length","Quality")
-
-filename2="bGalGal1_PAK10959_09282022.concat.invcu.csv"
-invcu <- read.csv(file = filename2, header = FALSE)
-colnames(invcu) <- c("Length","Count","CountxLength","Inv_cu_length")
-
-cat(paste0("Number of reads in ", filename, ": ",dim(ql)[1], "\n\n")) 
-
-```
-```{r Statistics, echo=FALSE, comment = ""}
-describe(ql, descript = "Descriptive statistics of read set qualities and lengths.") 
-```
-
-```{r length distribution, warning=FALSE, fig.show='hold', out.width="70%", echo = FALSE, fig.cap = "Fig.1) Read length distributions above and below 100 Kbp.", comment = ""}
-
-## Filtering dataset by read lengths below and above/equal to 100Kb and plotting length distribution histograms 
-b_100 <- ql %>% 
-  filter(Length < 100000)
-
-a_100 <- ql %>% 
-  filter(Length >= 100000)
-
-cat(paste0("Number of reads below 100Kb: ",dim(b_100)[1]))
-cat(paste0("Number of reads above 100Kb: ",dim(a_100)[1]))
-
-b_100_hist <- ggplot(b_100, mapping = aes(x = Length/1000)) +
-  geom_histogram(bins = 20) +
-  xlab("Read length (Kbp)") +
-  theme_bw() 
-
-a_100_hist <- ggplot(a_100, mapping = aes(x = Length/1000)) +
-  geom_histogram(bins = 20) + 
-  xlab("Read length (Kbp)") + 
-  theme_bw()
-
-grob1 <- textGrob(label = "< 100Kb",
-                  x = 0.90, y = 0.95, 
-                  gp=gpar(col = "black",
-                          fontsize = 10, 
-                          fontface = "bold"))
-
-grob2 <- textGrob(label = ">= 100Kb",
-                  x = 0.90, y = 0.95, 
-                  gp=gpar(col = "black",
-                          fontsize = 10, 
-                          fontface = "bold"))
-
-## TO DO:  also include mean, min, max on plots 
-
-grid.arrange((b_100_hist + annotation_custom(grob1)), 
-             (a_100_hist + annotation_custom(grob2)))
-# , 
-#              top = textGrob("Read length distributions above and below 100 Kbp",
-#                             gp=gpar(fontsize = 12, 
-#                                     fontface = 2))
-#              )
-```
-
-### Read lengths below 100Kbp
-
-```{r pre_filter, echo = FALSE,  fig.cap="Fig. 2) Density graph of reads binned by length and quality. Hover mouse over a bin to see the length and quality limits, and number of reads in the bin."}
-
-unfilt_density <- ggplot(data = b_100, mapping = aes(x = Length, y = Quality)) + 
-    stat_bin_2d(bins = 100) + 
-    scale_fill_viridis_c(end = 0.8, option = "C", direction = -1, alpha = 0.9) + 
-    xlab("Read length (Kb)") +
-    ylab("Quality") + 
-    labs(fill = "Count") +
-    theme_bw()
-ggplotly(unfilt_density)
-
-```
-
-
-```{r outliers, echo = FALSE, comment = ""}
-
-## First filtering the dataframe to remove length outliers and then quality outliers.
-
-outliers <- function(df) {
-
-  df_stats <- boxplot(df, plot = FALSE)$stats
-  
-  df_filt <- df %>% 
-    filter(df$Length > df_stats[1,1]) %>%
-    filter(Length < df_stats[5,1]) %>% 
-    filter(Quality > df_stats[1,2]) %>%
-    filter(Quality < df_stats[5,2])
-  
-  cat(paste0("Minimum and maximum lengths after removing outliers:[",min(df_filt$Length),",", max(df_filt$Length),"]\n"))
-  cat(paste0("Minimum and maximum qualities after removing outliers:[",min(df_filt$Quality),",",max(df_filt$Quality),"]\n"))
-
-  cat(paste0(dim(df_filt)[1], " reads remain after filtering.\n"))
-
-  return(df_filt)
-
+# Inverse Cumulative Distribution Function
+icdf <- function(read_lengths) {
+  sum <- sum(read_lengths)
+  read_lengths <- sort(read_lengths)
+  n <- length(read_lengths)
+  vals <- unique(read_lengths)
+  inv_cs <- sum - cumsum(as.numeric(tabulate(match(read_lengths, vals)) * vals))
+  inv_cs_gb <- inv_cs/10^9
+  return(tibble(read_length = vals, inv_cs = inv_cs, inv_cs_gb = inv_cs_gb))
 }
 
-b_100_filt <- outliers(b_100)
+reads <- tibble(read_length = numeric(), read_quality = numeric(), run = character())
+inv_cs <- tibble(read_length = numeric(), inv_cs = numeric(), run = character())
+
+files <- list.files(pattern = 'mCteGun2/*.length_quality.txt')
+n_runs <- length(files)
+for (file in files) {
+  df <- read.csv(file, header = FALSE)
+  run <- strsplit(file, '[.]')[[1]][1]
+  df$run <- run
+  names(df) = c('read_length', 'read_quality', 'run')
+  df_icdf <- icdf(df$read_length)
+  df_icdf$run <- run
+  reads <- rbind(reads, df)
+  inv_cs <- rbind(inv_cs, df_icdf)
+}
 
 ```
 
-```{r filt_histogram, echo = FALSE, fig.cap= "Fig.3) Filtered read length histogram."}
+### Boxplot
+```{r}
 
-ggplot(data = b_100_filt, mapping = aes(x = Length, fill = as.factor(Quality)))+
-  geom_histogram(bins = 10,linewidth = 0.15, color = "black") +
-  theme_bw() +
-  theme(legend.position = "bottom",
-        plot.margin = margin(1,1,1,1, "cm")) + 
-  labs(fill = "Quality") +
-  xlab("Read length (bp) ") +
-  ylab("Count") + 
-  scale_fill_viridis_d(option = "A")
-
+ggplot(reads, aes(x = run, y = read_length)) +
+  geom_boxplot(fill = "#E69F00") +
+  scale_x_discrete(name = ("Read")) +
+  scale_y_continuous(name = ("Read Length"),
+                     labels = scales::label_comma()) +
+  scale_fill_manual(guide = "none") +
+  theme_bw() 
 ```
 
-```{r binned_counts, echo = FALSE, fig.cap= "Fig. 4) Filtered reads below 100Kb binned by quality and kength."}
-ggplot(data = b_100_filt, mapping = aes(x = Length, y = Quality)) + 
-  stat_bin_2d(aes(fill = after_stat(ncount)), bins = 10) + 
-  scale_fill_viridis_c(end = 0.8, option = "C", direction = -1, alpha = 0.9) + 
-  xlab("Read length (Kb)") +
-  ylab("Quality") + 
-  labs(fill = "N-count") +
-  theme_bw()
+### Read lengths
 
-
+```{r}
+ggplot(reads, aes(x = read_length, fill = run)) +
+  geom_histogram_interactive(bins = floor(nrow(reads)/(100000 * n_runs)), 
+                             color = "white") +
+  scale_x_continuous(name = ("Read length (bp)"),
+                     breaks = scales::breaks_width(10000),
+                     labels = scales::label_comma(),
+                     expand = expansion(mult = c(0, 0))) +
+  scale_y_continuous(name = "Count", labels = scales::label_comma(),
+                     expand = expansion(mult = c(0, 0.05))) +
+  scale_fill_manual(name = "Run", values = palette) +
+  theme_bw() 
 ```
 
-
-### Read lengths above 100Kbp
-
-```{r pre_filter_a100, echo = FALSE,  fig.cap = "Fig. 5) Density graph of reads binned by length and quality. Hover mouse over a bin to see the length and quality limits, and number of reads in the bin."}
-
-unfilt_density <- ggplot(data = a_100, mapping = aes(x = Length, y = Quality)) + 
-    stat_bin_2d(bins = 100) + 
-    scale_fill_viridis_c(end = 0.8, option = "C", direction = -1, alpha = 0.9) + 
-    xlab("Read length (Kb)") +
-    ylab("Quality") + 
-    labs(fill = "Count") +
-    theme_bw()
-ggplotly(unfilt_density)
-
+### Read lengths (log transformed)
+```{r}
+ggplot(reads, aes(x = read_length, fill = run)) +
+  geom_histogram(bins = floor(nrow(reads)/(100000 * n_runs)), color = "white") +
+  scale_x_log10(name = ("Read length (bp)"),
+                breaks = scales::breaks_log(n = 5),
+                labels = scales::label_comma()) +
+  scale_y_continuous(labels = scales::label_comma(),
+                     expand = expansion(mult = c(0, 0.05))) +
+  scale_fill_manual(name = "Run", values = palette) +
+  theme_bw() 
 ```
 
-```{r, echo = FALSE, comment = ""}
-a_100_filt <- outliers(a_100)
+### Inverse cumulative distribution plot
+```{r}
+ggplot(inv_cs, aes(read_length, inv_cs_gb, color = run)) +
+  geom_point() +
+  scale_x_continuous(name = "Read length (bp)",
+                     breaks = scales::breaks_width(10000),
+                     labels = scales::label_comma(),
+                     expand = expansion(mult = c(0.05, 0.05))) +
+  scale_y_continuous(name = "Cumulative yield (Gb)",
+                     expand = expansion(mult = c(0.05, 0.05))) +
+  scale_color_manual(name = "Run", values = palette) +
+  theme_bw() 
 ```
 
+### Read lengths vs average quality
+```{r}
+reads_by_avg_quality <- reads %>%
+  group_by(run, read_length) %>%
+  summarize_at("read_quality", mean)
 
-```{r histogram, echo = FALSE, comment = "", fig.cap = "Fig.6) Filtered read length histogram." }
-ggplot(data = a_100_filt, mapping = aes(x = Length, fill = as.factor(Quality)))+
-  geom_histogram(bins = 10, colour = "black", linewidth = 0.15) +
-  theme_bw() +
-  theme(legend.position = "bottom") +
-  labs(fill = "Quality") +
-  xlab("Read length") +
-  ylab("Count") +
-  scale_fill_viridis_d(option = "A")
+g <- reads_by_avg_quality %>%
+  ggplot(aes(x = read_length, y = read_quality, fill = run, color = run)) +
+  geom_point(position = position_jitter(h = 0.3), 
+             size = 0.75, 
+             alpha = 0.2) +
+  # geom_density2d(color = "black", linewidth = 0.2) +
+  scale_x_continuous(name = ("Read length (bp)"),
+                     breaks = scales::breaks_width(10000),
+                     labels = scales::label_comma()) +
+  scale_y_continuous(name = ("Average Read Quality")) +
+  scale_color_manual(name = "Run", values = palette) +
+  scale_fill_discrete(guide = "none") +
+  theme_bw() 
+g1 <- ggMarginal(g + theme(legend.position = "left"), type = "histogram", groupColour = TRUE, groupFill = TRUE)
+g1
 ```
-
-```{r binned_counts_a100, echo = FALSE, fig.cap= "Fig. 7) Filtered reads below 100Kb binned by quality and kength."}
-ggplot(data = a_100_filt, mapping = aes(x = Length, y = Quality)) + 
-  stat_bin_2d(aes(fill = after_stat(ncount)), bins = 10) + 
-  scale_fill_viridis_c(end = 0.8, option = "C", direction = -1, alpha = 0.9) + 
-  xlab("Read length (Kb)") +
-  ylab("Quality") + 
-  labs(fill = "N-count") +
-  theme_bw()
-
-
-```
-
-### Inverse cumulative read lengths
-
-```{r Inverse cumulative plot, echo = FALSE, fig.cap= "Fig. 8) Inverse cumulative read lengths. At a given read length (x-axis), the data point represents the sum of lengths in the dataset equal to or greater than that read length."}
-ggplot() +
-  geom_point(data = invcu, 
-             mapping = aes(x = Length/1000, 
-                           y = Inv_cu_length)) + 
-  ylab("Cumulative inverse read length (Mbp)") + 
-  xlab("Read length (Kbp)") +
-  scale_y_continuous(trans = 'log10', 
-                     breaks = c(1000000,10000000,100000000,1000000000,10000000000), 
-                     labels = c("1","10","100", "1000", "10000")) + 
-  theme_bw()
-```
-
