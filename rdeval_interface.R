@@ -92,9 +92,11 @@ rdFile <- rdFileClass$new(input_file = input_file,
                           qualities = qualities)
 
 # usage examples:
+length(rdFile$lengths) # total number of reads
+sum(rdFile$lengths) # total read length
+mean(rdFile$lengths) # average read length
 tail(rdFile$lengths, n=1) # shortest read (they are sorted)
 rdFile$lengths[1] # longest read
-mean(rdFile$lengths) # average read length
 mean(rdFile$qualities) # average read quality (not weighted by length)
 rdFile$A_count # As count etc
 input_file # name of the input
