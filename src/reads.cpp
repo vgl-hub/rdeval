@@ -860,7 +860,7 @@ void InReads::printTableCompressed(std::string outFile) {
     
     std::ofstream ofs(outFile, std::fstream::trunc | std::ios::out | std::ios::binary);
     
-    // write md5s
+    // write md5s <-- these could presumably be also gzipped (need to work on the R interface too)
     uint32_t md5sN = md5s.size();
     uint16_t stringSize;
     ofs.write(reinterpret_cast<const char*>(&md5sN), sizeof(uint32_t));
@@ -890,14 +890,13 @@ void InReads::readTableCompressed(std::string inFile) {
     ifs.read(reinterpret_cast<char*>(&md5sN), sizeof(uint32_t));
     
     for (uint32_t i = 0; i < md5sN; ++i) {
-        std::string filename;
-        std::string *md5 = new std::string;
+        std::string filename, md5;
         ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(uint16_t));
         filename.resize(stringSize);
         ifs.read(reinterpret_cast<char*>(&filename[0]), sizeof(char) * stringSize);
         ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(uint16_t));
-        md5->resize(stringSize);
-        ifs.read(reinterpret_cast<char*>(&(*md5)[0]), sizeof(char) * stringSize);
+        md5.resize(stringSize);
+        ifs.read(reinterpret_cast<char*>(&md5[0]), sizeof(char) * stringSize);
         md5s.push_back(std::make_pair(filename,md5));
     }
     
@@ -905,7 +904,7 @@ void InReads::readTableCompressed(std::string inFile) {
     ifs.read(reinterpret_cast<char*> (&decompressedSize), sizeof(uint64_t)); // read gz-uncompressed size
     Bytef *data = new Bytef[decompressedSize];
     
-    uLong compressedSize = fileSize - sizeof(uint64_t);
+    uLong compressedSize = fileSize - sizeof(uint64_t); // it seems this should subtract the header too, probably it should be fixed subtracting the md5s
     Bytef *gzData = new Bytef[compressedSize];
     ifs.read(reinterpret_cast<char*> (gzData), compressedSize * sizeof(Bytef)); // read gzipped data
     uncompress(data, &decompressedSize, gzData, compressedSize);
