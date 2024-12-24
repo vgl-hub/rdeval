@@ -860,10 +860,10 @@ void InReads::printTableCompressed(std::string outFile) {
     
     std::ofstream ofs(outFile, std::fstream::trunc | std::ios::out | std::ios::binary);
     
-    // write md5s <-- these could presumably be also gzipped (need to work on the R interface too)
+    // write md5s
     uint32_t md5sN = md5s.size();
     uint16_t stringSize;
-    ofs.write(reinterpret_cast<const char*>(&md5sN), sizeof(uint32_t));
+    ofs.write(reinterpret_cast<const char*>(&md5sN), sizeof(uint32_t)); // <-- these could presumably be also gzipped (need to work on the R interface too)
     for (auto md5 : md5s) {
         stringSize = md5.first.size();
         ofs.write(reinterpret_cast<const char*>(&stringSize), sizeof(uint16_t));
@@ -890,13 +890,14 @@ void InReads::readTableCompressed(std::string inFile) {
     ifs.read(reinterpret_cast<char*>(&md5sN), sizeof(uint32_t));
     
     for (uint32_t i = 0; i < md5sN; ++i) {
-        std::string filename, md5;
+        std::string filename;
+        std::string *md5 = new std::string;
         ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(uint16_t));
         filename.resize(stringSize);
         ifs.read(reinterpret_cast<char*>(&filename[0]), sizeof(char) * stringSize);
         ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(uint16_t));
-        md5.resize(stringSize);
-        ifs.read(reinterpret_cast<char*>(&md5[0]), sizeof(char) * stringSize);
+        md5->resize(stringSize);
+        ifs.read(reinterpret_cast<char*>(&(*md5)[0]), sizeof(char) * stringSize);
         md5s.push_back(std::make_pair(filename,md5));
     }
     
