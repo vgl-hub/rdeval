@@ -715,7 +715,17 @@ void InReads::closeStream() {
         closeBam();
     
     streamOutput = false;
-    writer.join();
+    //writer.join();
+    
+    try {
+        if (writer.joinable()) {
+            writer.join();
+        } else {
+            std::cerr << "Thread not joinable\n";
+        }
+    } catch (const std::system_error& e) {
+        std::cerr << "Error joining thread: " << e.what() << '\n';
+    }
 }
 
 void InReads::writeToStream() {
