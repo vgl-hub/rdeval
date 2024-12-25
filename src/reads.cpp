@@ -705,7 +705,7 @@ void InReads::initStream() {
         if (bam)
             writeBamHeader();
         
-        writer = std::thread(&InReads::writeToStream);
+        writer = std::thread(&InReads::writeToStream, this);
     }
 }
 
