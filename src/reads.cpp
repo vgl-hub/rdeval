@@ -715,7 +715,7 @@ void InReads::closeStream() {
         closeBam();
     
     streamOutput = false;
-    if (writer.joinable()) {
+    if (writer.joinable())
         writer.join();
 }
 
