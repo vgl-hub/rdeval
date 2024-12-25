@@ -63,7 +63,7 @@ class InReads {
     
     uint64_t batchCounter = 1;
     
-    std::vector<std::pair<std::string,std::string*>> md5s;
+    std::vector<std::pair<std::string,std::string>> md5s;
     
     // filters
     char lSign = '0', qSign = '0', logicalOperator = '0';
@@ -98,11 +98,6 @@ public:
         if(userInput.filter != "none")
             initFilters();
     };
-    
-    ~InReads() {
-        for (auto md5 : md5s)
-            delete md5.second;
-    }
     
     void openOutput(std::string file);
     
