@@ -705,7 +705,7 @@ void InReads::initStream() {
         if (bam)
             writeBamHeader();
         
-        writer = std::thread(&InReads::writeToStream, this);
+        writer = std::thread(&InReads::writeToStream);
     }
 }
 
@@ -738,7 +738,7 @@ void InReads::writeToStream() {
     
     std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
     
-    while (streamOutput) {
+    while (streamOutput && batchCounter < readBatches.size()) {
         
         {
             std::unique_lock<std::mutex> lck(mtx);
