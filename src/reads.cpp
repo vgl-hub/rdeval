@@ -251,9 +251,7 @@ void InReads::load() {
 }
 
 void InReads::appendReads(Sequences* readBatch) { // read a collection of reads
-    
     threadPool.queueJob([=]{ return traverseInReads(readBatch); });
-    writeToStream();
 }
 
 float InReads::computeAvgQuality(std::string &sequenceQuality) {
@@ -376,17 +374,20 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
             delete read;
     }
     
-    std::unique_lock<std::mutex> lck(mtx);
-    readBatches.emplace_back(inReadsBatch,readBatch->batchN);
-    delete readBatch;
-    readLens.insert(readLensBatch);
-    totA+=batchA;
-    totT+=batchT;
-    totC+=batchC;
-    totG+=batchG;
-    totN+=batchN;
-    totReads += readN;
-    logs.push_back(threadLog);
+    {
+        std::unique_lock<std::mutex> lck(mtx);
+        readBatches.emplace_back(inReadsBatch,readBatch->batchN);
+        delete readBatch;
+        readLens.insert(readLensBatch);
+        totA+=batchA;
+        totT+=batchT;
+        totC+=batchC;
+        totG+=batchG;
+        totN+=batchN;
+        totReads += readN;
+        logs.push_back(threadLog);
+    }
+    writerMutexCondition.notify_one();
     return true;
 }
 
@@ -449,10 +450,8 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seq
             default: {
                 break;
             }
-                
         }
     }
-
     if (sequence->sequenceQuality != NULL)
         avgQuality = computeAvgQuality(*sequence->sequenceQuality);
 
@@ -694,28 +693,58 @@ void dump_read(bam1_t* b) {
     printf("\n");
 }
 
-void InReads::writeToStream() {
+void InReads::initStream() {
     
     if (streamOutput) {
         
-        std::string ext = getFileExt(outputStream.file); // variable to handle output path and extension
+        if(userInput.outFiles.size() > 1) {
+            fprintf(stderr, "Error: rdeval does not support more than one output at a time. Terminating.\n");
+            exit(EXIT_FAILURE);
+        }
         
-        const static phmap::flat_hash_map<std::string,int> string_to_case{
-            {"fasta",1},
-            {"fa",1},
-            {"fasta.gz",1},
-            {"fa.gz",1},
-            {"fastq",2},
-            {"fq",2},
-            {"fastq.gz",2},
-            {"fq.gz",2},
-            {"bam",3},
-            {"cram",3}
-        };
+        if (bam)
+            writeBamHeader();
         
-        std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
+        writer = std::thread(&InReads::writeToStream, this);
+    }
+}
+
+void InReads::closeStream() {
+    
+    if (bam)
+        closeBam();
+    
+    streamOutput = false;
+    writer.join();
+}
+
+void InReads::writeToStream() {
+
+    uint64_t batchCounter = 1;
+    OutputStream outputStream(userInput.outFiles[0]);
+    std::string ext = getFileExt(outputStream.file); // variable to handle output path and extension
+    const static phmap::flat_hash_map<std::string,int> string_to_case{
+        {"fasta",1},
+        {"fa",1},
+        {"fasta.gz",1},
+        {"fa.gz",1},
+        {"fastq",2},
+        {"fq",2},
+        {"fastq.gz",2},
+        {"fq.gz",2},
+        {"bam",3},
+        {"cram",3}
+    };
+    
+    std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
+    
+    while (streamOutput) {
+        
         {
             std::unique_lock<std::mutex> lck(mtx);
+            writerMutexCondition.wait(lck, [this, batchCounter] {
+                return readBatches.size()>batchCounter;
+            });
             readBatchesCpy = {readBatches.begin() + batchCounter-1, readBatches.end()};
         }
         
@@ -972,18 +1001,14 @@ void InReads::printMd5() {
         std::cout<<md5.first<<": "<<md5.second<<std::endl;
 }
 
-bool InReads::isOutputBam() {
-    return bam;
-}
-
 void InReads::writeBamHeader() {
     
-    if (getFileExt(outputStream.file) == "bam") {
-        fp = sam_open(outputStream.file.c_str(),"wb");
-    }else if(getFileExt(outputStream.file) == "cram") {
+    if (getFileExt(userInput.outFiles[0]) == "bam") {
+        fp = sam_open(userInput.outFiles[0].c_str(),"wb");
+    }else if(userInput.outFiles[0] == "cram") {
         htsFormat fmt4 = {sequence_data, cram, {3, 1}, gzip, 6, NULL};
         hts_parse_format(&fmt4, "cram,no_ref=1");
-        fp = sam_open_format(outputStream.file.c_str(), "wc", &fmt4);
+        fp = sam_open_format(userInput.outFiles[0].c_str(), "wc", &fmt4);
     }
     // write header
     const char init_header[] = "@HD\tVN:1.4\tSO:unknown\n";

@@ -28,26 +28,18 @@ void Input::load(UserInputRdeval userInput) {
 void Input::read() {
     
     if (userInput.inFiles.empty()) {return;}
-
-    std::string outFile = "";
-    if(userInput.outFiles.size())
-        outFile = userInput.outFiles[0];
     
-    InReads inReads(userInput, outFile); // initialize sequence collection object
+    InReads inReads(userInput); // initialize sequence collection object
     lg.verbose("Read object generated");
     threadPool.init(maxThreads); // initialize threadpool
-    
-    if (inReads.isOutputBam())
-        inReads.writeBamHeader();
+
+    inReads.initStream(); // stream output
     
     inReads.load();
     jobWait(threadPool);
-    inReads.writeToStream(); // write last batch
-    
     lg.verbose("Data loaded");
     
-    if (inReads.isOutputBam())
-        inReads.closeBam();
+    inReads.closeStream(); // close stream output
     
     lg.verbose("Generating output");
     

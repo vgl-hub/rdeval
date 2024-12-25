@@ -54,14 +54,13 @@ class InReads {
     LenVector<float> readLens;
     uint64_t totA=0, totT=0, totC=0, totG=0, totN=0;
     
-    OutputStream outputStream;
-    bool streamOutput = false;
+    std::atomic<bool> streamOutput{false};
+    std::thread writer;
+    std::condition_variable writerMutexCondition;
     
     htsFile *fp; // htslib file pointer
     bam_hdr_t *hdr; // htslib sam header pointer
     bool bam = false;
-    
-    uint64_t batchCounter = 1;
     
     std::vector<std::pair<std::string,std::string>> md5s;
     
@@ -71,7 +70,7 @@ class InReads {
     
 public:
     
-    InReads(UserInputRdeval &userInput, std::string file) : userInput(userInput), outputStream(file) {
+    InReads(UserInputRdeval &userInput) : userInput(userInput) {
         
         const static phmap::flat_hash_map<std::string,int> string_to_case{ // supported read outputs
             {"fasta",1},
@@ -99,7 +98,9 @@ public:
             initFilters();
     };
     
-    void openOutput(std::string file);
+    void initStream();
+    
+    void closeStream();
     
     void load();
     
@@ -146,8 +147,6 @@ public:
     void readTableCompressed(std::string inFile);
     
     void printMd5();
-    
-    bool isOutputBam();
     
     void writeBamHeader();
     
