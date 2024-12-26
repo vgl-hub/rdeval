@@ -855,6 +855,7 @@ void InReads::writeToStream() {
                         bam_destroy1(q);
                         if (read->inSequenceQuality != NULL)
                             delete quality;
+                        delete read;
                     }
                     it = readBatchesCpy.erase(it);
                     ++batchCounter;
