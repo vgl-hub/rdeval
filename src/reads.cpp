@@ -758,7 +758,7 @@ void InReads::writeToStream() {
                 
                 for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatchesCpy) {
                     
-                    if (inReads.second > batchCounter)
+                    if (inReads.second != batchCounter)
                         continue;
                     
                     lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
@@ -776,7 +776,7 @@ void InReads::writeToStream() {
                 
                 for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatchesCpy) {
                     
-                    if (inReads.second > batchCounter)
+                    if (inReads.second != batchCounter)
                         continue;
                     
                     lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
@@ -794,7 +794,7 @@ void InReads::writeToStream() {
                 
                 for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatchesCpy) {
                     
-                    if (inReads.second > batchCounter)
+                    if (inReads.second != batchCounter)
                         continue;
                     
                     lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
