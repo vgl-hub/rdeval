@@ -715,10 +715,8 @@ void InReads::closeStream() {
         closeBam();
     
     streamOutput = false;
-    if (writer.joinable()) {
-        writerMutexCondition.notify_one();
+    if (writer.joinable())
         writer.join();
-    }
 }
 
 void InReads::writeToStream() {
@@ -748,7 +746,6 @@ void InReads::writeToStream() {
             writerMutexCondition.wait(lck, [this, batchCounter] {
                 return !streamOutput || readBatches.size()>batchCounter;
             });
-            std::cout<<+batchCounter<<" "<<+readBatches.size()<<std::endl;
             if (!streamOutput && !readBatches.size() && !readBatchesCpy.size())
                 return;
             readBatchesCpy.insert(readBatchesCpy.begin(), readBatches.begin(), readBatches.end());
