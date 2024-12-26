@@ -739,13 +739,15 @@ void InReads::writeToStream() {
     
     std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
     
-    while (streamOutput || batchCounter-1 < readBatches.size()) {
+    while (streamOutput || batchCounter < readBatches.size()) {
         
         {
             std::unique_lock<std::mutex> lck(mtx);
             writerMutexCondition.wait(lck, [this, batchCounter] {
                 return readBatches.size()>batchCounter;
             });
+            if (!streamOutput || batchCounter == readBatches.size())
+                return;
             readBatchesCpy = {readBatches.begin() + batchCounter, readBatches.end()};
         }
         
