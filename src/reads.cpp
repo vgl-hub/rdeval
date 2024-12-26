@@ -819,10 +819,10 @@ void InReads::writeToStream() {
                     lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
                         
                     for (InRead* read : inReads.first) { // main loop, iter through each fastq records
-                        
+                        std::cout<<"we are here"<<std::endl;
                         if (read->inSequenceQuality == NULL)
                             read->inSequenceQuality = new std::string('!', read->inSequence->size());
-                        
+                        std::cout<<"we are here1"<<std::endl;
                         bam1_t *q = bam_init1();
                         //`q->data` structure: qname-cigar-seq-qual-aux
                         q->l_data = read->seqHeader.size()+1+(int)(1.5*read->inSequence->size()+(read->inSequence->size() % 2 != 0)); // +1 includes the tailing '\0'
@@ -831,11 +831,13 @@ void InReads::writeToStream() {
                             kroundup32(q->m_data);
                             q->data = (uint8_t*)realloc(q->data, q->m_data);
                         }
+                        std::cout<<"we are here2"<<std::endl;
                         q->core.flag = BAM_FUNMAP;
                         q->core.l_qname = read->seqHeader.size()+1; // +1 includes the tailing '\0'
                         q->core.l_qseq = read->inSequence->size();
                         q->core.n_cigar = 0; // we have no cigar sequence
                         // no flags for unaligned reads
+                        std::cout<<"we are her3"<<std::endl;
                         q->core.tid = -1;
                         q->core.pos = -1;
                         q->core.mtid = -1;
@@ -848,6 +850,7 @@ void InReads::writeToStream() {
                         for (size_t i = 0; i < read->inSequenceQuality->size(); ++i)
                             s[i] = read->inSequenceQuality->at(i) - 33;
                         // dump_read(q);
+                        std::cout<<"we are here4"<<std::endl;
                         std::ignore = sam_write1(fp, hdr, q);
                         bam_destroy1(q);
                         delete read;
