@@ -746,9 +746,9 @@ void InReads::writeToStream() {
             writerMutexCondition.wait(lck, [this, batchCounter] {
                 return readBatches.size()>batchCounter;
             });
+            std::cout<<+batchCounter<<" "<<+readBatches.size()<<std::endl;
             if (!streamOutput && batchCounter == readBatches.size())
                 return;
-            std::cout<<+batchCounter<<" "<<+readBatches.size()<<std::endl;
             readBatchesCpy = readBatches;
         }
         
