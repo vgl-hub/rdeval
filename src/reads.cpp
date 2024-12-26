@@ -748,8 +748,9 @@ void InReads::writeToStream() {
             });
             if (!streamOutput && batchCounter == readBatches.size())
                 return;
-            auto beg = readBatches.begin();
-            readBatchesCpy = {std::advance(beg,batchCounter), readBatches.end()};
+            auto start = readBatches.begin();
+            std::advance(start, batchCounter);
+            readBatchesCpy = {start, readBatches.end()};
         }
         
         switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
