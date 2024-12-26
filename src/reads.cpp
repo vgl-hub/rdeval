@@ -775,7 +775,7 @@ void InReads::writeToStream() {
             }
             case 2:  { // fastq[.gz]
                 
-                for (std::vector<std::pair<std::vector<InRead*>,uint32_t>>::iterator it = readBatchesCpy.begin(); it != readBatchesCpy.end()) {
+                for (std::vector<std::pair<std::vector<InRead*>,uint32_t>>::iterator it = readBatchesCpy.begin(); it != readBatchesCpy.end();) {
                     
                     auto &inReads = *it;
                     
