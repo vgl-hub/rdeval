@@ -820,11 +820,8 @@ void InReads::writeToStream() {
                         
                     for (InRead* read : inReads.first) { // main loop, iter through each fastq records
                         
-                        std::string *quality;
-                        if (read->inSequenceQuality != NULL)
-                            quality = read->inSequenceQuality;
-                        else
-                            quality = new std::string('!', read->inSequence->size());
+                        if (read->inSequenceQuality == NULL)
+                            read->inSequenceQuality = new std::string('!', read->inSequence->size());
                         
                         bam1_t *q = bam_init1();
                         //`q->data` structure: qname-cigar-seq-qual-aux
@@ -848,13 +845,11 @@ void InReads::writeToStream() {
                         for (int i = 0; i < q->core.l_qseq; ++i)
                             bam1_seq_seti(s, i, seq_nt16_table[(unsigned char)read->inSequence->at(i)]);
                         s = bam_get_qual(q);
-                        for (size_t i = 0; i < quality->size(); ++i)
-                            s[i] = quality->at(i) - 33;
+                        for (size_t i = 0; i < read->inSequenceQuality->size(); ++i)
+                            s[i] = read->inSequenceQuality->at(i) - 33;
                         // dump_read(q);
                         std::ignore = sam_write1(fp, hdr, q);
                         bam_destroy1(q);
-                        if (read->inSequenceQuality != NULL)
-                            delete quality;
                         delete read;
                     }
                     it = readBatchesCpy.erase(it);
