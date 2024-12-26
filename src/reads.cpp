@@ -749,7 +749,7 @@ void InReads::writeToStream() {
             if (!streamOutput && batchCounter == readBatches.size())
                 return;
             std::cout<<+batchCounter<<" "<<+readBatches.size()<<std::endl;
-            readBatchesCpy = {readBatches.begin() + batchCounter, readBatches.end()};
+            readBatchesCpy = readBatches;
         }
         
         switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
