@@ -711,9 +711,6 @@ void InReads::initStream() {
 
 void InReads::closeStream() {
     
-    if (bam)
-        closeBam();
-    
     if (writer.joinable()) {
         {
             std::unique_lock<std::mutex> lck(mtx);
@@ -722,6 +719,9 @@ void InReads::closeStream() {
         writerMutexCondition.notify_one();
         writer.join();
     }
+    
+    if (bam)
+        closeBam();
 }
 
 void InReads::writeToStream() {
@@ -842,11 +842,11 @@ void InReads::writeToStream() {
                         q->core.mpos = -1;
                         memcpy(q->data, read->seqHeader.c_str(), q->core.l_qname); // first set qname
                         uint8_t *s = bam_get_seq(q);
-//                        for (int i = 0; i < q->core.l_qseq; ++i)
-//                            bam1_seq_seti(s, i, seq_nt16_table[(unsigned char)read->inSequence->at(i)]);
-//                        s = bam_get_qual(q);
-//                        for (size_t i = 0; i < read->inSequenceQuality->size(); ++i)
-//                            s[i] = read->inSequenceQuality->at(i) - 33;
+                        for (int i = 0; i < q->core.l_qseq; ++i)
+                            bam1_seq_seti(s, i, seq_nt16_table[(unsigned char)read->inSequence->at(i)]);
+                        s = bam_get_qual(q);
+                        for (size_t i = 0; i < read->inSequenceQuality->size(); ++i)
+                            s[i] = read->inSequenceQuality->at(i) - 33;
                         // dump_read(q);
                         std::ignore = sam_write1(fp, hdr, q);
                         bam_destroy1(q);
