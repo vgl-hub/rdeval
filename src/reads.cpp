@@ -775,12 +775,14 @@ void InReads::writeToStream() {
             }
             case 2:  { // fastq[.gz]
                 
-                for (std::vector<std::pair<std::vector<InRead*>,uint32_t>>::iterator it = readBatchesCpy.begin(); it != readBatchesCpy.end(); ++it) {
+                for (std::vector<std::pair<std::vector<InRead*>,uint32_t>>::iterator it = readBatchesCpy.begin(); it != readBatchesCpy.end()) {
                     
                     auto &inReads = *it;
                     
-                    if (inReads.second != batchCounter)
+                    if (inReads.second != batchCounter) {
+                        ++it;
                         continue;
+                    }
                     
                     lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
                         
