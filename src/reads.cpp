@@ -851,8 +851,8 @@ void InReads::writeToStream() {
                             s[i] = read->inSequenceQuality->at(i) - 33;
                         // dump_read(q);
                         std::cout<<"we are here4"<<std::endl;
-                        std::ignore = sam_write1(fp, hdr, q);
-                        std::cout<<"we are here5"<<std::endl;
+                        int error = sam_write1(fp, hdr, q);
+                        std::cout<<+error<<std::endl;
                         bam_destroy1(q);
                         std::cout<<"we are here6"<<std::endl;
                         delete read;
