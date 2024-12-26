@@ -746,9 +746,9 @@ void InReads::writeToStream() {
             writerMutexCondition.wait(lck, [this, batchCounter] {
                 return readBatches.size()>batchCounter;
             });
-            if (!streamOutput && batchCounter+1 == readBatches.size())
+            if (!streamOutput && batchCounter == readBatches.size())
                 return;
-            readBatchesCpy = {readBatches.begin() + batchCounter, readBatches.end()};
+            readBatchesCpy = {std::advance(readBatches.begin(),batchCounter), readBatches.end()};
         }
         
         switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
