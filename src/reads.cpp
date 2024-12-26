@@ -721,7 +721,7 @@ void InReads::closeStream() {
 
 void InReads::writeToStream() {
 
-    uint64_t batchCounter = 1;
+    uint64_t batchCounter = 0;
     OutputStream outputStream(userInput.outFiles[0]);
     std::string ext = getFileExt(outputStream.file); // variable to handle output path and extension
     const static phmap::flat_hash_map<std::string,int> string_to_case{
