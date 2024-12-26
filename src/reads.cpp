@@ -852,8 +852,11 @@ void InReads::writeToStream() {
                         // dump_read(q);
                         std::cout<<"we are here4"<<std::endl;
                         std::ignore = sam_write1(fp, hdr, q);
+                        std::cout<<"we are here5"<<std::endl;
                         bam_destroy1(q);
+                        std::cout<<"we are here6"<<std::endl;
                         delete read;
+                        std::cout<<"we are here7"<<std::endl;
                     }
                     std::cout<<"writing almost done"<<std::endl;
                     it = readBatchesCpy.erase(it);
