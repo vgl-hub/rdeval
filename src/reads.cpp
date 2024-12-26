@@ -716,7 +716,6 @@ void InReads::closeStream() {
     
     streamOutput = false;
     if (writer.joinable()) {
-        writerMutexCondition.notify_one();
         writer.join();
     }
 }
@@ -746,7 +745,7 @@ void InReads::writeToStream() {
         {
             std::unique_lock<std::mutex> lck(mtx);
             writerMutexCondition.wait(lck, [this, batchCounter] {
-                return readBatches.size()>batchCounter;
+                return !streamOutput || readBatches.size()>batchCounter;
             });
             std::cout<<+batchCounter<<" "<<+readBatches.size()<<std::endl;
             if (!streamOutput && !readBatches.size() && !readBatchesCpy.size())
