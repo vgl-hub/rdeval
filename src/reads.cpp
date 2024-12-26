@@ -714,9 +714,14 @@ void InReads::closeStream() {
     if (bam)
         closeBam();
     
-    streamOutput = false;
-    if (writer.joinable())
+    if (writer.joinable()) {
+        {
+            std::unique_lock<std::mutex> lck(mtx);
+            streamOutput = false;
+        }
+        writerMutexCondition.notify_one();
         writer.join();
+    }
 }
 
 void InReads::writeToStream() {

@@ -54,7 +54,7 @@ class InReads {
     LenVector<float> readLens;
     uint64_t totA=0, totT=0, totC=0, totG=0, totN=0;
     
-    std::atomic<bool> streamOutput{false};
+    bool streamOutput = false;
     std::thread writer;
     std::condition_variable writerMutexCondition;
     
