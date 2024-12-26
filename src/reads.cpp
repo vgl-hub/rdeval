@@ -747,7 +747,7 @@ void InReads::writeToStream() {
                 return readBatches.size()>batchCounter;
             });
             std::cout<<+batchCounter<<" "<<+readBatches.size()<<std::endl;
-            if (!streamOutput && !readBatches.size())
+            if (!streamOutput && !readBatches.size() && !readBatchesCpy.size())
                 return;
             readBatchesCpy.insert(readBatchesCpy.begin(), readBatches.begin(), readBatches.end());
             readBatches.clear();
