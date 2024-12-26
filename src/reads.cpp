@@ -761,10 +761,14 @@ void InReads::writeToStream() {
                 
             case 1:  { // fasta[.gz]
                 
-                for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatchesCpy) {
+                for (std::vector<std::pair<std::vector<InRead*>,uint32_t>>::iterator it = readBatchesCpy.begin(); it != readBatchesCpy.end();) {
                     
-                    if (inReads.second != batchCounter)
+                    auto &inReads = *it;
+                    
+                    if (inReads.second != batchCounter) {
+                        ++it;
                         continue;
+                    }
 
                     lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
                     
@@ -773,6 +777,7 @@ void InReads::writeToStream() {
                         *outputStream.stream << '>' << read->seqHeader << '\n' << *read->inSequence << '\n';
                         delete read;
                     }
+                    it = readBatchesCpy.erase(it);
                     ++batchCounter;
                 }
                 break;
@@ -802,10 +807,14 @@ void InReads::writeToStream() {
             }
             case 3: { // bam&cram
                 
-                for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatchesCpy) {
+                for (std::vector<std::pair<std::vector<InRead*>,uint32_t>>::iterator it = readBatchesCpy.begin(); it != readBatchesCpy.end();) {
                     
-                    if (inReads.second != batchCounter)
+                    auto &inReads = *it;
+                    
+                    if (inReads.second != batchCounter) {
+                        ++it;
                         continue;
+                    }
                     
                     lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
                         
@@ -847,6 +856,7 @@ void InReads::writeToStream() {
                         if (read->inSequenceQuality != NULL)
                             delete quality;
                     }
+                    it = readBatchesCpy.erase(it);
                     ++batchCounter;
                 }
                 break;
