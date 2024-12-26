@@ -819,10 +819,10 @@ void InReads::writeToStream() {
                     lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
                         
                     for (InRead* read : inReads.first) { // main loop, iter through each fastq records
-                        std::cout<<"we are here"<<std::endl;
+                        
                         if (read->inSequenceQuality == NULL)
                             read->inSequenceQuality = new std::string('!', read->inSequence->size());
-                        std::cout<<"we are here1"<<std::endl;
+                        
                         bam1_t *q = bam_init1();
                         //`q->data` structure: qname-cigar-seq-qual-aux
                         q->l_data = read->seqHeader.size()+1+(int)(1.5*read->inSequence->size()+(read->inSequence->size() % 2 != 0)); // +1 includes the tailing '\0'
@@ -831,37 +831,29 @@ void InReads::writeToStream() {
                             kroundup32(q->m_data);
                             q->data = (uint8_t*)realloc(q->data, q->m_data);
                         }
-                        std::cout<<"we are here2"<<std::endl;
                         q->core.flag = BAM_FUNMAP;
                         q->core.l_qname = read->seqHeader.size()+1; // +1 includes the tailing '\0'
                         q->core.l_qseq = read->inSequence->size();
                         q->core.n_cigar = 0; // we have no cigar sequence
                         // no flags for unaligned reads
-                        std::cout<<"we are her3"<<std::endl;
                         q->core.tid = -1;
                         q->core.pos = -1;
                         q->core.mtid = -1;
                         q->core.mpos = -1;
                         memcpy(q->data, read->seqHeader.c_str(), q->core.l_qname); // first set qname
                         uint8_t *s = bam_get_seq(q);
-                        for (int i = 0; i < q->core.l_qseq; ++i)
-                            bam1_seq_seti(s, i, seq_nt16_table[(unsigned char)read->inSequence->at(i)]);
-                        s = bam_get_qual(q);
-                        for (size_t i = 0; i < read->inSequenceQuality->size(); ++i)
-                            s[i] = read->inSequenceQuality->at(i) - 33;
+//                        for (int i = 0; i < q->core.l_qseq; ++i)
+//                            bam1_seq_seti(s, i, seq_nt16_table[(unsigned char)read->inSequence->at(i)]);
+//                        s = bam_get_qual(q);
+//                        for (size_t i = 0; i < read->inSequenceQuality->size(); ++i)
+//                            s[i] = read->inSequenceQuality->at(i) - 33;
                         // dump_read(q);
-                        std::cout<<"we are here4"<<std::endl;
-                        int error = sam_write1(fp, hdr, q);
-                        std::cout<<+error<<std::endl;
+                        std::ignore = sam_write1(fp, hdr, q);
                         bam_destroy1(q);
-                        std::cout<<"we are here6"<<std::endl;
                         delete read;
-                        std::cout<<"we are here7"<<std::endl;
                     }
-                    std::cout<<"writing almost done"<<std::endl;
                     it = readBatchesCpy.erase(it);
                     ++batchCounter;
-                    std::cout<<"writing done"<<std::endl;
                 }
                 break;
             }
