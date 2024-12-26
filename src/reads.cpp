@@ -738,6 +738,7 @@ void InReads::writeToStream() {
     };
     
     std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
+    last = false;
     
     while (true) {
         
@@ -748,7 +749,7 @@ void InReads::writeToStream() {
             });
             std::cout<<+batchCounter<<" "<<+readBatches.size()<<std::endl;
             if (!streamOutput && batchCounter+1 == readBatches.size())
-                return;
+                last = true;
             readBatchesCpy = readBatches;
         }
         
@@ -842,6 +843,8 @@ void InReads::writeToStream() {
                 break;
             }
         }
+        if (last)
+            return;
     }
 }
 
