@@ -133,7 +133,7 @@ void InReads::load() {
                                 processedLength += inSequence->size();
                                 
                                 if (processedLength > batchSize) {
-                                    readBatch->batchN = ++batchN;
+                                    readBatch->batchN = batchN++;
                                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
                                     appendReads(readBatch);
                                     readBatch = new Sequences;
@@ -170,7 +170,7 @@ void InReads::load() {
                                 processedLength += inSequence->size();
                                 
                                 if (processedLength > batchSize) {
-                                    readBatch->batchN = ++batchN;
+                                    readBatch->batchN = batchN++;
                                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
                                     appendReads(readBatch);
                                     readBatch = new Sequences;
@@ -181,7 +181,7 @@ void InReads::load() {
                             break;
                         }
                     }
-                    readBatch->batchN = ++batchN; // process residual reads
+                    readBatch->batchN = batchN++; // process residual reads
                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
                     appendReads(readBatch);
                 }
@@ -221,7 +221,7 @@ void InReads::load() {
                     processedLength += inSequence->size();
                     
                     if (processedLength > batchSize) {
-                        readBatch->batchN = seqPos/batchSize;
+                        readBatch->batchN = batchN++;
                         lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
                         appendReads(readBatch);
                         readBatch = new Sequences;
@@ -231,7 +231,7 @@ void InReads::load() {
                     lg.verbose("Individual fastq sequence read: " + seqHeader);
 
                 }
-                readBatch->batchN = seqPos/batchSize + 1;
+                readBatch->batchN = batchN++;
                 lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
                 appendReads(readBatch);
                 bam_destroy1(bamdata);
@@ -739,14 +739,14 @@ void InReads::writeToStream() {
     
     std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
     
-    while (streamOutput || batchCounter-1 < readBatches.size()) {
+    while (streamOutput || batchCounter < readBatches.size()) {
         
         {
             std::unique_lock<std::mutex> lck(mtx);
             writerMutexCondition.wait(lck, [this, batchCounter] {
-                return readBatches.size()>batchCounter-1;
+                return readBatches.size()>batchCounter;
             });
-            readBatchesCpy = {readBatches.begin() + batchCounter-1, readBatches.end()};
+            readBatchesCpy = {readBatches.begin() + batchCounter, readBatches.end()};
         }
         
         switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
