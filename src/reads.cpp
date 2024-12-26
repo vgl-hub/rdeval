@@ -738,7 +738,6 @@ void InReads::writeToStream() {
     };
     
     std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
-    last = false;
     
     while (true) {
         
@@ -748,9 +747,10 @@ void InReads::writeToStream() {
                 return readBatches.size()>batchCounter;
             });
             std::cout<<+batchCounter<<" "<<+readBatches.size()<<std::endl;
-            if (!streamOutput && batchCounter+1 == readBatches.size())
-                last = true;
-            readBatchesCpy = readBatches;
+            if (!streamOutput && !readBatches.size())
+                return;
+            readBatchesCpy.insert(readBatchesCpy.begin(), readBatches.begin(), readBatches.end());
+            readBatches.clear();
         }
         
         switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
@@ -761,7 +761,7 @@ void InReads::writeToStream() {
                     
                     if (inReads.second != batchCounter)
                         continue;
-                    
+
                     lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
                     
                     for (InRead* read : inReads.first){
@@ -775,18 +775,21 @@ void InReads::writeToStream() {
             }
             case 2:  { // fastq[.gz]
                 
-                for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatchesCpy) {
+                for (std::vector<std::pair<std::vector<InRead*>,uint32_t>>::iterator it = readBatches.begin(); it != readBatches.end(); ++it) {
+                    
+                    auto &inReads = *it;
                     
                     if (inReads.second != batchCounter)
                         continue;
                     
                     lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
                         
-                        for (InRead* read : inReads.first){
-                            
-                            *outputStream.stream << '@' << read->seqHeader << '\n' << *read->inSequence << "\n+\n" << (read->inSequenceQuality != NULL ? *read->inSequenceQuality : std::string('!', read->inSequence->size())) << '\n';
-                            delete read;
-                        }
+                    for (InRead* read : inReads.first){
+                        
+                        *outputStream.stream << '@' << read->seqHeader << '\n' << *read->inSequence << "\n+\n" << (read->inSequenceQuality != NULL ? *read->inSequenceQuality : std::string('!', read->inSequence->size())) << '\n';
+                        delete read;
+                    }
+                    it = readBatchesCpy.erase(it);
                     ++batchCounter;
                 }
                 break;
@@ -843,8 +846,6 @@ void InReads::writeToStream() {
                 break;
             }
         }
-        if (last)
-            return;
     }
 }
 
