@@ -715,8 +715,10 @@ void InReads::closeStream() {
         closeBam();
     
     streamOutput = false;
-    if (writer.joinable())
+    if (writer.joinable()) {
+        writerMutexCondition.notify_one();
         writer.join();
+    }
 }
 
 void InReads::writeToStream() {
