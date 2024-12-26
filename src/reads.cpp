@@ -852,8 +852,10 @@ void InReads::writeToStream() {
                         bam_destroy1(q);
                         delete read;
                     }
+                    std::cout<<"writing almost done"<<std::endl;
                     it = readBatchesCpy.erase(it);
                     ++batchCounter;
+                    std::cout<<"writing done"<<std::endl;
                 }
                 break;
             }
