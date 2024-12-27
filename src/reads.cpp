@@ -359,7 +359,7 @@ inline bool InReads::filterRead(Sequence* sequence) {
 }
 
 float newRand() {
-    return (static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
+    return (static_cast <float> (random()) / static_cast <float> (RAND_MAX));
 }
 
 bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read

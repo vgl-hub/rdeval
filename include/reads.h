@@ -105,9 +105,9 @@ public:
         
         
         if (userInput.randSeed != -1)
-            srand(userInput.randSeed);
+            srandom(userInput.randSeed);
         else
-            srand(time(nullptr));
+            srandom(time(nullptr));
     };
     
     void initStream();
