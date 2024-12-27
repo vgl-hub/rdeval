@@ -10,11 +10,8 @@ class Input {
     
     // stream read variable definition
     std::string firstLine;
-    
     StreamObj streamObj;
-    
     std::string newLine, seqHeader, seqComment, line;
-    
     std::shared_ptr<std::istream> stream;
     
 public:

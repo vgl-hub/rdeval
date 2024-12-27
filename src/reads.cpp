@@ -261,6 +261,24 @@ float InReads::computeAvgQuality(std::string &sequenceQuality) {
     return (float) sumQuality/(sequenceQuality.size());
 }
 
+void InReads::initDictionaries() {
+    
+    std::ifstream includeFile(userInput.inBedInclude);
+    std::string key;
+
+    while (includeFile >> key)
+        includeList.insert(key);
+
+    includeFile.close();
+    
+    std::ifstream excludeFile(userInput.inBedExclude);
+
+    while (excludeFile >> key)
+        excludeList.insert(key);
+
+    excludeFile.close();
+}
+
 void InReads::initFilters() {
     
     bool cannotParse = false;
@@ -340,6 +358,10 @@ inline bool InReads::filterRead(Sequence* sequence) {
     return true;
 }
 
+float newRand() {
+    return (static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
+}
+
 bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
 
     Log threadLog;
@@ -349,14 +371,29 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     LenVector<float> readLensBatch;
     InRead* read;
 
-    uint64_t batchA = 0, batchT=0, batchC=0, batchG=0, batchN =0;
+    uint64_t batchA = 0, batchT = 0, batchC = 0, batchG = 0, batchN = 0;
+    bool include = userInput.inBedInclude.size();
+    bool exclude = userInput.inBedExclude.size();
     bool filter = userInput.filter != "none" ? true : false;
-    
+    bool sample = userInput.ratio < 1 ? true : false; // read subsampling
+
     for (Sequence* sequence : readBatch->sequences) {
         
+        if (include) {
+            if (includeList.find(sequence->header) == excludeList.end())
+                continue;
+        }
+        if (exclude) {
+            if (excludeList.find(sequence->header) != excludeList.end())
+                continue;
+        }
         if (filter) {
             bool filtered = filterRead(sequence);
             if (filtered)
+                continue;
+        }
+        if (sample) {
+            if (newRand() > userInput.ratio)
                 continue;
         }
         read = traverseInRead(&threadLog, sequence, readBatch->batchN+readN++);

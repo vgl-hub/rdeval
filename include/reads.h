@@ -16,7 +16,9 @@ struct UserInputRdeval : UserInput {
     char qualityOut = 'a'; // average quality per read
     char content = 'a'; // default output is to print the normalized ATCGN content for all sequences
     int outSize_flag = 0, quality_flag = 0, content_flag = 0, md5_flag = 0, cmd_flag = 0;
-
+    float ratio = 1.0f;
+    int stats_flag = 1; // by default we output the stats
+    int32_t randSeed = -1;
 };
 
 class InRead : InSegment {
@@ -34,9 +36,7 @@ friend class InReads;
 class InReads {
     
     uint32_t batchSize = 1000000; // number of bases processed by a thread
-    
     std::vector<Log> logs;
-    
     std::shared_ptr<std::istream> stream;
     
     UserInputRdeval &userInput;
@@ -63,6 +63,10 @@ class InReads {
     bool bam = false;
     
     std::vector<std::pair<std::string,std::string>> md5s;
+    
+    // dictionaries
+    phmap::parallel_flat_hash_set<std::string> includeList;
+    phmap::parallel_flat_hash_set<std::string> excludeList;
     
     // filters
     char lSign = '0', qSign = '0', logicalOperator = '0';
@@ -94,8 +98,16 @@ public:
                     bam = true;
             }
         }
+        if(userInput.inBedInclude != "" || userInput.inBedExclude != "")
+            initDictionaries();
         if(userInput.filter != "none")
             initFilters();
+        
+        
+        if (userInput.randSeed != -1)
+            srand(userInput.randSeed);
+        else
+            srand(time(nullptr));
     };
     
     void initStream();
@@ -103,6 +115,8 @@ public:
     void closeStream();
     
     void load();
+
+    void initDictionaries();
     
     void initFilters();
     
