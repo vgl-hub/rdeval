@@ -4,7 +4,7 @@
 
 A general purpose, multithreaded read analysis and manipulation tool.
 
-**rdeval** is a single, fast and exhaustive tool for **summary statistics** and simultaneous **manipulation** of sequence read files in fa\*[.gz], bam, cram, and formats. **rdeval** also allows seamless file conversion conversion between formats.
+**rdeval** is a single, fast and exhaustive tool for **summary statistics** and simultaneous **manipulation** of sequence read files in fa\*[.gz], bam, and cram formats. **rdeval** also allows seamless file conversion between formats.
 
 Typical metrics include:
 
