@@ -169,11 +169,13 @@ int main(int argc, char **argv) {
                 printf("\t-q --quality c|l a generates list of average quality for each read (c) or both length and quality (c).\n");
                 printf("\t-r --reads <file1> <file2> <file n> input file (fa*[.gz], bam, cram, rd).\n");
                 printf("\t-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cumulative table).\n");
-                printf("\t--homopolymer-compress <n> compress all the homopolymers longer than n in the input.\n");
+                printf("\t--homopolymer-compress <int> compress all the homopolymers longer than n in the input.\n");
+                printf("\t--sample <float> fraction of reads to subsample.\n");
+                printf("\t--random-seed <int> an optional random seed to make subsampling reproducible.\n");
                 printf("\t--md5 print md5 of .rd files.\n");
                 printf("\t--tabular tabular output.\n");
                 printf("\t--verbose verbose output.\n");
-                printf("\t-j --threads <n> numbers of threads (default:3).\n");
+                printf("\t-j --threads <int> numbers of threads (default:3).\n");
                 printf("\t-v --version software version.\n");
                 printf("\t--cmd print $0 to stdout.\n");
                 exit(0);
