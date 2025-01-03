@@ -31,7 +31,8 @@ icdf <- function(read_lengths) {
 reads <- tibble(read_length = numeric(), read_quality = numeric(), run = character())
 inv_cs <- tibble(read_length = numeric(), inv_cs = numeric(), run = character())
 
-files <- commandArgs(trailingOnly = TRUE)
+files <- list.files(pattern = '.rd')
+# files <- commandArgs(trailingOnly = TRUE)
 n_runs <- length(files)
 for (file in files) {
   rdFile <- generateRdFile(file)
@@ -63,7 +64,7 @@ ggplot(reads, aes(x = run, y = read_length, fill = run)) +
 
 ```{r}
 ggplot(reads, aes(x = read_length, fill = run)) +
-  geom_density(alpha = 0.5) +
+  geom_density(aes(y = after_stat(count)), alpha = 0.5) +
   scale_x_continuous(name = ("Read length (bp)"),
                      breaks = scales::breaks_width(10000),
                      labels = scales::label_comma(),
@@ -77,7 +78,7 @@ ggplot(reads, aes(x = read_length, fill = run)) +
 ### Read lengths (log transformed)
 ```{r}
 ggplot(reads, aes(x = read_length, fill = run)) +
-  geom_density(alpha = 0.5) +
+  geom_density(aes(y = after_stat(count)), alpha = 0.5) +
   scale_x_log10(name = ("Read length (bp)"),
                 breaks = scales::breaks_log(n = 5),
                 labels = scales::label_comma()) +
@@ -112,7 +113,6 @@ g <- reads_by_avg_quality %>%
   geom_point(position = position_jitter(h = 0.3), 
              size = 0.75, 
              alpha = 0.2) +
-  # geom_density2d(color = "black", linewidth = 0.2) +
   scale_x_continuous(name = ("Read length (bp)"),
                      breaks = scales::breaks_width(10000),
                      labels = scales::label_comma()) +
