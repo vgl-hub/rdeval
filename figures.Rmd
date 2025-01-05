@@ -1,20 +1,21 @@
 ---
-title: "Plots"
+title: "Figures"
 output: html_document
-date: "2024-12-06"
+date: "`r Sys.Date()`"
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, fig.align = 'center')
 library(tidyverse)
 library(ggExtra)
-library(ggiraph)
-library(plotly)
+library(bit64)
+source('rdeval_interface.R')
 ```
 
 ```{r}
-# Set color palette (Okabe-Ito)
-palette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+# Set color palette (jco from ggsci package)
+palette <- c("#0073C2", "#EFC000","#868686", "#CD534C", "#7AA6DC", 
+             "#003C67", "#8F7700", "#3B3B3B", "#A73030", "#4A6990")
 
 # Inverse Cumulative Distribution Function
 icdf <- function(read_lengths) {
@@ -30,13 +31,15 @@ icdf <- function(read_lengths) {
 reads <- tibble(read_length = numeric(), read_quality = numeric(), run = character())
 inv_cs <- tibble(read_length = numeric(), inv_cs = numeric(), run = character())
 
-files <- list.files(pattern = 'mCteGun2/*.length_quality.txt')
+files <- list.files(pattern = '.rd')
+# files <- commandArgs(trailingOnly = TRUE)
 n_runs <- length(files)
 for (file in files) {
-  df <- read.csv(file, header = FALSE)
-  run <- strsplit(file, '[.]')[[1]][1]
+  rdFile <- generateRdFile(file)
+  df <- tibble(read_length = rdFile$lengths, 
+                   read_quality = rdFile$qualities)
+  run <- strsplit(basename(file), '[.]')[[1]][1]
   df$run <- run
-  names(df) = c('read_length', 'read_quality', 'run')
   df_icdf <- icdf(df$read_length)
   df_icdf$run <- run
   reads <- rbind(reads, df)
@@ -48,12 +51,12 @@ for (file in files) {
 ### Boxplot
 ```{r}
 
-ggplot(reads, aes(x = run, y = read_length)) +
-  geom_boxplot(fill = "#E69F00") +
+ggplot(reads, aes(x = run, y = read_length, fill = run)) +
+  geom_boxplot() +
   scale_x_discrete(name = ("Read")) +
   scale_y_continuous(name = ("Read Length"),
                      labels = scales::label_comma()) +
-  scale_fill_manual(guide = "none") +
+  scale_fill_manual(guide = "none", values = palette) +
   theme_bw() 
 ```
 
@@ -61,8 +64,7 @@ ggplot(reads, aes(x = run, y = read_length)) +
 
 ```{r}
 ggplot(reads, aes(x = read_length, fill = run)) +
-  geom_histogram_interactive(bins = floor(nrow(reads)/(100000 * n_runs)), 
-                             color = "white") +
+  geom_density(aes(y = after_stat(count)), alpha = 0.5) +
   scale_x_continuous(name = ("Read length (bp)"),
                      breaks = scales::breaks_width(10000),
                      labels = scales::label_comma(),
@@ -76,7 +78,7 @@ ggplot(reads, aes(x = read_length, fill = run)) +
 ### Read lengths (log transformed)
 ```{r}
 ggplot(reads, aes(x = read_length, fill = run)) +
-  geom_histogram(bins = floor(nrow(reads)/(100000 * n_runs)), color = "white") +
+  geom_density(aes(y = after_stat(count)), alpha = 0.5) +
   scale_x_log10(name = ("Read length (bp)"),
                 breaks = scales::breaks_log(n = 5),
                 labels = scales::label_comma()) +
@@ -111,7 +113,6 @@ g <- reads_by_avg_quality %>%
   geom_point(position = position_jitter(h = 0.3), 
              size = 0.75, 
              alpha = 0.2) +
-  # geom_density2d(color = "black", linewidth = 0.2) +
   scale_x_continuous(name = ("Read length (bp)"),
                      breaks = scales::breaks_width(10000),
                      labels = scales::label_comma()) +
