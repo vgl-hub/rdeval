@@ -874,7 +874,7 @@ void InReads::writeToStream() {
                     for (InRead* read : inReads.first) { // main loop, iter through each fastq records
                         
                         if (read->inSequenceQuality == NULL)
-                            read->inSequenceQuality = new std::string('!', read->inSequence->size());
+                            read->inSequenceQuality = new std::string(read->inSequence->size(),'!');
                         
                         if (!(q = bam_init1())) {
                             printf("Failed to initialize bamdata\n");

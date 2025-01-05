@@ -55,9 +55,11 @@ void Input::read() {
         inReads.printContent();
     
     if (userInput.outFiles.size()) {
-        lg.verbose("Writing rd file(s)");
-        for (std::string file : userInput.outFiles)
-            if (getFileExt(file) == "rd")
+        for (std::string file : userInput.outFiles) {
+            if (getFileExt(file) == "rd") {
+                lg.verbose("Writing rd file: " + file);
                 inReads.printTableCompressed(file);
+            }
+        }
     }
 }
