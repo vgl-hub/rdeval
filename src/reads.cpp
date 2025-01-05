@@ -834,7 +834,7 @@ void InReads::writeToStream() {
                         }
                 
                         if (read->inSequenceQuality == NULL)
-                            read->inSequenceQuality = new std::string('!', read->inSequence->size());
+                            read->inSequenceQuality = new std::string(read->inSequence->size(),'!');
                         
                         if (bam_set1(q, strlen(read->seqHeader.c_str()), read->seqHeader.c_str(), BAM_FUNMAP, -1, -1, 0, 0, NULL, -1, -1, 0, strlen(read->inSequence->c_str()), read->inSequence->c_str(), NULL, 0) < 0) {
                             printf("Failed to set data\n");
