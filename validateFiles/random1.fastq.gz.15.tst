@@ -1,4 +1,4 @@
-testFiles/random1.fastq -o /tmp/test.cram
+testFiles/random1.fastq.gz -o /tmp/test.fastq
 embedded
 +++Read summary+++: 
 # reads: 5

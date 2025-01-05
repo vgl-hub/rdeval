@@ -1,13 +1,13 @@
-testFiles/random1.fasta -f "l=10"
+testFiles/random1.fasta 
 embedded
 +++Read summary+++: 
-# reads: 1
-Total read length: 10
+# reads: 5
+Total read length: 50
 Average read length: 10.00
-Read N50: 10
-Smallest read length: 10
-Largest read length: 10
+Read N50: 15
+Smallest read length: 5
+Largest read length: 15
 Coverage: inf
-GC content %: 28.57
-Base composition (A:C:T:G): 2:1:3:1
+GC content %: 50.00
+Base composition (A:C:T:G): 9:14:11:6
 Average per base quality: 0.00

@@ -1,4 +1,4 @@
-testFiles/random1.fastq -o /tmp/test.cram
+testFiles/random1.fasta.gz -o /tmp/test.cram
 embedded
 +++Read summary+++: 
 # reads: 5
@@ -10,4 +10,4 @@ Largest read length: 15
 Coverage: inf
 GC content %: 50.00
 Base composition (A:C:T:G): 9:14:11:6
-Average per base quality: 21.92
+Average per base quality: 0.00
