@@ -1081,7 +1081,7 @@ void InReads::writeBamHeader() {
     
     if (getFileExt(userInput.outFiles[0]) == "bam") {
         fp = sam_open(userInput.outFiles[0].c_str(),"wb");
-    }else if(userInput.outFiles[0] == "cram") {
+    }else if(getFileExt(userInput.outFiles[0]) == "cram") {
         htsFormat fmt4 = {sequence_data, cram, {3, 1}, gzip, 6, NULL};
         hts_parse_format(&fmt4, "cram,no_ref=1");
         fp = sam_open_format(userInput.outFiles[0].c_str(), "wc", &fmt4);
