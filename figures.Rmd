@@ -12,7 +12,7 @@ library(bit64)
 source('rdeval_interface.R')
 ```
 
-```{r}
+```{r results = 'asis'}
 # Set color palette (jco from ggsci package)
 palette <- c("#0073C2", "#EFC000","#868686", "#CD534C", "#7AA6DC", 
              "#003C67", "#8F7700", "#3B3B3B", "#A73030", "#4A6990")
@@ -31,8 +31,8 @@ icdf <- function(read_lengths) {
 reads <- tibble(read_length = numeric(), read_quality = numeric(), run = character())
 inv_cs <- tibble(read_length = numeric(), inv_cs = numeric(), run = character())
 
-files <- list.files(pattern = '.rd')
-# files <- commandArgs(trailingOnly = TRUE)
+# files <- list.files(pattern = '.rd')
+files <- commandArgs(trailingOnly = TRUE)
 n_runs <- length(files)
 for (file in files) {
   rdFile <- generateRdFile(file)
@@ -44,6 +44,7 @@ for (file in files) {
   df_icdf$run <- run
   reads <- rbind(reads, df)
   inv_cs <- rbind(inv_cs, df_icdf)
+  cat(printRdSummary(rdFile))
 }
 
 ```
