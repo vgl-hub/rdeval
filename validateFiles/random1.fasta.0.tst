@@ -1,4 +1,4 @@
-testFiles/random1.fasta -o /tmp/test.fastq
+testFiles/random1.fasta 
 embedded
 +++Read summary+++: 
 # reads: 5

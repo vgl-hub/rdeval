@@ -1,4 +1,4 @@
-testFiles/random1.fastq -o /tmp/test.cram
+testFiles/random1.fastq 5
 embedded
 +++Read summary+++: 
 # reads: 5
@@ -7,7 +7,7 @@ Average read length: 10.00
 Read N50: 15
 Smallest read length: 5
 Largest read length: 15
-Coverage: inf
+Coverage: 10.00
 GC content %: 50.00
 Base composition (A:C:T:G): 9:14:11:6
 Average per base quality: 21.92

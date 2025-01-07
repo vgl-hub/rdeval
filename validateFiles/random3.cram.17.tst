@@ -1,4 +1,4 @@
-testFiles/random3.bam --sequence-report
+testFiles/random3.cram --sequence-report
 embedded
 Header	Comment	Length	A	C	G	T	N	Average Quality
 m64334e_230307_045304/227/ccs		15788	5226	3430	2651	4481	0	92.541

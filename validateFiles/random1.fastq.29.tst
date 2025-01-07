@@ -1,13 +1,13 @@
-testFiles/random1.fastq 5
+testFiles/random1.fastq -f "l<10"
 embedded
 +++Read summary+++: 
-# reads: 5
-Total read length: 50
-Average read length: 10.00
-Read N50: 15
+# reads: 2
+Total read length: 10
+Average read length: 5.00
+Read N50: 5
 Smallest read length: 5
-Largest read length: 15
-Coverage: 10.00
-GC content %: 50.00
-Base composition (A:C:T:G): 9:14:11:6
-Average per base quality: 21.92
+Largest read length: 5
+Coverage: inf
+GC content %: 55.56
+Base composition (A:C:T:G): 2:3:2:2
+Average per base quality: 20.00

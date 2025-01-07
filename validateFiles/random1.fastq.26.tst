@@ -1,4 +1,4 @@
-testFiles/random1.fastq -o /tmp/test.bam
+testFiles/random1.fastq 
 embedded
 +++Read summary+++: 
 # reads: 5

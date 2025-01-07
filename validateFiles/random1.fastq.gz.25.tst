@@ -1,4 +1,4 @@
-testFiles/random1.fastq --sequence-report
+testFiles/random1.fastq.gz --sequence-report
 embedded
 Header	Comment	Length	A	C	G	T	N	Average Quality
 Header1	5bp sequence with no gaps	5	1	2	1	1	0	18

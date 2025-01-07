@@ -1,4 +1,4 @@
-testFiles/random3.bam -o /tmp/test.cram
+testFiles/random3.cram 
 embedded
 +++Read summary+++: 
 # reads: 59

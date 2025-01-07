@@ -1,13 +1,13 @@
-testFiles/random1.fasta.gz -o /tmp/test.fastq.gz
+testFiles/random1.fasta.gz -f "l>10"
 embedded
 +++Read summary+++: 
-# reads: 5
-Total read length: 50
-Average read length: 10.00
+# reads: 2
+Total read length: 30
+Average read length: 15.00
 Read N50: 15
-Smallest read length: 5
+Smallest read length: 15
 Largest read length: 15
 Coverage: inf
-GC content %: 50.00
-Base composition (A:C:T:G): 9:14:11:6
+GC content %: 54.17
+Base composition (A:C:T:G): 5:10:6:3
 Average per base quality: 0.00

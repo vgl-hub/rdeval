@@ -1,13 +1,11 @@
-testFiles/random2.fastq -f "l>10"
+testFiles/random2.fastq -f 'l>10000' -ql
 embedded
-+++Read summary+++: 
-# reads: 10
-Total read length: 147073
-Average read length: 14707.30
-Read N50: 15160
-Smallest read length: 7979
-Largest read length: 19770
-Coverage: inf
-GC content %: 41.21
-Base composition (A:C:T:G): 43434:30278:43029:30332
-Average per base quality: 85.37
+15174,88.58
+15160,71.22
+19770,89.45
+14004,89.82
+13666,57.70
+14538,90.84
+15820,91.65
+12401,91.58
+18561,89.94
