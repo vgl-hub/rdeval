@@ -93,14 +93,26 @@ generateRdFile <- function(input_file) {
   return(rdFile)
 }
 
-# usage examples:
-rdFile <- generateRdFile(input_file)
-length(rdFile$lengths) # total number of reads
-sum(rdFile$lengths) # total read length
-mean(rdFile$lengths) # average read length
-tail(rdFile$lengths, n=1) # shortest read (they are sorted)
-rdFile$lengths[1] # longest read
-mean(rdFile$qualities) # average read quality (not weighted by length)
-rdFile$A_count # As count etc
-input_file # name of the input
-rdFile$md5s # md5s of files that were used to generate the .rd file
+printRdSummary <- function(rdFile) {
+  if (class(rdFile)[1] == 'rdFileClass') {
+    gc_content = round(
+      (rdFile$C_count + rdFile$G_count)/(rdFile$A_count + rdFile$C_count + rdFile$T_count + rdFile$G_count) * 100, 4)
+    cat(paste0("### ", rdFile$md5s[[1]][1], "\n"))
+    cat(paste0("Number of reads: ", length(rdFile$lengths), "\n\n"))
+    cat(paste0("Total read length: ", sum(rdFile$lengths), "\n\n"))
+    cat(paste0("Average read length: ", round(mean(rdFile$lengths), 1), "\n\n"))
+    cat(paste0("Read N50: ", quantile(rdFile$lengths, .5)[['50%']], "\n\n"))
+    cat(paste0("Smallest read length: ", tail(rdFile$lengths, n=1), "\n\n"))
+    cat(paste0("Largest read length: ", rdFile$lengths[1], "\n\n"))
+    cat(paste0("GC content %: ", gc_content, "\n\n"))
+    cat(paste0("Base composition (A:C:T:G): ", 
+                 rdFile$A_count, ":", 
+                 rdFile$C_count, ":", 
+                 rdFile$T_count, ":",
+                 rdFile$G_count, "\n\n"))
+    cat(paste0("Average read quality: ", round(mean(rdFile$qualities)), "\n\n"))
+    cat()
+  } else {
+    print('Input is not of class rdFileClass.')
+  }
+}
