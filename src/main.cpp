@@ -46,8 +46,8 @@ int main(int argc, char **argv) {
         {"homopolymer-compress", required_argument, 0, 0},
         {"sample", required_argument, 0, 0},
         {"random-seed", required_argument, 0, 0},
+        {"sequence-report",no_argument, 0, 0},
         
-        {"content",required_argument, 0, 'c'},
         {"exclude-list", required_argument, 0, 'e'},
         {"filter", required_argument, 0, 'f'},
         {"include-list", required_argument, 0, 'i'},
@@ -76,9 +76,6 @@ int main(int argc, char **argv) {
         switch (c) {
             case ':': // handle options without arguments
                 switch (optopt) { // the command line option last matched
-                    case 'b':
-                        break;
-                        
                     default:
                         fprintf(stderr, "option -%c is missing a required argument\n", optopt);
                         return EXIT_FAILURE;
@@ -99,6 +96,12 @@ int main(int argc, char **argv) {
                 }
                 if(strcmp(long_options[option_index].name,"random-seed") == 0)
                     userInput.randSeed = atoi(optarg);
+                if(strcmp(long_options[option_index].name,"sequence-report") == 0) {
+                    userInput.content_flag = 1;
+                    userInput.stats_flag = false;
+                    userInput.outSize_flag = false;
+                    userInput.quality_flag = false;
+                }
                 break;
             default: // handle positional arguments
                 if (isInt(optarg)) { // if the positional argument is a number, it is likely the expected genome size
@@ -141,13 +144,6 @@ int main(int argc, char **argv) {
                 userInput.stats_flag = false;
                 userInput.outSize_flag = false;
                 break;
-            case 'c':
-                userInput.content = *optarg;
-                userInput.content_flag = 1;
-                userInput.stats_flag = false;
-                userInput.outSize_flag = false;
-                userInput.quality_flag = false;
-                break;
             case 'o':
                 userInput.outFiles.push_back(optarg);
                 break;
@@ -161,7 +157,7 @@ int main(int argc, char **argv) {
             case 'h': // help
                 printf("%s", helpStr);
                 printf("\nOptions:\n");
-                printf("\t-c --content a|g|t|n generates a list of sequences and their ATCGN base content; all bases, GC content, AT content, Ns (default:a).\n");
+                printf("\t--sequence-report generates a per-read report\n");
                 printf("\t-e --exclude-list <file> generates output on a excluding list of headers.\n");
                 printf("\t-f --filter <exp> filter reads using <exp> in quotes, e.g. 'l>10' for longer than 10bp or 'l>10 & q>10' to further exclude reads by quality (default: none).\n");
                 printf("\t-i --include-list <file> generates output on a subset list of headers.\n");

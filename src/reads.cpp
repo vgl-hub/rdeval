@@ -42,24 +42,24 @@ void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHead
     if (inSequenceTags != NULL)
         this->setSeqTags(inSequenceTags);
     
-    if (*sequence != "*") {
-        
+    if (sequence != NULL && *sequence != "*") {
         this->setInSequence(sequence);
         threadLog->add("Segment sequence set");
+    }
         
-        if (sequenceQuality != NULL) {
-            
-            this->setInSequenceQuality(sequenceQuality);
-            threadLog->add("Segment sequence quality set");
-            this->avgQuality = avgQuality;
-        }
-        
-        this->setACGT(A, C, G, T, N);
-        threadLog->add("Increased ACGT counts");
-        this->setLowerCount(lowerCount);
-        threadLog->add("Increased total count of lower bases");
+    if (sequenceQuality != NULL) {
+        this->setInSequenceQuality(sequenceQuality);
+        threadLog->add("Segment sequence quality set");
+    }
+    this->avgQuality = avgQuality;
+    
+    this->setACGT(A, C, G, T, N);
+    threadLog->add("Increased ACGT counts");
+    this->setLowerCount(lowerCount);
+    threadLog->add("Increased total count of lower bases");
+    
+    if (sequence != NULL && *sequence != "*") {
         seqSize = *A + *C + *G + *T;
-        
     }else{
         
         seqSize = *lowerCount;
@@ -397,7 +397,7 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
                 continue;
         }
         read = traverseInRead(&threadLog, sequence, readBatch->batchN+readN++);
-        std::pair<uint64_t, float> lenQual(read->inSequence->size(), read->avgQuality);
+        std::pair<uint64_t, float> lenQual(read->getA()+read->getC()+read->getG()+read->getT()+read->getN(), read->avgQuality);
         readLensBatch.push_back(lenQual);
         batchA += read->getA();
         batchT += read->getT();
@@ -405,7 +405,7 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
         batchG += read->getG();
         batchN += read->getN();
 
-        if (streamOutput)
+        if (streamOutput || userInput.content_flag)
             inReadsBatch.push_back(read);
         else
             delete read;
@@ -436,7 +436,6 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seq
         delete sequence->sequenceQuality; // sequence quality not meaningful when compressed
         sequence->sequenceQuality = NULL;
     }
-    
     uint64_t A = 0, C = 0, G = 0, T = 0, N = 0, lowerCount = 0;
     float avgQuality = 0;
     
@@ -494,6 +493,15 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seq
 
     // operations on the segment
     InRead* inRead = new InRead;
+    
+    if (userInput.content_flag) {
+        delete sequence->sequence;
+        sequence->sequence = NULL;
+        if (sequence->sequenceQuality != NULL) {
+            delete sequence->sequence;
+            sequence->sequenceQuality = NULL;
+        }
+    }
     inRead->set(threadLog, 0, 0, sequence->header, &sequence->comment, sequence->sequence, &A, &C, &G, &T, &lowerCount, seqPos, sequence->sequenceQuality, avgQuality, NULL, &N);
     sequence->sequence = NULL;
     sequence->sequenceQuality = NULL;
@@ -649,25 +657,11 @@ void InReads::printQualities() {
 }
 void InReads::printContent() {
     
-    char content = userInput.content;
-
+    std::cout<<"Header\tComment\tLength\tA\tC\tG\tT\tN\tAverage Quality\n";
     for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatches){
-        
         for (InRead* read : inReads.first){
-            
-            long double readLen=read->getA()+read->getT()+read->getC()+read->getG()+read->getN();
-            
-            if (content == 'g') {
-                std::cout << (read->getC()+read->getG())/readLen << "\n";
-            }
-            
-            if (content == 't') {
-                std::cout << (read->getA()+read->getT())/readLen << "\n";
-            }
-            
-            if (content == 'n') {
-                std::cout << read->getN()/readLen << "\n";
-            }
+            uint64_t A = read->getA(), C = read->getC(), G = read->getG(), T = read->getT(), N = read->getN();
+            std::cout<<read->seqHeader<<"\t"<<read->seqComment<<"\t"<<+(A+C+G+T+N)<<"\t"<<A<<"\t"<<C<<"\t"<<G<<"\t"<<T<<"\t"<<N<<"\t"<<read->avgQuality<<"\n";
         }
     }
 }

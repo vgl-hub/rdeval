@@ -14,7 +14,6 @@ struct UserInputRdeval : UserInput {
     
     char sizeOutType = 'u'; //default output from this flag is unsorted sizes
     char qualityOut = 'a'; // average quality per read
-    char content = 'a'; // default output is to print the normalized ATCGN content for all sequences
     int outSize_flag = 0, quality_flag = 0, content_flag = 0, md5_flag = 0, cmd_flag = 0;
     float ratio = 1.0f;
     int stats_flag = 1; // by default we output the stats
@@ -23,7 +22,7 @@ struct UserInputRdeval : UserInput {
 
 class InRead : InSegment {
 
-float avgQuality = 0;
+    float avgQuality = 0;
         
 public:
     
