@@ -123,6 +123,8 @@ public:
     
     inline bool filterRead(Sequence* sequence);
     
+    inline bool applyFilter(uint64_t size, float avgQuality);
+    
     bool traverseInReads(Sequences* readBatch);
     
     InRead* traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seqPos);

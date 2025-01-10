@@ -336,6 +336,11 @@ inline bool InReads::filterRead(Sequence* sequence) {
     if (sequence->sequenceQuality != NULL)
         avgQuality = computeAvgQuality(*sequence->sequenceQuality);
     
+    return applyFilter(size, avgQuality);
+}
+
+inline bool InReads::applyFilter(uint64_t size, float avgQuality) {
+    
     bool lFilter = ((lSign == '0') ||
                     ((lSign == '>') && (size > l)) ||
                     ((lSign == '<') && (size < l)) ||
@@ -354,7 +359,6 @@ inline bool InReads::filterRead(Sequence* sequence) {
         (logicalOperator == '&' && (lFilter && qFilter))
        )
         return false;
-    lg.verbose("Sequence length (" + std::to_string(sequence->sequence->size()) + ") shorter than filter length. Filtering out (" + sequence->header + ").");
     return true;
 }
 
@@ -593,24 +597,25 @@ void InReads::printReadLengths() {
     std::cout << std::setprecision(2); // 2 decimal points
     
     uint64_t readCount = readLens.size();
-    
-    if (userInput.sizeOutType == 'u') {
-        
-        for (uint64_t i = 0; i < readCount; ++i)
-            std::cout << readLens[i].first << "\n";
-        
-    }else if(userInput.sizeOutType == 's') {
-        
+    bool noFilter = userInput.filter == "none" ? true : false;
+    if(userInput.sizeOutType == 's')
         readLens.sort();
-        for (uint64_t i = 0; i < readCount; ++i)
-            std::cout << readLens[i].first << "\n";
+    
+    if (userInput.sizeOutType == 'u' || userInput.sizeOutType == 's') {
+        
+        for (uint64_t i = 0; i < readCount; ++i) {
+            if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
+                std::cout << readLens[i].first << "\n";
+        }
         
     }else if(userInput.sizeOutType == 'h') {
         
         phmap::parallel_flat_hash_map<uint64_t, uint64_t> hist;
         
-        for (uint64_t i = 0; i < readCount; ++i)
-            ++hist[readLens[i].first];
+        for (uint64_t i = 0; i < readCount; ++i) {
+            if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
+                ++hist[readLens[i].first];
+        }
         
         std::vector<std::pair<uint64_t, uint64_t>> table(hist.begin(), hist.end()); // converts the hashmap to a table
         std::sort(table.begin(), table.end());
@@ -618,13 +623,14 @@ void InReads::printReadLengths() {
         for (auto pair : table)
             std::cout<<pair.first<<"\t"<<pair.second<<"\n";
         
-    } else if (userInput.sizeOutType == 'c') {
+    }else if(userInput.sizeOutType == 'c') {
 
         phmap::parallel_flat_hash_map<uint64_t, uint64_t> hist;
         
-        for (uint64_t i = 0; i < readCount; ++i)
-            ++hist[readLens[i].first];
-        
+        for (uint64_t i = 0; i < readCount; ++i) {
+            if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
+                ++hist[readLens[i].first];
+        }
         std::vector<std::pair<uint64_t, uint64_t>> table(hist.begin(), hist.end());
         std::sort(table.begin(), table.end());
         
@@ -644,15 +650,20 @@ void InReads::printQualities() {
     
     uint64_t readCount = readLens.size();
     
+    bool noFilter = userInput.filter == "none" ? true : false;
     char qualityOut = userInput.qualityOut;
 
     if (qualityOut == 'q'){
-        for (uint64_t i = 0; i < readCount; ++i)
-            std::cout << readLens[i].second << "\n";
+        for (uint64_t i = 0; i < readCount; ++i) {
+            if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
+                std::cout << readLens[i].second << "\n";
+        }
     }
-    else if (qualityOut == 'a') { // l prints read lengths and qualities
-        for (uint64_t i = 0; i < readCount; ++i)
-            std::cout << readLens[i].first << "," << readLens[i].second << "\n";
+    else if (qualityOut == 'a') { // a prints read lengths and qualities
+        for (uint64_t i = 0; i < readCount; ++i) {
+            if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
+                std::cout << readLens[i].first << "," << readLens[i].second << "\n";
+        }
     }
 }
 void InReads::printContent() {
