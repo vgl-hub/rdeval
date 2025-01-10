@@ -35,9 +35,9 @@ void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHead
     this->setiId(iId); // set temporary sId internal to scaffold
     this->setuId(uId); // set absolute id
     this->setSeqPos(seqPos); // set original order
-    this->setSeqHeader(seqHeader);
+    this->setSeqHeader(std::move(seqHeader));
     if (seqComment != "")
-        this->setSeqComment(seqComment);
+        this->setSeqComment(std::move(seqComment));
     
     if (inSequenceTags != NULL)
         this->setSeqTags(inSequenceTags);
