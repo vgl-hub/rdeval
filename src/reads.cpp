@@ -431,6 +431,7 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
                 s[i] = read->inSequenceQuality->at(i) - 33;
             
             inReadsBatch.push_back(q);
+            delete read;
         }else if (userInput.content_flag){
             inReadsSummaryBatch.push_back(read);
         }else
@@ -696,6 +697,7 @@ void InReads::printContent() {
         for (InRead* read : inReads.first){
             uint64_t A = read->getA(), C = read->getC(), G = read->getG(), T = read->getT(), N = read->getN(), total = A+C+G+T+N;
             std::cout<<read->seqHeader<<"\t"<<read->seqComment<<"\t"<<total<<"\t"<<A<<"\t"<<C<<"\t"<<G<<"\t"<<T<<"\t"<<N<<"\t"<<gfa_round((float)(G+C)/total)<<"\t"<<read->avgQuality<<"\n";
+            delete read;
         }
     }
 }
