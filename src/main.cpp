@@ -15,7 +15,7 @@
 #include "stream-obj.h"
 #include "input.h"
 
-std::string version = "0.0.3";
+std::string version = "0.0.4";
 
 //global
 std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now(); // immediately start the clock when the program is run
@@ -162,8 +162,8 @@ int main(int argc, char **argv) {
                 printf("\t-f --filter <exp> filter reads using <exp> in quotes, e.g. 'l>10' for longer than 10bp or 'l>10 & q>10' to further exclude reads by quality (default: none).\n");
                 printf("\t-i --include-list <file> generates output on a subset list of headers.\n");
                 printf("\t-o --out-format <file> output file (fa*[.gz], bam, cram, rd). Optionally write reads to file or generate rd summary file.\n");
-                printf("\t-q --quality c|l a generates list of average quality for each read (c) or both length and quality (c).\n");
-                printf("\t-r --reads <file1> <file2> <file n> input file (fa*[.gz], bam, cram, rd).\n");
+                printf("\t-q --quality q|a generates list of average quality for each read (q) or both length and quality (a).\n");
+                printf("\t-r --input-reads <file1> <file2> <file n> input file (fa*[.gz], bam, cram, rd).\n");
                 printf("\t-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cumulative table).\n");
                 printf("\t--homopolymer-compress <int> compress all the homopolymers longer than n in the input.\n");
                 printf("\t--sample <float> fraction of reads to subsample.\n");

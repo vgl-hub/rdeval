@@ -646,22 +646,22 @@ void InReads::printQualities() {
     
     char qualityOut = userInput.qualityOut;
 
-    if (qualityOut == 'c'){
+    if (qualityOut == 'q'){
         for (uint64_t i = 0; i < readCount; ++i)
             std::cout << readLens[i].second << "\n";
     }
-    else if (qualityOut == 'l') { // l prints read lengths and qualities
+    else if (qualityOut == 'a') { // l prints read lengths and qualities
         for (uint64_t i = 0; i < readCount; ++i)
             std::cout << readLens[i].first << "," << readLens[i].second << "\n";
     }
 }
 void InReads::printContent() {
     
-    std::cout<<"Header\tComment\tLength\tA\tC\tG\tT\tN\tAverage Quality\n";
+    std::cout<<"Header\tComment\tLength\tA\tC\tG\tT\tN\tGC\tAverage Quality\n";
     for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatches){
         for (InRead* read : inReads.first){
-            uint64_t A = read->getA(), C = read->getC(), G = read->getG(), T = read->getT(), N = read->getN();
-            std::cout<<read->seqHeader<<"\t"<<read->seqComment<<"\t"<<+(A+C+G+T+N)<<"\t"<<A<<"\t"<<C<<"\t"<<G<<"\t"<<T<<"\t"<<N<<"\t"<<read->avgQuality<<"\n";
+            uint64_t A = read->getA(), C = read->getC(), G = read->getG(), T = read->getT(), N = read->getN(), total = A+C+G+T+N;
+            std::cout<<read->seqHeader<<"\t"<<read->seqComment<<"\t"<<total<<"\t"<<A<<"\t"<<C<<"\t"<<G<<"\t"<<T<<"\t"<<N<<"\t"<<gfa_round((float)(G+C)/total)<<"\t"<<read->avgQuality<<"\n";
         }
     }
 }
