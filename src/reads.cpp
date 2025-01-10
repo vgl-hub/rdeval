@@ -744,9 +744,47 @@ void InReads::initStream() {
             exit(EXIT_FAILURE);
         }
         
-        if (bam)
-            writeBamHeader();
+        std::string ext = getFileExt(userInput.outFiles[0]); // variable to handle output path and extension
+        const static phmap::flat_hash_map<std::string,int> string_to_case{
+            {"fasta",1},
+            {"fa",1},
+            {"fasta.gz",1},
+            {"fa.gz",1},
+            {"fastq",2},
+            {"fq",2},
+            {"fastq.gz",2},
+            {"fq.gz",2},
+            {"bam",3},
+            {"cram",4}
+        };
         
+        switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
+            case 1:   // fasta[.gz]
+            case 2: { // fastq[.gz]
+                char mode[4] = "w";
+                if (sam_open_mode(mode + 1, userInput.outFiles[0].c_str(), NULL) < 0) {
+                    printf("Invalid file name\n");
+                    exit(EXIT_FAILURE);
+                }
+                if (!(fp = sam_open(userInput.outFiles[0].c_str(), mode))) {
+                    printf("Could not open %s\n", userInput.outFiles[0].c_str());
+                    exit(EXIT_FAILURE);
+                }
+                break;
+            }
+            case 3: {  // bam
+                fp = sam_open(userInput.outFiles[0].c_str(),"wb");
+                break;
+            }
+            case 4: {  // cram
+                htsFormat fmt4 = {sequence_data, cram, {3, 1}, gzip, 6, NULL};
+                hts_parse_format(&fmt4, "cram,no_ref=1");
+                fp = sam_open_format(userInput.outFiles[0].c_str(), "wc", &fmt4);
+                break;
+            }
+        }
+        if (bam)
+            writeHeader();
         writer = std::thread(&InReads::writeToStream, this);
     }
 }
@@ -763,44 +801,29 @@ void InReads::closeStream() {
         
         if (bam)
             closeBam();
-        
         sam_close(fp); // close file
     }
 }
+
+void InReads::writeHeader() {
+    
+    const char init_header[] = "@HD\tVN:1.4\tSO:unknown\n";
+    hdr = bam_hdr_init();
+    hdr->l_text = strlen(init_header);
+    hdr->text = strdup(init_header);
+    hdr->n_targets = 0;
+    std::ignore = sam_hdr_write(fp,hdr);
+}
+
+void InReads::closeBam() {
+    bam_hdr_destroy(hdr);
+}
+
 
 void InReads::writeToStream() {
 
     bam1_t *q;
     uint64_t batchCounter = 0;
-    std::string ext = getFileExt(userInput.outFiles[0]); // variable to handle output path and extension
-    const static phmap::flat_hash_map<std::string,int> string_to_case{
-        {"fasta",1},
-        {"fa",1},
-        {"fasta.gz",1},
-        {"fa.gz",1},
-        {"fastq",2},
-        {"fq",2},
-        {"fastq.gz",2},
-        {"fq.gz",2},
-        {"bam",3},
-        {"cram",3}
-    };
-    
-    switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
-        case 1:   // fasta[.gz]
-        case 2: { // fastq[.gz]
-            char mode[4] = "w";
-            if (sam_open_mode(mode + 1, userInput.outFiles[0].c_str(), NULL) < 0) {
-                printf("Invalid file name\n");
-                exit(EXIT_FAILURE);
-            }
-            if (!(fp = sam_open(userInput.outFiles[0].c_str(), mode))) {
-                printf("Could not open %s\n", userInput.outFiles[0].c_str());
-                exit(EXIT_FAILURE);
-            }
-            break;
-        }
-    }
     std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
     
     while (true) {
@@ -815,109 +838,46 @@ void InReads::writeToStream() {
             readBatchesCpy.insert(readBatchesCpy.begin(), readBatches.begin(), readBatches.end());
             readBatches.clear();
         }
+                
+        for (std::vector<std::pair<std::vector<InRead*>,uint32_t>>::iterator it = readBatchesCpy.begin(); it != readBatchesCpy.end();) {
+            
+            auto &inReads = *it;
+            
+            if (inReads.second != batchCounter) {
+                ++it;
+                continue;
+            }
+            lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
+                
+            for (InRead* read : inReads.first){
+                
+                if (!(q = bam_init1())) {
+                    printf("Failed to initialize bamdata\n");
+                    exit(EXIT_FAILURE);
+                }
         
-        switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
+                if (read->inSequenceQuality == NULL)
+                    read->inSequenceQuality = new std::string(read->inSequence->size(),'!');
                 
-            case 1:    // fasta[.gz]
-            case 2:  { // fastq[.gz]
-                
-                for (std::vector<std::pair<std::vector<InRead*>,uint32_t>>::iterator it = readBatchesCpy.begin(); it != readBatchesCpy.end();) {
-                    
-                    auto &inReads = *it;
-                    
-                    if (inReads.second != batchCounter) {
-                        ++it;
-                        continue;
-                    }
-                    lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
-                        
-                    for (InRead* read : inReads.first){
-                        
-                        if (!(q = bam_init1())) {
-                            printf("Failed to initialize bamdata\n");
-                            exit(EXIT_FAILURE);
-                        }
-                
-                        if (read->inSequenceQuality == NULL)
-                            read->inSequenceQuality = new std::string(read->inSequence->size(),'!');
-                        
-                        if (bam_set1(q, strlen(read->seqHeader.c_str()), read->seqHeader.c_str(), BAM_FUNMAP, -1, -1, 0, 0, NULL, -1, -1, 0, strlen(read->inSequence->c_str()), read->inSequence->c_str(), NULL, 0) < 0) {
-                            printf("Failed to set data\n");
-                            exit(EXIT_FAILURE);
-                        }
-                        uint8_t *s = bam_get_seq(q);
-                        s = bam_get_qual(q);
-                        for (size_t i = 0; i < read->inSequenceQuality->size(); ++i)
-                            s[i] = read->inSequenceQuality->at(i) - 33;
-                        
-                        //as we write only FASTA/FASTQ, we can get away without providing headers
-                        if (sam_write1(fp, NULL, q) < 0) {
-                            printf("Failed to write data\n");
-                            exit(EXIT_FAILURE);
-                        }
-                        bam_destroy1(q);
-                        delete read;
-                    }
-                    it = readBatchesCpy.erase(it);
-                    ++batchCounter;
+                if (bam_set1(q, strlen(read->seqHeader.c_str()), read->seqHeader.c_str(), BAM_FUNMAP, -1, -1, 0, 0, NULL, -1, -1, 0, strlen(read->inSequence->c_str()), read->inSequence->c_str(), NULL, 0) < 0) {
+                    printf("Failed to set data\n");
+                    exit(EXIT_FAILURE);
                 }
-                break;
-            }
-            case 3: { // bam&cram
+                uint8_t *s = bam_get_seq(q);
+                s = bam_get_qual(q);
+                for (size_t i = 0; i < read->inSequenceQuality->size(); ++i)
+                    s[i] = read->inSequenceQuality->at(i) - 33;
                 
-                for (std::vector<std::pair<std::vector<InRead*>,uint32_t>>::iterator it = readBatchesCpy.begin(); it != readBatchesCpy.end();) {
-                    
-                    auto &inReads = *it;
-                    
-                    if (inReads.second != batchCounter) {
-                        ++it;
-                        continue;
-                    }
-                    
-                    lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
-                        
-                    for (InRead* read : inReads.first) { // main loop, iter through each fastq records
-                        
-                        if (read->inSequenceQuality == NULL)
-                            read->inSequenceQuality = new std::string(read->inSequence->size(),'!');
-                        
-                        if (!(q = bam_init1())) {
-                            printf("Failed to initialize bamdata\n");
-                            exit(EXIT_FAILURE);
-                        }
-                        //`q->data` structure: qname-cigar-seq-qual-aux
-                        q->l_data = read->seqHeader.size()+1+(int)(1.5*read->inSequence->size()+(read->inSequence->size() % 2 != 0)); // +1 includes the tailing '\0'
-                        if (q->m_data < (uint32_t)q->l_data) {
-                            q->m_data = q->l_data;
-                            kroundup32(q->m_data);
-                            q->data = (uint8_t*)realloc(q->data, q->m_data);
-                        }
-                        q->core.flag = BAM_FUNMAP;
-                        q->core.l_qname = read->seqHeader.size()+1; // +1 includes the tailing '\0'
-                        q->core.l_qseq = read->inSequence->size();
-                        q->core.n_cigar = 0; // we have no cigar sequence
-                        // no flags for unaligned reads
-                        q->core.tid = -1;
-                        q->core.pos = -1;
-                        q->core.mtid = -1;
-                        q->core.mpos = -1;
-                        memcpy(q->data, read->seqHeader.c_str(), q->core.l_qname); // first set qname
-                        uint8_t *s = bam_get_seq(q);
-                        for (int i = 0; i < q->core.l_qseq; ++i)
-                            bam1_seq_seti(s, i, seq_nt16_table[(unsigned char)read->inSequence->at(i)]);
-                        s = bam_get_qual(q);
-                        for (size_t i = 0; i < read->inSequenceQuality->size(); ++i)
-                            s[i] = read->inSequenceQuality->at(i) - 33;
-                        // dump_read(q);
-                        std::ignore = sam_write1(fp, hdr, q);
-                        bam_destroy1(q);
-                        delete read;
-                    }
-                    it = readBatchesCpy.erase(it);
-                    ++batchCounter;
+                //as we write only FASTA/FASTQ, we can get away without providing headers
+                if (sam_write1(fp, hdr, q) < 0) {
+                    printf("Failed to write data\n");
+                    exit(EXIT_FAILURE);
                 }
-                break;
+                bam_destroy1(q);
+                delete read;
             }
+            it = readBatchesCpy.erase(it);
+            ++batchCounter;
         }
     }
 }
@@ -1080,26 +1040,4 @@ void InReads::readTableCompressed(std::string inFile) {
 void InReads::printMd5() {
     for (auto md5 : md5s)
         std::cout<<md5.first<<": "<<md5.second<<std::endl;
-}
-
-void InReads::writeBamHeader() {
-    
-    if (getFileExt(userInput.outFiles[0]) == "bam") {
-        fp = sam_open(userInput.outFiles[0].c_str(),"wb");
-    }else if(getFileExt(userInput.outFiles[0]) == "cram") {
-        htsFormat fmt4 = {sequence_data, cram, {3, 1}, gzip, 6, NULL};
-        hts_parse_format(&fmt4, "cram,no_ref=1");
-        fp = sam_open_format(userInput.outFiles[0].c_str(), "wc", &fmt4);
-    }
-    // write header
-    const char init_header[] = "@HD\tVN:1.4\tSO:unknown\n";
-    hdr = bam_hdr_init();
-    hdr->l_text = strlen(init_header);
-    hdr->text = strdup(init_header);
-    hdr->n_targets = 0;
-    std::ignore = sam_hdr_write(fp,hdr);
-}
-
-void InReads::closeBam() {
-    bam_hdr_destroy(hdr);
 }

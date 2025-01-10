@@ -163,7 +163,7 @@ public:
     
     void printMd5();
     
-    void writeBamHeader();
+    void writeHeader();
     
     void closeBam();
 };
