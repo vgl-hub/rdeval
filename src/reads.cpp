@@ -166,7 +166,7 @@ void InReads::load() {
                                 getline(*stream, *inSequenceQuality);
                                 
                                 readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence, inSequenceQuality});
-                                seqPos++;
+                                ++seqPos;
                                 processedLength += inSequence->size();
                                 
                                 if (processedLength > batchSize) {
@@ -370,7 +370,8 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
 
     Log threadLog;
     threadLog.setId(readBatch->batchN);
-    std::vector<InRead*> inReadsBatch;
+    std::vector<bam1_t*> inReadsBatch;
+    std::vector<InRead*> inReadsSummaryBatch;
     uint32_t readN = 0;
     LenVector<float> readLensBatch;
     InRead* read;
@@ -409,15 +410,37 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
         batchG += read->getG();
         batchN += read->getN();
 
-        if (streamOutput || userInput.content_flag)
-            inReadsBatch.push_back(read);
-        else
+        if (streamOutput) {
+            
+            bam1_t *q;
+            if (!(q = bam_init1())) {
+                printf("Failed to initialize bamdata\n");
+                exit(EXIT_FAILURE);
+            }
+
+            if (read->inSequenceQuality == NULL)
+                read->inSequenceQuality = new std::string(read->inSequence->size(),'!');
+            
+            if (bam_set1(q, strlen(read->seqHeader.c_str()), read->seqHeader.c_str(), BAM_FUNMAP, -1, -1, 0, 0, NULL, -1, -1, 0, strlen(read->inSequence->c_str()), read->inSequence->c_str(), NULL, 0) < 0) {
+                printf("Failed to set data\n");
+                exit(EXIT_FAILURE);
+            }
+            uint8_t *s = bam_get_seq(q);
+            s = bam_get_qual(q);
+            for (size_t i = 0; i < read->inSequenceQuality->size(); ++i)
+                s[i] = read->inSequenceQuality->at(i) - 33;
+            
+            inReadsBatch.push_back(q);
+        }else if (userInput.content_flag){
+            inReadsSummaryBatch.push_back(read);
+        }else
             delete read;
     }
     
     {
         std::unique_lock<std::mutex> lck(mtx);
         readBatches.emplace_back(inReadsBatch,readBatch->batchN);
+        readSummaryBatches.emplace_back(inReadsSummaryBatch,readBatch->batchN);
         delete readBatch;
         readLens.insert(readLensBatch);
         totA+=batchA;
@@ -669,7 +692,7 @@ void InReads::printQualities() {
 void InReads::printContent() {
     
     std::cout<<"Header\tComment\tLength\tA\tC\tG\tT\tN\tGC\tAverage Quality\n";
-    for (std::pair<std::vector<InRead*>,uint32_t> inReads : readBatches){
+    for (std::pair<std::vector<InRead*>,uint32_t> inReads : readSummaryBatches){
         for (InRead* read : inReads.first){
             uint64_t A = read->getA(), C = read->getC(), G = read->getG(), T = read->getT(), N = read->getN(), total = A+C+G+T+N;
             std::cout<<read->seqHeader<<"\t"<<read->seqComment<<"\t"<<total<<"\t"<<A<<"\t"<<C<<"\t"<<G<<"\t"<<T<<"\t"<<N<<"\t"<<gfa_round((float)(G+C)/total)<<"\t"<<read->avgQuality<<"\n";
@@ -822,9 +845,8 @@ void InReads::closeBam() {
 
 void InReads::writeToStream() {
 
-    bam1_t *q;
     uint64_t batchCounter = 0;
-    std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatchesCpy;
+    std::vector<std::pair<std::vector<bam1_t*>,uint32_t>> readBatchesCpy;
     
     while (true) {
         
@@ -839,7 +861,7 @@ void InReads::writeToStream() {
             readBatches.clear();
         }
                 
-        for (std::vector<std::pair<std::vector<InRead*>,uint32_t>>::iterator it = readBatchesCpy.begin(); it != readBatchesCpy.end();) {
+        for (std::vector<std::pair<std::vector<bam1_t*>,uint32_t>>::iterator it = readBatchesCpy.begin(); it != readBatchesCpy.end();) {
             
             auto &inReads = *it;
             
@@ -849,32 +871,12 @@ void InReads::writeToStream() {
             }
             lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
                 
-            for (InRead* read : inReads.first){
-                
-                if (!(q = bam_init1())) {
-                    printf("Failed to initialize bamdata\n");
-                    exit(EXIT_FAILURE);
-                }
-        
-                if (read->inSequenceQuality == NULL)
-                    read->inSequenceQuality = new std::string(read->inSequence->size(),'!');
-                
-                if (bam_set1(q, strlen(read->seqHeader.c_str()), read->seqHeader.c_str(), BAM_FUNMAP, -1, -1, 0, 0, NULL, -1, -1, 0, strlen(read->inSequence->c_str()), read->inSequence->c_str(), NULL, 0) < 0) {
-                    printf("Failed to set data\n");
-                    exit(EXIT_FAILURE);
-                }
-                uint8_t *s = bam_get_seq(q);
-                s = bam_get_qual(q);
-                for (size_t i = 0; i < read->inSequenceQuality->size(); ++i)
-                    s[i] = read->inSequenceQuality->at(i) - 33;
-                
-                //as we write only FASTA/FASTQ, we can get away without providing headers
+            for (bam1_t* q : inReads.first){
                 if (sam_write1(fp, hdr, q) < 0) {
                     printf("Failed to write data\n");
                     exit(EXIT_FAILURE);
                 }
                 bam_destroy1(q);
-                delete read;
             }
             it = readBatchesCpy.erase(it);
             ++batchCounter;

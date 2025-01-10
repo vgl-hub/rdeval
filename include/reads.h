@@ -39,7 +39,8 @@ class InReads {
     std::shared_ptr<std::istream> stream;
     
     UserInputRdeval &userInput;
-    std::vector<std::pair<std::vector<InRead*>,uint32_t>> readBatches;
+    std::vector<std::pair<std::vector<bam1_t*>,uint32_t>> readBatches;
+    std::vector<std::pair<std::vector<InRead*>,uint32_t>> readSummaryBatches; // could be avoided in the future
     uint64_t totReads = 0;
     
     //intermediates
