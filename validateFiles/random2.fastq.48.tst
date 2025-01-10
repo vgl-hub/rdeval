@@ -1,4 +1,4 @@
-testFiles/random2.fastq -f 'l>10000' -ql
+testFiles/random2.fastq -f 'l>10000' -qa
 embedded
 15174,88.58
 15160,71.22
