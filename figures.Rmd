@@ -1,5 +1,5 @@
 ---
-title: "Figures"
+title: "Read Summary and Figures"
 output: html_document
 date: "`r Sys.Date()`"
 ---
@@ -49,58 +49,63 @@ for (file in files) {
 
 ```
 
-### Boxplot
+### Violin Plot
 ```{r}
 
-ggplot(reads, aes(x = run, y = read_length, fill = run)) +
-  geom_boxplot() +
-  scale_x_discrete(name = ("Read")) +
+violin <- ggplot(reads, aes(x = run, y = read_length, fill = run)) +
+  geom_violin() +
+  scale_x_discrete(name = ("Run")) +
   scale_y_continuous(name = ("Read Length"),
                      labels = scales::label_comma()) +
   scale_fill_manual(guide = "none", values = palette) +
-  theme_bw() 
+  theme_bw()
+violin
 ```
 
 ### Read lengths
 
 ```{r}
-ggplot(reads, aes(x = read_length, fill = run)) +
+read_lengths <- ggplot(reads, aes(x = read_length/1000, fill = run)) +
   geom_density(aes(y = after_stat(count)), alpha = 0.5) +
-  scale_x_continuous(name = ("Read length (bp)"),
-                     breaks = scales::breaks_width(10000),
+  scale_x_continuous(name = ("Read length (kbp)"),
+                     breaks = scales::breaks_width(10),
                      labels = scales::label_comma(),
                      expand = expansion(mult = c(0, 0))) +
   scale_y_continuous(name = "Count", labels = scales::label_comma(),
                      expand = expansion(mult = c(0, 0.05))) +
-  scale_fill_manual(name = "Run", values = palette) +
+  scale_fill_manual(guide = "none", values = palette) +
   theme_bw() 
+read_lengths
 ```
 
 ### Read lengths (log transformed)
 ```{r}
-ggplot(reads, aes(x = read_length, fill = run)) +
+read_lengths_log <- ggplot(reads, aes(x = read_length, fill = run)) +
   geom_density(aes(y = after_stat(count)), alpha = 0.5) +
   scale_x_log10(name = ("Read length (bp)"),
                 breaks = scales::breaks_log(n = 5),
                 labels = scales::label_comma()) +
-  scale_y_continuous(labels = scales::label_comma(),
+  scale_y_continuous(name = "Count", 
+                     labels = scales::label_comma(),
                      expand = expansion(mult = c(0, 0.05))) +
-  scale_fill_manual(name = "Run", values = palette) +
+  scale_fill_manual(guide = "none", values = palette) +
   theme_bw() 
+read_lengths_log
 ```
 
 ### Inverse cumulative distribution plot
 ```{r}
-ggplot(inv_cs, aes(read_length, inv_cs_gb, color = run)) +
+icd <- ggplot(inv_cs, aes(read_length/1000, inv_cs_gb, color = run)) +
   geom_point() +
-  scale_x_continuous(name = "Read length (bp)",
-                     breaks = scales::breaks_width(10000),
+  scale_x_continuous(name = "Read length (kbp)",
+                     breaks = scales::breaks_width(10),
                      labels = scales::label_comma(),
                      expand = expansion(mult = c(0.05, 0.05))) +
-  scale_y_continuous(name = "Cumulative yield (Gb)",
+  scale_y_continuous(name = "Cumulative yield (Gbp)",
                      expand = expansion(mult = c(0.05, 0.05))) +
   scale_color_manual(name = "Run", values = palette) +
   theme_bw() 
+icd
 ```
 
 ### Read lengths vs average quality
@@ -110,12 +115,12 @@ reads_by_avg_quality <- reads %>%
   summarize_at("read_quality", mean)
 
 g <- reads_by_avg_quality %>%
-  ggplot(aes(x = read_length, y = read_quality, fill = run, color = run)) +
+  ggplot(aes(x = read_length/1000, y = read_quality, fill = run, color = run)) +
   geom_point(position = position_jitter(h = 0.3), 
              size = 0.75, 
              alpha = 0.2) +
-  scale_x_continuous(name = ("Read length (bp)"),
-                     breaks = scales::breaks_width(10000),
+  scale_x_continuous(name = ("Read length (kbp)"),
+                     breaks = scales::breaks_width(10),
                      labels = scales::label_comma()) +
   scale_y_continuous(name = ("Average Read Quality")) +
   scale_color_manual(name = "Run", values = palette) +
