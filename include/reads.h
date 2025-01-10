@@ -26,7 +26,7 @@ class InRead : InSegment {
         
 public:
     
-    void set(Log* threadLog, uint32_t uId, uint32_t iId, std::string readHeader, std::string* readComment, std::string* read, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t readPos, std::string* sequenceQuality, float avgQuality, std::vector<Tag>* inReadTags = NULL, uint64_t* N = NULL);
+    void set(Log* threadLog, uint32_t uId, uint32_t iId, std::string readHeader, std::string readComment, std::string read, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t readPos, std::string sequenceQuality, float avgQuality, std::vector<Tag>* inReadTags = NULL, uint64_t* N = NULL);
     
 friend class InReads;
 
@@ -119,17 +119,17 @@ public:
     
     void initFilters();
     
-    float computeAvgQuality(std::string &sequenceQuality);
+    float computeAvgQuality(const std::string &sequenceQuality);
     
-    inline bool filterRead(Sequence* sequence);
+    inline bool filterRead(const Sequence &sequence);
     
     inline bool applyFilter(uint64_t size, float avgQuality);
     
-    bool traverseInReads(Sequences* readBatch);
+    bool traverseInReads(Sequences readBatch);
     
-    InRead* traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seqPos);
+    InRead* traverseInRead(Log* threadLog, Sequence &sequence, uint32_t seqPos);
     
-    void appendReads(Sequences* readBatch);
+    void appendReads(Sequences readBatch);
     
     uint64_t getTotReadLen();
 

@@ -28,7 +28,7 @@
 
 #define bam1_seq_seti(s, i, c) ( (s)[(i)>>1] = ((s)[(i)>>1] & 0xf<<(((i)&1)<<2)) | (c)<<((~(i)&1)<<2) )
 
-void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHeader, std::string* seqComment, std::string* sequence, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t seqPos, std::string* sequenceQuality, float avgQuality, std::vector<Tag>* inSequenceTags, uint64_t* N) {
+void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHeader, std::string seqComment, std::string sequence, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t seqPos, std::string sequenceQuality, float avgQuality, std::vector<Tag>* inSequenceTags, uint64_t* N) {
     
     threadLog->add("Processing read: " + seqHeader + " (uId: " + std::to_string(uId) + ", iId: " + std::to_string(iId) + ")");
     uint64_t seqSize = 0;
@@ -36,19 +36,19 @@ void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHead
     this->setuId(uId); // set absolute id
     this->setSeqPos(seqPos); // set original order
     this->setSeqHeader(seqHeader);
-    if (*seqComment != "")
-        this->setSeqComment(*seqComment);
+    if (seqComment != "")
+        this->setSeqComment(seqComment);
     
     if (inSequenceTags != NULL)
         this->setSeqTags(inSequenceTags);
     
-    if (sequence != NULL && *sequence != "*") {
-        this->setInSequence(sequence);
+    if (sequence != "" && sequence != "*") {
+        this->setInSequence(std::move(&sequence));
         threadLog->add("Segment sequence set");
     }
         
-    if (sequenceQuality != NULL) {
-        this->setInSequenceQuality(sequenceQuality);
+    if (sequenceQuality != "") {
+        this->setInSequenceQuality(std::move(&sequenceQuality));
         threadLog->add("Segment sequence quality set");
     }
     this->avgQuality = avgQuality;
@@ -58,7 +58,7 @@ void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHead
     this->setLowerCount(lowerCount);
     threadLog->add("Increased total count of lower bases");
     
-    if (sequence != NULL && *sequence != "*") {
+    if (sequence != "" && sequence != "*") {
         seqSize = *A + *C + *G + *T;
     }else{
         
@@ -106,7 +106,7 @@ void InReads::load() {
                 
                 StreamObj streamObj;
                 stream = streamObj.openStream(userInput, 'r', i);
-                Sequences* readBatch = new Sequences;
+                Sequences readBatch;
                 
                 if (stream) {
                     
@@ -126,17 +126,17 @@ void InReads::load() {
                                 if (c != NULL)
                                     seqComment = std::string(c);
                                 
-                                std::string* inSequence = new std::string;
-                                getline(*stream, *inSequence, '>');
-                                readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence});
+                                std::string inSequence;
+                                getline(*stream, inSequence, '>');
+                                processedLength += inSequence.size();
+                                readBatch.sequences.push_back({std::move(seqHeader), std::move(seqComment), std::move(inSequence), std::string()});
                                 seqPos++;
-                                processedLength += inSequence->size();
                                 
                                 if (processedLength > batchSize) {
-                                    readBatch->batchN = batchN++;
-                                    lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-                                    appendReads(readBatch);
-                                    readBatch = new Sequences;
+                                    readBatch.batchN = batchN++;
+                                    lg.verbose("Processing batch N: " + std::to_string(readBatch.batchN));
+                                    appendReads(std::move(readBatch));
+                                    readBatch = Sequences();
                                     processedLength = 0;
                                 }
                                 //lg.verbose("Individual fasta sequence read: " + seqHeader);
@@ -157,23 +157,24 @@ void InReads::load() {
                                 if (c != NULL)
                                     seqComment = std::string(c);
                                 
-                                std::string* inSequence = new std::string;
-                                getline(*stream, *inSequence);
+                                std::string inSequence;
+                                getline(*stream, inSequence);
                                 
                                 getline(*stream, newLine);
                                 
-                                std::string* inSequenceQuality = new std::string;
-                                getline(*stream, *inSequenceQuality);
+                                std::string inSequenceQuality;
+                                getline(*stream, inSequenceQuality);
+                                processedLength += inSequence.size();
                                 
-                                readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence, inSequenceQuality});
+                                readBatch.sequences.push_back({std::move(seqHeader), std::move(seqComment), std::move(inSequence), std::move(inSequenceQuality)});
                                 seqPos++;
-                                processedLength += inSequence->size();
+                                
                                 
                                 if (processedLength > batchSize) {
-                                    readBatch->batchN = batchN++;
-                                    lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
+                                    readBatch.batchN = batchN++;
+                                    lg.verbose("Processing batch N: " + std::to_string(readBatch.batchN));
                                     appendReads(readBatch);
-                                    readBatch = new Sequences;
+                                    readBatch = Sequences();
                                     processedLength = 0;
                                 }
                                 //lg.verbose("Individual fastq sequence read: " + seqHeader);
@@ -181,15 +182,15 @@ void InReads::load() {
                             break;
                         }
                     }
-                    readBatch->batchN = batchN++; // process residual reads
-                    lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
+                    readBatch.batchN = batchN++; // process residual reads
+                    lg.verbose("Processing batch N: " + std::to_string(readBatch.batchN));
                     appendReads(readBatch);
                 }
                 break;
             }
             case 2: { // bam, cram
                 
-                Sequences* readBatch = new Sequences;
+                Sequences readBatch;
                 samFile *fp_in = hts_open(userInput.file('r', i).c_str(),"r"); //open bam file
                 bam_hdr_t *bamHdr = sam_hdr_read(fp_in); //read header
                 bam1_t *bamdata = bam_init1(); //initialize an alignment
@@ -207,32 +208,33 @@ void InReads::load() {
                     for(uint32_t i=0; i<len; ++i)
                         qseq[i] = seq_nt16_str[bam_seqi(q,i)]; //gets nucleotide id and converts them into IUPAC id.
                     
-                    std::string* inSequence = new std::string(qseq, len);
+                    std::string inSequence(qseq, len);
                     free(qseq);
                     
                     for(int i=0; i<bamdata->core.l_qseq; ++i)
                         qual[i] = (char) bam_get_qual(bamdata)[i] + 33;
                     
-                    std::string* inSequenceQuality = new std::string(qual, len);
+                    std::string inSequenceQuality(qual, len);
                     free(qual);
+            
+                    processedLength += inSequence.size();
                     
-                    readBatch->sequences.push_back(new Sequence {bam_get_qname(bamdata), std::string(), inSequence, inSequenceQuality});
+                    readBatch.sequences.push_back({std::move(bam_get_qname(bamdata)), std::string(), std::move(inSequence), std::move(inSequenceQuality)});
                     seqPos++;
-                    processedLength += inSequence->size();
                     
                     if (processedLength > batchSize) {
-                        readBatch->batchN = batchN++;
-                        lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
+                        readBatch.batchN = batchN++;
+                        lg.verbose("Processing batch N: " + std::to_string(readBatch.batchN));
                         appendReads(readBatch);
-                        readBatch = new Sequences;
+                        readBatch = Sequences();
                         processedLength = 0;
 
                     }
                     lg.verbose("Individual fastq sequence read: " + seqHeader);
 
                 }
-                readBatch->batchN = batchN++;
-                lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
+                readBatch.batchN = batchN++;
+                lg.verbose("Processing batch N: " + std::to_string(readBatch.batchN));
                 appendReads(readBatch);
                 bam_destroy1(bamdata);
                 sam_close(fp_in);
@@ -250,13 +252,14 @@ void InReads::load() {
     }
 }
 
-void InReads::appendReads(Sequences* readBatch) { // read a collection of reads
-    threadPool.queueJob([=]{ return traverseInReads(readBatch); });
+void InReads::appendReads(Sequences readBatch) { // read a collection of reads
+    threadPool.queueJob([=]{ return traverseInReads(std::move(readBatch)); });
+
 }
 
-float InReads::computeAvgQuality(std::string &sequenceQuality) {
+float InReads::computeAvgQuality(const std::string &sequenceQuality) {
     uint64_t sumQuality = 0;
-    for (char &quality : sequenceQuality)
+    for (const char quality : sequenceQuality)
         sumQuality += int(quality) - 33;
     return (float) sumQuality/(sequenceQuality.size());
 }
@@ -329,12 +332,12 @@ void InReads::initFilters() {
     }
 }
 
-inline bool InReads::filterRead(Sequence* sequence) {
+inline bool InReads::filterRead(const Sequence &sequence) {
     
-    uint64_t size = sequence->sequence->size();
+    uint64_t size = sequence.sequence.size();
     float avgQuality = 0;
-    if (sequence->sequenceQuality != NULL)
-        avgQuality = computeAvgQuality(*sequence->sequenceQuality);
+    if (sequence.sequenceQuality != "")
+        avgQuality = computeAvgQuality(sequence.sequenceQuality);
     
     return applyFilter(size, avgQuality);
 }
@@ -366,10 +369,10 @@ float newRand() {
     return (static_cast <float> (random()) / static_cast <float> (RAND_MAX));
 }
 
-bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
+bool InReads::traverseInReads(Sequences readBatch) { // traverse the read
 
     Log threadLog;
-    threadLog.setId(readBatch->batchN);
+    threadLog.setId(readBatch.batchN);
     std::vector<InRead*> inReadsBatch;
     uint32_t readN = 0;
     LenVector<float> readLensBatch;
@@ -381,14 +384,14 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     bool filter = userInput.filter != "none" ? true : false;
     bool sample = userInput.ratio < 1 ? true : false; // read subsampling
 
-    for (Sequence* sequence : readBatch->sequences) {
+    for (Sequence &sequence : readBatch.sequences) {
         
         if (include) {
-            if (includeList.find(sequence->header) == excludeList.end())
+            if (includeList.find(sequence.header) == excludeList.end())
                 continue;
         }
         if (exclude) {
-            if (excludeList.find(sequence->header) != excludeList.end())
+            if (excludeList.find(sequence.header) != excludeList.end())
                 continue;
         }
         if (filter) {
@@ -400,7 +403,7 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
             if (newRand() > userInput.ratio)
                 continue;
         }
-        read = traverseInRead(&threadLog, sequence, readBatch->batchN+readN++);
+        read = traverseInRead(&threadLog, sequence, readBatch.batchN+readN++);
         std::pair<uint64_t, float> lenQual(read->getA()+read->getC()+read->getG()+read->getT()+read->getN(), read->avgQuality);
         readLensBatch.push_back(lenQual);
         batchA += read->getA();
@@ -417,8 +420,7 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     
     {
         std::unique_lock<std::mutex> lck(mtx);
-        readBatches.emplace_back(inReadsBatch,readBatch->batchN);
-        delete readBatch;
+        readBatches.emplace_back(inReadsBatch,readBatch.batchN);
         readLens.insert(readLensBatch);
         totA+=batchA;
         totT+=batchT;
@@ -432,18 +434,17 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     return true;
 }
 
-InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seqPos) { // traverse a single read
+InRead* InReads::traverseInRead(Log* threadLog, Sequence &sequence, uint32_t seqPos) { // traverse a single read
 
     std::vector<std::pair<uint64_t, uint64_t>> bedCoords;
     if(userInput.hc_cutoff != -1) {
-        homopolymerCompress(sequence->sequence, bedCoords, userInput.hc_cutoff);
-        delete sequence->sequenceQuality; // sequence quality not meaningful when compressed
-        sequence->sequenceQuality = NULL;
+        homopolymerCompress(&sequence.sequence, bedCoords, userInput.hc_cutoff);
+        sequence.sequenceQuality = ""; // sequence quality not meaningful when compressed
     }
     uint64_t A = 0, C = 0, G = 0, T = 0, N = 0, lowerCount = 0;
     float avgQuality = 0;
     
-    for (char &base : *sequence->sequence) {
+    for (const char base : sequence.sequence) {
         
         if (islower(base))
             ++lowerCount;
@@ -492,23 +493,17 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seq
             }
         }
     }
-    if (sequence->sequenceQuality != NULL)
-        avgQuality = computeAvgQuality(*sequence->sequenceQuality);
+    if (sequence.sequenceQuality != "")
+        avgQuality = computeAvgQuality(sequence.sequenceQuality);
 
     // operations on the segment
     InRead* inRead = new InRead;
     
     if (userInput.content_flag) {
-        delete sequence->sequence;
-        sequence->sequence = NULL;
-        if (sequence->sequenceQuality != NULL) {
-            delete sequence->sequence;
-            sequence->sequenceQuality = NULL;
-        }
+        sequence.sequence.clear();
+        sequence.sequenceQuality.clear();
     }
-    inRead->set(threadLog, 0, 0, sequence->header, &sequence->comment, sequence->sequence, &A, &C, &G, &T, &lowerCount, seqPos, sequence->sequenceQuality, avgQuality, NULL, &N);
-    sequence->sequence = NULL;
-    sequence->sequenceQuality = NULL;
+    inRead->set(threadLog, 0, 0, std::move(sequence.header), std::move(sequence.comment), std::move(sequence.sequence), &A, &C, &G, &T, &lowerCount, seqPos, std::move(sequence.sequenceQuality), avgQuality, NULL, &N);
     return inRead;
 }
 
