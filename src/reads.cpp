@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include <htslib/sam.h>
+#include <htslib/thread_pool.h>
 
 #include "log.h"
 #include "global.h"
@@ -193,6 +194,11 @@ void InReads::load() {
                 samFile *fp_in = hts_open(userInput.file('r', i).c_str(),"r"); //open bam file
                 bam_hdr_t *bamHdr = sam_hdr_read(fp_in); //read header
                 bam1_t *bamdata = bam_init1(); //initialize an alignment
+                
+                tpool = {NULL, 0};
+                tpool.pool = hts_tpool_init(2);
+                if (tpool.pool)
+                    hts_set_opt(fp_in, HTS_OPT_THREAD_POOL, &tpool);
 
 //                char *tar = bamHdr->text;
 //                printf("%s\n",tar);
@@ -236,6 +242,8 @@ void InReads::load() {
                 appendReads(readBatch);
                 bam_destroy1(bamdata);
                 sam_close(fp_in);
+                if (tpool.pool)
+                    hts_tpool_destroy(tpool.pool);
                 break;
             }
             case 3: { // rd
@@ -807,6 +815,10 @@ void InReads::initStream() {
                 fp = sam_open_format(userInput.outFiles[0].c_str(), "wc", &fmt4);
                 break;
             }
+            tpool = {NULL, 0};
+            tpool.pool = hts_tpool_init(2);
+            if (tpool.pool)
+                hts_set_opt(fp, HTS_OPT_THREAD_POOL, &tpool);
         }
         if (bam)
             writeHeader();
@@ -827,6 +839,8 @@ void InReads::closeStream() {
         if (bam)
             closeBam();
         sam_close(fp); // close file
+        if (tpool.pool)
+            hts_tpool_destroy(tpool.pool);
     }
 }
 
