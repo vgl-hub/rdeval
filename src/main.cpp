@@ -24,7 +24,7 @@ int verbose_flag;
 Log lg;
 std::vector<Log> logs;
 int tabular_flag;
-int maxThreads = 5;
+int maxThreads = 8;
 std::mutex mtx;
 ThreadPool<std::function<bool()>> threadPool;
 
