@@ -866,8 +866,14 @@ void InReads::writeToStream() {
             writerMutexCondition.wait(lck, [this] {
                 return !streamOutput || readBatches.size();
             });
-            if (!streamOutput && !readBatches.size() && !readBatchesCpy.size())
+            if (!streamOutput && !readBatches.size() && !readBatchesCpy.size()) {
+                if (bam)
+                    closeBam();
+                sam_close(fp); // close file
+                if (tpool.pool)
+                    hts_tpool_destroy(tpool.pool);
                 return;
+            }
             readBatchesCpy.insert(readBatchesCpy.begin(), readBatches.begin(), readBatches.end());
             readBatches.clear();
         }
@@ -893,11 +899,6 @@ void InReads::writeToStream() {
             ++batchCounter;
         }
     }
-    if (bam)
-        closeBam();
-    sam_close(fp); // close file
-    if (tpool.pool)
-        hts_tpool_destroy(tpool.pool);
 }
 
 void InReads::printTableCompressed(std::string outFile) {
