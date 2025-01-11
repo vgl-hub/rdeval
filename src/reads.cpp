@@ -199,9 +199,8 @@ void InReads::load() {
                 tpool.pool = hts_tpool_init(userInput.decompression_threads);
                 if (tpool.pool)
                     hts_set_opt(fp_in, HTS_OPT_THREAD_POOL, &tpool);
-
-//                char *tar = bamHdr->text;
-//                printf("%s\n",tar);
+                else
+                    lg.verbose("Failed to generate decompression threadpool with " + std::to_string(userInput.decompression_threads) + " threads. Continuing single-threaded");
                 
                 while(sam_read1(fp_in,bamHdr,bamdata) > 0) {
                     
@@ -819,6 +818,8 @@ void InReads::initStream() {
             tpool.pool = hts_tpool_init(userInput.compression_threads);
             if (tpool.pool)
                 hts_set_opt(fp, HTS_OPT_THREAD_POOL, &tpool);
+            else
+                lg.verbose("Failed to generate compression threadpool with " + std::to_string(userInput.compression_threads) + " threads. Continuing single-threaded");
         }
         if (bam)
             writeHeader();
