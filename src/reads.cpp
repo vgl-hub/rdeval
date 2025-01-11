@@ -195,10 +195,10 @@ void InReads::load() {
                 bam_hdr_t *bamHdr = sam_hdr_read(fp_in); //read header
                 bam1_t *bamdata = bam_init1(); //initialize an alignment
                 
-                tpool = {NULL, 0};
-                tpool.pool = hts_tpool_init(userInput.decompression_threads);
-                if (tpool.pool)
-                    hts_set_opt(fp_in, HTS_OPT_THREAD_POOL, &tpool);
+                tpool_read = {NULL, 0};
+                tpool_read.pool = hts_tpool_init(userInput.decompression_threads);
+                if (tpool_read.pool)
+                    hts_set_opt(fp_in, HTS_OPT_THREAD_POOL, &tpool_read);
                 else
                     lg.verbose("Failed to generate decompression threadpool with " + std::to_string(userInput.decompression_threads) + " threads. Continuing single-threaded");
                 
@@ -241,8 +241,8 @@ void InReads::load() {
                 appendReads(readBatch);
                 bam_destroy1(bamdata);
                 sam_close(fp_in);
-                if (tpool.pool)
-                    hts_tpool_destroy(tpool.pool);
+                if (tpool_read.pool)
+                    hts_tpool_destroy(tpool_read.pool);
                 break;
             }
             case 3: { // rd
@@ -852,10 +852,10 @@ void InReads::writeToStream() {
     uint64_t batchCounter = 0;
     std::vector<std::pair<std::vector<bam1_t*>,uint32_t>> readBatchesCpy;
     
-    tpool = {NULL, 0}; // init htslib threadpool
-    tpool.pool = hts_tpool_init(userInput.compression_threads);
-    if (tpool.pool)
-        hts_set_opt(fp, HTS_OPT_THREAD_POOL, &tpool);
+    tpool_write = {NULL, 0}; // init htslib threadpool
+    tpool_write.pool = hts_tpool_init(userInput.compression_threads);
+    if (tpool_write.pool)
+        hts_set_opt(fp, HTS_OPT_THREAD_POOL, &tpool_write);
     else
         lg.verbose("Failed to generate compression threadpool with " + std::to_string(userInput.compression_threads) + " threads. Continuing single-threaded");
     
@@ -870,8 +870,8 @@ void InReads::writeToStream() {
                 if (bam)
                     closeBam();
                 sam_close(fp); // close file
-                if (tpool.pool)
-                    hts_tpool_destroy(tpool.pool);
+                if (tpool_write.pool)
+                    hts_tpool_destroy(tpool_write.pool);
                 return;
             }
             readBatchesCpy.insert(readBatchesCpy.begin(), readBatches.begin(), readBatches.end());

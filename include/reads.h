@@ -61,7 +61,7 @@ class InReads {
     
     htsFile *fp; // htslib file pointer
     bam_hdr_t *hdr; // htslib sam header pointer
-    htsThreadPool tpool; // htslib threadpool pointer
+    htsThreadPool tpool_read, tpool_write; // htslib threadpool pointer
     bool bam = false;
     
     std::vector<std::pair<std::string,std::string>> md5s;
