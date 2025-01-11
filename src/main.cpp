@@ -24,7 +24,7 @@ int verbose_flag;
 Log lg;
 std::vector<Log> logs;
 int tabular_flag;
-int maxThreads = 3;
+int maxThreads = 5;
 std::mutex mtx;
 ThreadPool<std::function<bool()>> threadPool;
 
@@ -171,7 +171,7 @@ int main(int argc, char **argv) {
                 printf("\t--md5 print md5 of .rd files.\n");
                 printf("\t--tabular tabular output.\n");
                 printf("\t--verbose verbose output.\n");
-                printf("\t-j --threads <int> numbers of threads (default:3).\n");
+                printf("\t-j --threads <int> numbers of threads (default:5).\n");
                 printf("\t-v --version software version.\n");
                 printf("\t--cmd print $0 to stdout.\n");
                 exit(0);

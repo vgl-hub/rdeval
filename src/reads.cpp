@@ -844,7 +844,6 @@ void InReads::closeBam() {
     bam_hdr_destroy(hdr);
 }
 
-
 void InReads::writeToStream() {
 
     uint64_t batchCounter = 0;
