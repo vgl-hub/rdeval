@@ -830,12 +830,6 @@ void InReads::closeStream() {
         }
         writerMutexCondition.notify_one();
         writer.join();
-        
-        if (bam)
-            closeBam();
-        sam_close(fp); // close file
-        if (tpool.pool)
-            hts_tpool_destroy(tpool.pool);
     }
 }
 
@@ -899,6 +893,11 @@ void InReads::writeToStream() {
             ++batchCounter;
         }
     }
+    if (bam)
+        closeBam();
+    sam_close(fp); // close file
+    if (tpool.pool)
+        hts_tpool_destroy(tpool.pool);
 }
 
 void InReads::printTableCompressed(std::string outFile) {
