@@ -814,12 +814,6 @@ void InReads::initStream() {
                 fp = sam_open_format(userInput.outFiles[0].c_str(), "wc", &fmt4);
                 break;
             }
-            tpool = {NULL, 0};
-            tpool.pool = hts_tpool_init(userInput.compression_threads);
-            if (tpool.pool)
-                hts_set_opt(fp, HTS_OPT_THREAD_POOL, &tpool);
-            else
-                lg.verbose("Failed to generate compression threadpool with " + std::to_string(userInput.compression_threads) + " threads. Continuing single-threaded");
         }
         if (bam)
             writeHeader();
@@ -863,6 +857,13 @@ void InReads::writeToStream() {
 
     uint64_t batchCounter = 0;
     std::vector<std::pair<std::vector<bam1_t*>,uint32_t>> readBatchesCpy;
+    
+    tpool = {NULL, 0}; // init htslib threadpool
+    tpool.pool = hts_tpool_init(userInput.compression_threads);
+    if (tpool.pool)
+        hts_set_opt(fp, HTS_OPT_THREAD_POOL, &tpool);
+    else
+        lg.verbose("Failed to generate compression threadpool with " + std::to_string(userInput.compression_threads) + " threads. Continuing single-threaded");
     
     while (true) {
         
