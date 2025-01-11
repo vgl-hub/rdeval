@@ -864,7 +864,7 @@ void InReads::writeToStream() {
         {
             std::unique_lock<std::mutex> lck(mtx);
             writerMutexCondition.wait(lck, [this] {
-                return !streamOutput || readBatches.size();
+                return !streamOutput || readBatches.size() || readBatchesCpy.size();
             });
             if (!streamOutput && !readBatches.size() && !readBatchesCpy.size()) {
                 if (bam)
