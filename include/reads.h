@@ -18,6 +18,7 @@ struct UserInputRdeval : UserInput {
     float ratio = 1.0f;
     int stats_flag = 1; // by default we output the stats
     int32_t randSeed = -1;
+    uint8_t decompression_threads = 2, compression_threads = 4;
 };
 
 class InRead : InSegment {

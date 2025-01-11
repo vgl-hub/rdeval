@@ -196,7 +196,7 @@ void InReads::load() {
                 bam1_t *bamdata = bam_init1(); //initialize an alignment
                 
                 tpool = {NULL, 0};
-                tpool.pool = hts_tpool_init(2);
+                tpool.pool = hts_tpool_init(userInput.decompression_threads);
                 if (tpool.pool)
                     hts_set_opt(fp_in, HTS_OPT_THREAD_POOL, &tpool);
 
@@ -816,7 +816,7 @@ void InReads::initStream() {
                 break;
             }
             tpool = {NULL, 0};
-            tpool.pool = hts_tpool_init(2);
+            tpool.pool = hts_tpool_init(userInput.compression_threads);
             if (tpool.pool)
                 hts_set_opt(fp, HTS_OPT_THREAD_POOL, &tpool);
         }

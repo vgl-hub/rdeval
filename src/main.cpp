@@ -46,6 +46,8 @@ int main(int argc, char **argv) {
         {"homopolymer-compress", required_argument, 0, 0},
         {"sample", required_argument, 0, 0},
         {"random-seed", required_argument, 0, 0},
+        {"decompression-threads", required_argument, 0, 0},
+        {"compression-threads", required_argument, 0, 0},
         {"sequence-report",no_argument, 0, 0},
         
         {"exclude-list", required_argument, 0, 'e'},
@@ -102,6 +104,10 @@ int main(int argc, char **argv) {
                     userInput.outSize_flag = false;
                     userInput.quality_flag = false;
                 }
+                if(strcmp(long_options[option_index].name,"decompression-threads") == 0)
+                    userInput.decompression_threads = atoi(optarg);
+                if(strcmp(long_options[option_index].name,"compression-threads") == 0)
+                    userInput.compression_threads = atoi(optarg);
                 break;
             default: // handle positional arguments
                 if (isInt(optarg)) { // if the positional argument is a number, it is likely the expected genome size
