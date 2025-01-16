@@ -44,10 +44,6 @@ class InReads {
     std::vector<std::pair<std::vector<InRead*>,uint32_t>> readSummaryBatches; // could be avoided in the future
     uint64_t totReads = 0;
     
-    //intermediates
-    std::string h;
-    char* c;
-    
     uint32_t seqPos = 0; // to keep track of the original sequence order
     
     std::vector<uint64_t> readNstars{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
