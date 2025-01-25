@@ -18,6 +18,9 @@ LIBS = -lz -lcrypto -lhts
 OBJS := main input reads
 BINS := $(addprefix $(BINDIR)/, $(OBJS))
 
+#define
+EVP := -DEVP
+
 #gfalibs
 GFALIBS_DIR := $(CURDIR)/gfalibs
 
@@ -27,11 +30,11 @@ head: $(BINS) gfalibs | $(BUILD)
 all: head validate regenerate
 
 $(BINDIR)%: $(SOURCE)/%.cpp $(INCLUDE)/%.h | $(BINDIR)
-	$(CXX) $(CXXFLAGS) -c $(SOURCE)/$(notdir $@).cpp -o $@
+	$(CXX) $(CXXFLAGS) $(EVP) -c $(SOURCE)/$(notdir $@).cpp -o $@
 
 .PHONY: gfalibs
 gfalibs:
-	$(MAKE) -j -C $(GFALIBS_DIR) EVP=1
+	$(MAKE) -j -C $(GFALIBS_DIR)
 	
 validate: | $(BUILD)
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/$(TARGET)-$(TEST_TARGET) $(SOURCE)/$(TEST_TARGET).cpp
