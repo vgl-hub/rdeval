@@ -612,7 +612,7 @@ void InReads::report() {
         std::cout<<output("Coverage")<<gfa_round((double)getTotReadLen()/userInput.gSize)<<std::endl;
         std::cout<<output("GC content %")<<gfa_round(computeGCcontent())<<std::endl;
         std::cout<<output("Base composition (A:C:T:G)")<<totA<<":"<<totC<<":"<<totT<<":"<<totG<<std::endl;
-        std::cout<<output("Average per base quality")<<getAvgQuality()<<std::endl;
+        std::cout<<output("Average per base quality")<<std::abs(getAvgQuality())<<std::endl;
     }
 }
 

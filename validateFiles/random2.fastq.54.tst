@@ -10,4 +10,4 @@ Largest read length: 18561
 Coverage: inf
 GC content %: 38.29
 Base composition (A:C:T:G): 18978:11734:18914:11779
-Average per base quality: 82.40
+Average per base quality: 27.45
