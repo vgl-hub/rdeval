@@ -31,7 +31,7 @@ $(BINDIR)%: $(SOURCE)/%.cpp $(INCLUDE)/%.h | $(BINDIR)
 
 .PHONY: gfalibs
 gfalibs:
-	$(MAKE) -j -C $(GFALIBS_DIR)
+	$(MAKE) -j -C $(GFALIBS_DIR) EVP=1
 	
 validate: | $(BUILD)
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/$(TARGET)-$(TEST_TARGET) $(SOURCE)/$(TEST_TARGET).cpp
