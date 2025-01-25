@@ -198,23 +198,25 @@ void InReads::load() {
                 
                 while(sam_read1(fp_in,bamHdr,bamdata) > 0) {
                     
-                    uint32_t len = bamdata->core.l_qseq; //length of the read.
-                    uint8_t *q = bam_get_seq(bamdata); //quality string
-                    char *qseq = (char *)malloc(len);
-                    char *qual = (char *)malloc(len);
+                    uint32_t len = bamdata->core.l_qseq; // length of the read.
+                    uint8_t *seq = bam_get_seq(bamdata); // seq string
+                    std::string* inSequenceQuality = NULL;
                     
+                    std::string* inSequence = new std::string;
+                    inSequence->resize(len);
                     for(uint32_t i=0; i<len; ++i)
-                        qseq[i] = seq_nt16_str[bam_seqi(q,i)]; //gets nucleotide id and converts them into IUPAC id.
+                        inSequence->at(i) = seq_nt16_str[bam_seqi(seq,i)]; //gets nucleotide id and converts them into IUPAC id.
                     
-                    std::string* inSequence = new std::string(qseq, len);
-                    free(qseq);
-                    
-                    for(int i=0; i<bamdata->core.l_qseq; ++i)
-                        qual[i] = (char) bam_get_qual(bamdata)[i] + 33;
-                    
-                    std::string* inSequenceQuality = new std::string(qual, len);
-                    free(qual);
-                    
+                    if (bam_get_qual(bamdata)[0] != (uint8_t)-1) {
+                        inSequenceQuality = new std::string((char*)bam_get_qual(bamdata),len);
+                        
+                        for(uint32_t i=0; i<len; ++i)
+                            inSequenceQuality->at(i) += 33;
+                    }else{
+                        uint8_t* tag = bam_aux_get(bamdata, "mq");
+                        if (tag != 0)
+                            inSequenceQuality = new std::string((char*)tag++,len);
+                    }
                     readBatch->sequences.push_back(new Sequence {bam_get_qname(bamdata), std::string(), inSequence, inSequenceQuality});
                     seqPos++;
                     processedLength += inSequence->size();
