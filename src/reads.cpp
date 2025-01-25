@@ -3,6 +3,7 @@
 #include <vector>
 #include <fstream>
 #include <algorithm>
+#include <cmath>
 
 #include <htslib/sam.h>
 #include <htslib/thread_pool.h>
@@ -255,10 +256,10 @@ void InReads::appendReads(Sequences* readBatch) { // read a collection of reads
 }
 
 float InReads::computeAvgQuality(std::string &sequenceQuality) {
-    uint64_t sumQuality = 0;
+    double sumQuality = 0;
     for (char &quality : sequenceQuality)
-        sumQuality += int(quality) - 33;
-    return (float) sumQuality/(sequenceQuality.size());
+        sumQuality += pow(10, -(double(quality) - 33)/10);
+    return (float) -10 * std::log10(sumQuality/sequenceQuality.size());
 }
 
 void InReads::initDictionaries() {
@@ -585,9 +586,9 @@ double InReads::getAvgQuality(){
     double sumQualities = 0, avgQualitiesSize=readLens.size();
 
     for (uint64_t i = 0; i < avgQualitiesSize; ++i)
-        sumQualities += readLens[i].first * readLens[i].second;  // sum the qualities normalized by their read length
+        sumQualities += readLens[i].first * pow(10, -readLens[i].second/10);  // sum the qualities normalized by their read length
 
-    return sumQualities/getTotReadLen();
+    return -10 * std::log10(sumQualities/getTotReadLen());
 }
 
 void InReads::report() {
