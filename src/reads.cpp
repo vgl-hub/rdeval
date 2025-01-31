@@ -647,7 +647,6 @@ void InReads::printReadLengths() {
             if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
                 ++hist[readLens[i].first];
         }
-        
         std::vector<std::pair<uint64_t, uint64_t>> table(hist.begin(), hist.end()); // converts the hashmap to a table
         std::sort(table.begin(), table.end());
         
@@ -664,7 +663,6 @@ void InReads::printReadLengths() {
         }
         std::vector<std::pair<uint64_t, uint64_t>> table(hist.begin(), hist.end());
         std::sort(table.begin(), table.end());
-        
         uint64_t totReadLen = getTotReadLen(), sum = 0;
         
         for (auto pair : table) {

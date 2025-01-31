@@ -34,6 +34,8 @@ You can test some typical usage with the files in the `testFiles` folder, e.g.:
 rdeval testFiles/random1.fastq 10 // computes summary statistics, including coverage (expected genome size 10bp)
 ```
 
+Additional documentation for rdeval is available in [ReadTheDocs](https://rdeval-documentation.readthedocs.io/).
+
 ## How to cite
 
 **Rdeval** is part of the gfastar tool suite. If you use **rdeval** in your work, please cite:
