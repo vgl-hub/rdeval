@@ -97,7 +97,12 @@ printRdSummary <- function(rdFile) {
   if (class(rdFile)[1] == 'rdFileClass') {
     gc_content = round(
       (rdFile$C_count + rdFile$G_count)/(rdFile$A_count + rdFile$C_count + rdFile$T_count + rdFile$G_count) * 100, 4)
-    cat(paste0("### ", rdFile$md5s[[1]][1], "\n"))
+    cat(paste0("### ", tools::file_path_sans_ext(rdFile$input_file), "\n"))
+    if (length(rdFile$md5s) > 1) {
+      cat('Included files:\n\n')
+      cat(paste0("- ", lapply(rdFile$md5s, `[`, 1)), sep = "\n\n")
+      cat("\n")
+    }
     cat(paste0("Number of reads: ", length(rdFile$lengths), "\n\n"))
     cat(paste0("Total read length: ", sum(rdFile$lengths), "\n\n"))
     cat(paste0("Average read length: ", round(mean(rdFile$lengths), 1), "\n\n"))

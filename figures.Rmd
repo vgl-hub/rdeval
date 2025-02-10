@@ -31,7 +31,7 @@ icdf <- function(read_lengths) {
 reads <- tibble(read_length = numeric(), read_quality = numeric(), run = character())
 inv_cs <- tibble(read_length = numeric(), inv_cs = numeric(), run = character())
 
-# files <- list.files(pattern = '.rd')
+# files <- list.files(pattern = 'SRR[[:digit:]]*.rd')
 files <- commandArgs(trailingOnly = TRUE)
 n_runs <- length(files)
 for (file in files) {
@@ -68,12 +68,11 @@ violin
 read_lengths <- ggplot(reads, aes(x = read_length/1000, fill = run)) +
   geom_density(aes(y = after_stat(count)), alpha = 0.5) +
   scale_x_continuous(name = ("Read length (kbp)"),
-                     breaks = scales::breaks_width(10),
                      labels = scales::label_comma(),
                      expand = expansion(mult = c(0, 0))) +
   scale_y_continuous(name = "Count", labels = scales::label_comma(),
                      expand = expansion(mult = c(0, 0.05))) +
-  scale_fill_manual(guide = "none", values = palette) +
+  scale_fill_manual(name = "Run", values = palette) +
   theme_bw() 
 read_lengths
 ```
@@ -88,7 +87,7 @@ read_lengths_log <- ggplot(reads, aes(x = read_length, fill = run)) +
   scale_y_continuous(name = "Count", 
                      labels = scales::label_comma(),
                      expand = expansion(mult = c(0, 0.05))) +
-  scale_fill_manual(guide = "none", values = palette) +
+  scale_fill_manual(name = "Run", values = palette) +
   theme_bw() 
 read_lengths_log
 ```
@@ -98,7 +97,6 @@ read_lengths_log
 icd <- ggplot(inv_cs, aes(read_length/1000, inv_cs_gb, color = run)) +
   geom_point() +
   scale_x_continuous(name = "Read length (kbp)",
-                     breaks = scales::breaks_width(10),
                      labels = scales::label_comma(),
                      expand = expansion(mult = c(0.05, 0.05))) +
   scale_y_continuous(name = "Cumulative yield (Gbp)",
@@ -120,12 +118,12 @@ g <- reads_by_avg_quality %>%
              size = 0.75, 
              alpha = 0.2) +
   scale_x_continuous(name = ("Read length (kbp)"),
-                     breaks = scales::breaks_width(10),
                      labels = scales::label_comma()) +
   scale_y_continuous(name = ("Average Read Quality")) +
-  scale_color_manual(name = "Run", values = palette) +
-  scale_fill_discrete(guide = "none") +
+  scale_color_manual(guide = "none", values = palette) +
+  scale_fill_discrete(name = "Run") +
   theme_bw() 
 g1 <- ggMarginal(g + theme(legend.position = "left"), type = "histogram", groupColour = TRUE, groupFill = TRUE)
 g1
 ```
+
