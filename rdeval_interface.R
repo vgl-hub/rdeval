@@ -97,9 +97,9 @@ printRdSummary <- function(rdFile) {
   if (class(rdFile)[1] == 'rdFileClass') {
     gc_content = round(
       (rdFile$C_count + rdFile$G_count)/(rdFile$A_count + rdFile$C_count + rdFile$T_count + rdFile$G_count) * 100, 4)
-    cat(paste0("### ", tools::file_path_sans_ext(rdFile$input_file), "\n"))
+    cat(paste0("### ", basename(rdFile$input_file), "\n"))
     if (length(rdFile$md5s) > 1) {
-      cat('Included files:\n\n')
+      cat('Included runs:\n\n')
       cat(paste0("- ", lapply(rdFile$md5s, `[`, 1)), sep = "\n\n")
       cat("\n")
     }
