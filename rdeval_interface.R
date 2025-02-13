@@ -93,6 +93,18 @@ generateRdFile <- function(input_file) {
   return(rdFile)
 }
 
+calculateN50 <- function(read_lengths) {
+  # Assumes read_lengths is sorted
+  i <- 1
+  sum <- 0
+  mid <- sum(read_lengths)/2
+  while (sum < mid) {
+    sum <- sum + read_lengths[i]
+    i <- i + 1
+  }
+  return(read_lengths[i])
+}
+
 printRdSummary <- function(rdFile) {
   if (class(rdFile)[1] == 'rdFileClass') {
     gc_content = round(
@@ -106,7 +118,7 @@ printRdSummary <- function(rdFile) {
     cat(paste0("Number of reads: ", length(rdFile$lengths), "\n\n"))
     cat(paste0("Total read length: ", sum(rdFile$lengths), "\n\n"))
     cat(paste0("Average read length: ", round(mean(rdFile$lengths), 1), "\n\n"))
-    cat(paste0("Read N50: ", quantile(rdFile$lengths, .5)[['50%']], "\n\n"))
+    cat(paste0("Read N50: ", calculateN50(rdFile$lengths), "\n\n"))
     cat(paste0("Smallest read length: ", tail(rdFile$lengths, n=1), "\n\n"))
     cat(paste0("Largest read length: ", rdFile$lengths[1], "\n\n"))
     cat(paste0("GC content %: ", gc_content, "\n\n"))
