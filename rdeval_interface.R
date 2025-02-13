@@ -102,7 +102,7 @@ calculateN50 <- function(read_lengths) {
     sum <- sum + read_lengths[i]
     i <- i + 1
   }
-  return(read_lengths[i])
+  return(read_lengths[i - 1])
 }
 
 printRdSummary <- function(rdFile) {
