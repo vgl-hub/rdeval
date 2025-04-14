@@ -336,6 +336,27 @@ void InReads::initFilters() {
     }
 }
 
+void InReads::filterRecords() {
+	
+	uint64_t readCount = readLens.size();
+	LenVector<float> readLensFiltered;
+	for (uint64_t i = 0; i < readCount; ++i) {
+		if (!applyFilter(readLens[i].first, readLens[i].second))
+			readLensFiltered.push_back(std::make_pair(readLens[i].first, readLens[i].second));
+	}
+	if (readLens.size() != readLensFiltered.size()) { // if the read counts after filtering is different these counts are invalidated
+		totA = 0;
+		totC = 0;
+		totG = 0;
+		totT = 0;
+		totN = 0;
+	}
+	readLens = readLensFiltered; // overwrite the counts
+	totReads = readLens.size();
+}
+
+
+
 inline bool InReads::filterRead(Sequence* sequence) {
     
     uint64_t size = sequence->sequence->size();
@@ -544,7 +565,14 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seq
 }
 
 uint64_t InReads::getTotReadLen() {
-    return totA + totC + totG + totT + totN;
+	
+	uint64_t sum = totA + totC + totG + totT + totN;
+	if (!sum) {
+		uint64_t readCount = readLens.size();
+		for (uint64_t i = 0; i < readCount; ++i)
+			sum += readLens[i].first;
+	}
+    return sum;
 }
 
 double InReads::computeGCcontent() {
@@ -600,6 +628,9 @@ double InReads::getAvgQuality(){
 void InReads::report() {
 
     if (totReads > 0) {
+		
+		if (userInput.filter != "none" && getFileExt(userInput.file('r', 0)) == "rd")
+			filterRecords();
         
         readLens.sort();
         
@@ -900,6 +931,8 @@ void InReads::writeToStream() {
 }
 
 void InReads::printTableCompressed(std::string outFile) {
+	
+	
     
     // compute buffer size
     std::vector<std::pair<uint8_t,float>> &readLens8 = readLens.getReadLens8();
@@ -966,6 +999,9 @@ void InReads::printTableCompressed(std::string outFile) {
 }
 
 void InReads::readTableCompressed(std::string inFile) {
+	
+	if (userInput.filter != "none" && getFileExt(userInput.file('r', 0)) == "rd")
+		filterRecords();
     
     // read
     std::ifstream ifs(inFile, std::ios::binary | std::ios::ate); // compute file size

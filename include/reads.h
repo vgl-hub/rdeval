@@ -119,6 +119,8 @@ public:
     void initFilters();
     
     float computeAvgQuality(std::string &sequenceQuality);
+	
+	void filterRecords();
     
     inline bool filterRead(Sequence* sequence);
     
