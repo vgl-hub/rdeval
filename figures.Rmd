@@ -2,6 +2,8 @@
 title: "Read Summary and Figures"
 output: html_document
 date: "`r Sys.Date()`"
+params:
+  input_files: !r NULL
 ---
 
 ```{r setup, include=FALSE}
@@ -32,7 +34,8 @@ reads <- tibble(read_length = numeric(), read_quality = numeric(), run = charact
 inv_cs <- tibble(read_length = numeric(), inv_cs = numeric(), run = character())
 
 # files <- list.files(pattern = 'SRR[[:digit:]]*.rd')
-files <- commandArgs(trailingOnly = TRUE)
+#files <- commandArgs(trailingOnly = TRUE)
+files <- params$input_files
 n_runs <- length(files)
 for (file in files) {
   rdFile <- generateRdFile(file)
