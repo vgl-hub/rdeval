@@ -1,5 +1,14 @@
 #!/bin/sh
 
+# Usage text
+usage="Usage: $(basename "$0") -i input1.rd [input2.rd ...] -o output_file.html [-h]
+
+Arguments:
+    -i input rd file(s)
+    -o output html file
+    -h help
+"
+
 # Initialize variables
 RDEVAL=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 output_file=""
@@ -12,6 +21,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -o|--output)
       output_file="$2"
+      if [[ $output_file != *.html ]]; then
+	echo "Please enter output filename as *.html"
+	exit 1
+      fi
       shift 2
       ;;
     -i|--input)
@@ -20,7 +33,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     -*)
       echo "Unknown option: $1"
-      echo "Usage: $0 -o output_file.html -i input1 [input2 ...]"
+      echo "$usage"
       exit 1
       ;;
     *)
@@ -29,7 +42,7 @@ while [[ $# -gt 0 ]]; do
         shift
       else
         echo "Unexpected argument: $1"
-        echo "Usage: $0 -o output_file.html -i input1 [input2 ...]"
+        echo "$usage"
         exit 1
       fi
       ;;
@@ -39,7 +52,7 @@ done
 # Validate required arguments
 if [[ -z "$output_file" ]] || [[ "${#input_files[@]}" -eq 0 ]]; then
   echo "Error: Both --output and at least one --input are required."
-  echo "Usage: $0 -o output_file.html -i input1 [input2 ...]"
+  echo "$usage"
   exit 1
 fi
 
