@@ -24,14 +24,16 @@ jobs:
       with:
             submodules: recursive
     - if: matrix.os == 'macos-latest'
-      name: Build
+      name: Build (macOS)
       run: |
-        brew install htslib
-        INCLUDE_DIR="-I/opt/homebrew/opt/openssl@3/include/ \
-                     -I/opt/homebrew/Cellar/htslib/1.21/include/" \
-            LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.4.0/lib \
-                     -L/opt/homebrew/Cellar/htslib/1.21/lib" \
-            make all -j
+        brew install openssl@3 htslib
+        OPENSSL_PREFIX=$(brew --prefix openssl@3)
+        HTSLIB_PREFIX=$(brew --prefix htslib)
+
+        INCLUDE_DIR="-I$OPENSSL_PREFIX/include -I$HTSLIB_PREFIX/include"
+        LDFLAGS="-L$OPENSSL_PREFIX/lib -L$HTSLIB_PREFIX/lib"
+
+        make CFLAGS="$INCLUDE_DIR" LDFLAGS="$LDFLAGS" all -j
     - if: matrix.os == 'ubuntu-latest'
       name: Build
       run: |
