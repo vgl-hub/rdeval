@@ -31,7 +31,7 @@ void Input::read() {
     
     InReads inReads(userInput); // initialize sequence collection object
     lg.verbose("Read object generated");
-    threadPool.init(maxThreads); // initialize threadpool
+    threadPool.init(userInput.maxThreads); // initialize threadpool
 
     inReads.initStream(); // stream output
     

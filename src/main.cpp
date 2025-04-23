@@ -24,7 +24,6 @@ int verbose_flag;
 Log lg;
 std::vector<Log> logs;
 int tabular_flag;
-int maxThreads = 8;
 std::mutex mtx;
 ThreadPool<std::function<bool()>> threadPool;
 
@@ -154,7 +153,7 @@ int main(int argc, char **argv) {
                 userInput.outFiles.push_back(optarg);
                 break;
             case 'j': // max threads
-                maxThreads = atoi(optarg);
+                userInput.maxThreads = atoi(optarg);
                 break;
             case 'v': // software version
                 printf("rdeval v%s\n", version.c_str());
