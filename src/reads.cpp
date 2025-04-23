@@ -459,11 +459,11 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
                 s[i] = read->inSequenceQuality->at(i) - 33;
             
             inReadsBatch.push_back(q);
-            delete read;
-        }else if (userInput.content_flag){
-            inReadsSummaryBatch.push_back(read);
-        }else
-            delete read;
+        }
+		if (userInput.content_flag)
+			inReadsSummaryBatch.push_back(read);
+		else
+			delete read;
     }
     
     {
@@ -550,7 +550,7 @@ InRead* InReads::traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seq
     // operations on the segment
     InRead* inRead = new InRead;
     
-    if (userInput.content_flag) {
+    if (userInput.content_flag && !streamOutput) {
         delete sequence->sequence;
         sequence->sequence = NULL;
         if (sequence->sequenceQuality != NULL) {
