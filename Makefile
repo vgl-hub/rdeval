@@ -25,8 +25,8 @@ endif
 # Automatically populate static flags from pkg-config
 PKG_CONFIG ?= pkg-config
 export PKG_CONFIG_PATH
-STATIC_CFLAGS = $(PKG_CONFIG) --cflags --static htslib openssl zlib
-STATIC_LIBS = $(PKG_CONFIG) --libs --static htslib openssl zlib
+STATIC_CFLAGS = $( $(PKG_CONFIG) --cflags --static htslib openssl zlib)
+STATIC_LIBS = $( $(PKG_CONFIG) --libs --static htslib openssl zlib)
 
 OBJS := main input reads
 BINS := $(addprefix $(BINDIR)/, $(OBJS))
