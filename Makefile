@@ -44,6 +44,10 @@ head: $(BINS) gfalibs | $(BUILD)
 static: $(BINS) gfalibs | $(BUILD)
 	$(CXX) $(CXXFLAGS) $(STATIC_LDFLAGS) -o $(BUILD)/$(TARGET) $(BINDIR)/* $(GFALIBS_DIR)/*.o $(STATIC_LIBS)
 	
+debug-pkg:
+	@echo "PKG_CONFIG_PATH=$(PKG_CONFIG_PATH)"
+	@$(PKG_CONFIG) --libs --static htslib
+	
 all: head validate regenerate
 
 $(BINDIR)%: $(SOURCE)/%.cpp $(INCLUDE)/%.h | $(BINDIR)
