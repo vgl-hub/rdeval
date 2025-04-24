@@ -413,7 +413,7 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     for (Sequence* sequence : readBatch->sequences) {
         
         if (include) {
-            if (includeList.find(sequence->header) == excludeList.end())
+            if (includeList.find(sequence->header) == includeList.end())
                 continue;
         }
         if (exclude) {
