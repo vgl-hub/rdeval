@@ -24,6 +24,7 @@ endif
 
 # Automatically populate static flags from pkg-config
 PKG_CONFIG ?= pkg-config
+export PKG_CONFIG_PATH
 STATIC_CFLAGS = $(shell $(PKG_CONFIG) --cflags --static htslib openssl zlib)
 STATIC_LIBS = $(shell $(PKG_CONFIG) --libs --static htslib openssl zlib)
 
