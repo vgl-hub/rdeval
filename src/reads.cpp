@@ -405,8 +405,8 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     InRead* read;
 
     uint64_t batchA = 0, batchT = 0, batchC = 0, batchG = 0, batchN = 0;
-    bool include = userInput.inBedInclude.size();
-    bool exclude = userInput.inBedExclude.size();
+    bool include = includeList.size();
+    bool exclude = excludeList.size();
     bool filter = userInput.filter != "none" ? true : false;
     bool sample = userInput.ratio < 1 ? true : false; // read subsampling
 
