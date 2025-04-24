@@ -15,6 +15,18 @@ BINDIR := $(BUILD)/.o
 LDFLAGS += -pthread
 LIBS = -lz -lcrypto -lhts
 
+# Static linking settings
+ifeq ($(UNAME_S),Linux)
+    STATIC_LDFLAGS = -static -pthread
+else
+    STATIC_LDFLAGS = -pthread
+endif
+
+# Automatically populate static flags from pkg-config
+PKG_CONFIG ?= pkg-config
+STATIC_CFLAGS = $(shell $(PKG_CONFIG) --cflags --static htslib openssl zlib)
+STATIC_LIBS = $(shell $(PKG_CONFIG) --libs --static htslib openssl zlib)
+
 OBJS := main input reads
 BINS := $(addprefix $(BINDIR)/, $(OBJS))
 
@@ -27,6 +39,10 @@ GFALIBS_DIR := $(CURDIR)/gfalibs
 head: $(BINS) gfalibs | $(BUILD)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(BUILD)/$(TARGET) $(BINDIR)/* $(GFALIBS_DIR)/*.o $(LIBS)
 	
+# New static target
+static: $(BINS) gfalibs | $(BUILD)
+	$(CXX) $(CXXFLAGS) $(STATIC_LDFLAGS) -o $(BUILD)/$(TARGET) $(BINDIR)/* $(GFALIBS_DIR)/*.o $(STATIC_LIBS)
+	
 all: head validate regenerate
 
 $(BINDIR)%: $(SOURCE)/%.cpp $(INCLUDE)/%.h | $(BINDIR)
@@ -35,20 +51,19 @@ $(BINDIR)%: $(SOURCE)/%.cpp $(INCLUDE)/%.h | $(BINDIR)
 .PHONY: gfalibs
 gfalibs:
 	$(MAKE) -j -C $(GFALIBS_DIR)
-	
+
 validate: | $(BUILD)
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/$(TARGET)-$(TEST_TARGET) $(SOURCE)/$(TEST_TARGET).cpp
 
 regenerate: | $(BUILD)
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/$(TARGET)-$(GENERATE_TARGET) $(SOURCE)/$(GENERATE_TARGET).cpp
-	
+
 $(BUILD):
 	-mkdir -p $@
-	
+
 $(BINDIR):
 	-mkdir -p $@
 
-	
 clean:
 	$(MAKE) -j -C $(GFALIBS_DIR) clean
 	$(RM) -r build
