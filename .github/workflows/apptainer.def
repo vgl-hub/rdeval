@@ -7,22 +7,21 @@ From: ubuntu:22.04
 %post
     export DEBIAN_FRONTEND=noninteractive
     apt-get update && apt-get install -y --no-install-recommends \
-        build-base \
+        build-essential \
         musl-dev \
-        zlib-dev \
-        zlib-static \
-        bzip2-dev \
-        bzip2-static \
-        xz-dev \
-        xz-static \
-        openssl-dev \
-        openssl-libs-static \
+        zlib1g-dev \
+        libbz2-dev \
+        liblzma-dev \
+        libssl-dev \
         cmake \
         git \
         perl \
         autoconf \
         automake \
-        libtool
+        libtool \
+        pkg-config \
+        ca-certificates \
+        wget
 
     # Build htslib from source
     rm -rf /tmp/htslib
