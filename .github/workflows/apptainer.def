@@ -1,11 +1,12 @@
 Bootstrap: docker
-From: alpine:latest
+From: ubuntu:22.04
 
 %files
     ./ /rdeval
 
 %post
-    apk add --no-cache \
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update && apt-get install -y --no-install-recommends \
         build-base \
         musl-dev \
         zlib-dev \
