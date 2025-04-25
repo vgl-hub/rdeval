@@ -1,27 +1,28 @@
 Bootstrap: docker
-From: ubuntu:22.04
+From: alpine:3.19
 
 %files
     ./ /rdeval
 
 %post
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update && apt-get install -y --no-install-recommends \
-        build-essential \
+    apk add --no-cache \
+        build-base \
         musl-dev \
-        zlib1g-dev \
-        libbz2-dev \
-        liblzma-dev \
-        libssl-dev \
+        zlib-dev \
+        zlib-static \
+        bzip2-dev \
+        bzip2-static \
+        xz-dev \
+        xz-static \
+        openssl-dev \
+        openssl-libs-static \
         cmake \
         git \
         perl \
         autoconf \
         automake \
         libtool \
-        pkg-config \
-        ca-certificates \
-        wget
+        linux-headers
 
     # Build htslib from source
     rm -rf /tmp/htslib
@@ -30,17 +31,18 @@ From: ubuntu:22.04
     cd htslib
     git submodule update --init --recursive
     autoreconf -i
-    ./configure --prefix=/tmp/htslib --disable-libcurl --disable-bz2
-    make -j
+    ./configure --disable-libcurl --disable-bz2 --enable-static --disable-shared
+    make -j$(nproc)
     make install prefix=/usr
 
-    # Build your project
+    # Build your project statically
     cd /rdeval
-    make -j static
+    make clean
+    make -j$(nproc) static
 
 %labels
     Author Giulio Formenti
-    Purpose Static rdeval build
+    Purpose Fully static rdeval build with musl
 
 %runscript
     exec /rdeval/build/bin/rdeval "$@"
