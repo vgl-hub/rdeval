@@ -51,12 +51,14 @@ jobs:
       - if: matrix.os == 'macos-latest'
         name: Build
         run: |
-          brew install htslib
-          INCLUDE_DIR="-I/opt/homebrew/opt/openssl@3/include/ \
-                       -I/opt/homebrew/Cellar/htslib/1.21/include/" \
-              LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.4.0/lib \
-                       -L/opt/homebrew/Cellar/htslib/1.21/lib" \
-          make all -j
+          brew install openssl@3 htslib
+          OPENSSL_PREFIX=$(brew --prefix openssl@3)
+          HTSLIB_PREFIX=$(brew --prefix htslib)
+
+          INCLUDE_DIR="-I$OPENSSL_PREFIX/include -I$HTSLIB_PREFIX/include"
+          LDFLAGS="-L$OPENSSL_PREFIX/lib -L$HTSLIB_PREFIX/lib"
+          
+          make head -j
       - if: matrix.os == 'ubuntu-latest'
         name: Set up Apptainer
         uses: eWaterCycle/setup-apptainer@v2
