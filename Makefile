@@ -16,6 +16,7 @@ LDFLAGS += -pthread
 LIBS = -lz -lcrypto -lhts
 
 # Static linking settings
+UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
     STATIC_LDFLAGS = -static -pthread
 else

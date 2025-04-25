@@ -35,13 +35,13 @@ jobs:
     name: Add Resources
     strategy:
       matrix:
-        OS: [macos-latest, ubuntu-latest]
+        os: [macos-latest, ubuntu-latest]
         include:
-        - OS: macos-latest
+        - os: macos-latest
           OS_NAME: macOS
-        - OS: ubuntu-latest
+        - os: ubuntu-latest
           OS_NAME: linux
-    runs-on: ${{ matrix.OS }}
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
