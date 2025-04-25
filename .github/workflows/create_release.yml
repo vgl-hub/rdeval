@@ -69,7 +69,7 @@ jobs:
         run: |
           sudo apt-get install libhts-dev
           make all -j
-          apptainer build --fix-perms --ignore-fakeroot-command rdeval_static.sif .github/workflows/apptainer.def
+          apptainer build --userns --fix-perms --ignore-fakeroot-command rdeval_static.sif .github/workflows/apptainer.def
           apptainer exec --bind $(pwd):/out rdeval_static.sif cp /rdeval/build/bin/rdeval /out/rdeval_static_binary
       - name: Zip-dynamic
         uses: papeloto/action-zip@v1
