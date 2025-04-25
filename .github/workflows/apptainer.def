@@ -2,7 +2,7 @@ Bootstrap: docker
 From: alpine:latest
 
 %files
-    ./rdeval /rdeval
+    ./* /rdeval
 
 %post
     apk add --no-cache \
