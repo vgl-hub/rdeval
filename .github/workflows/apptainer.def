@@ -2,7 +2,7 @@ Bootstrap: docker
 From: alpine:latest
 
 %files
-    ./* /rdeval
+    ./* /rdeval-static
 
 %post
     apk add --no-cache \
@@ -35,7 +35,7 @@ From: alpine:latest
     make install prefix=/usr
 
     # Build your project
-    cd /rdeval
+    cd /rdeval-static
     make -j static
 
 %labels
