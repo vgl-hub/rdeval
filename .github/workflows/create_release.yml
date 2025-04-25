@@ -58,18 +58,18 @@ jobs:
           INCLUDE_DIR="-I$OPENSSL_PREFIX/include -I$HTSLIB_PREFIX/include"
           LDFLAGS="-L$OPENSSL_PREFIX/lib -L$HTSLIB_PREFIX/lib"
           
-          make head -j
+          make CFLAGS="$INCLUDE_DIR" LDFLAGS="$LDFLAGS" head -j
       - if: matrix.os == 'ubuntu-latest'
         name: Set up Apptainer
         uses: eWaterCycle/setup-apptainer@v2
         with:
-          apptainer-version: 1.2.5
+          apptainer-version: 1.3.6
       - if: matrix.os == 'ubuntu-latest'
         name: Build
         run: |
           sudo apt-get install libhts-dev
           make all -j
-          apptainer build --userns --fix-perms --ignore-fakeroot-command rdeval_static.sif .github/workflows/apptainer.def
+          apptainer build --fix-perms --ignore-fakeroot-command rdeval_static.sif .github/workflows/apptainer.def
           apptainer exec --bind $(pwd):/out rdeval_static.sif cp /rdeval/build/bin/rdeval /out/rdeval_static_binary
       - name: Zip-dynamic
         uses: papeloto/action-zip@v1
