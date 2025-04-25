@@ -1,0 +1,46 @@
+Bootstrap: docker
+From: alpine:latest
+
+%files
+    ./rdeval /rdeval
+
+%post
+    apk add --no-cache \
+        build-base \
+        musl-dev \
+        zlib-dev \
+        zlib-static \
+        bzip2-dev \
+        bzip2-static \
+        xz-dev \
+        xz-static \
+        openssl-dev \
+        openssl-libs-static \
+        cmake \
+        git \
+        perl \
+        autoconf \
+        automake \
+        libtool
+
+    # Build htslib from source
+    rm -rf /tmp/htslib
+    cd /tmp
+    git clone https://github.com/samtools/htslib.git
+    cd htslib
+    git submodule update --init --recursive
+    autoreconf -i
+    ./configure --prefix=/tmp/htslib --disable-libcurl --disable-bz2
+    make -j
+    make install prefix=/usr
+
+    # Build your project
+    cd /rdeval
+    make -j static
+
+%labels
+    Author Giulio Formenti
+    Purpose Static rdeval build
+
+%runscript
+    exec /rdeval/build/bin/rdeval "$@"
