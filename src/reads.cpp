@@ -128,7 +128,10 @@ void InReads::load() {
                                     seqComment.clear();
                                 
                                 std::string* inSequence = new std::string;
-                                getline(*stream, *inSequence, '>');
+								if (!getline(*stream, *inSequence, '>')) {
+									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
+									exit(EXIT_FAILURE);
+								}
                                 readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence});
                                 seqPos++;
                                 processedLength += inSequence->size();
@@ -157,12 +160,19 @@ void InReads::load() {
                                     seqComment.clear();
                                 
                                 std::string* inSequence = new std::string;
-                                getline(*stream, *inSequence);
-                                
-                                getline(*stream, newLine);
-                                
+								if (!getline(*stream, *inSequence)) {
+									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
+									exit(EXIT_FAILURE);
+								}
+								if (!getline(*stream, newLine)) {
+									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
+									exit(EXIT_FAILURE);
+								}
                                 std::string* inSequenceQuality = new std::string;
-                                getline(*stream, *inSequenceQuality);
+								if (!getline(*stream, *inSequenceQuality)) {
+									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
+									exit(EXIT_FAILURE);
+								}
                                 
                                 readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence, inSequenceQuality});
                                 ++seqPos;
@@ -932,8 +942,6 @@ void InReads::writeToStream() {
 
 void InReads::printTableCompressed(std::string outFile) {
 	
-	
-    
     // compute buffer size
     std::vector<std::pair<uint8_t,float>> &readLens8 = readLens.getReadLens8();
     std::vector<std::pair<uint16_t,float>> &readLens16 = readLens.getReadLens16();
