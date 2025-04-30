@@ -63,4 +63,4 @@ done
 r_vector="${r_vector%,})"  # Remove trailing comma and close
 
 # Run the R command
-R -e "rmarkdown::render('${RDEVAL}/figures.Rmd', output_file='$(pwd)/$output_file', params=list(input_files = $r_vector))"
+R -e "rmarkdown::render('${RDEVAL}/figures.Rmd', output_file='$(readlink -f ${output_file})', params=list(input_files = $r_vector))"

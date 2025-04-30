@@ -9,7 +9,7 @@ params:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, fig.align = 'center')
 library(tidyverse)
-library(ggExtra)
+library(plotly)
 library(bit64)
 source('rdeval_interface.R')
 ```
@@ -195,7 +195,7 @@ inv_cs <- inv_cs %>% filter(row_number() %% 3 == 1)
 icd <- plot_ly(
   data = inv_cs,
   x = ~read_length_kb,
-  y = ~inv_cumulative_yield_gb,
+  y = ~inv_cs_gb,
   color = ~run,
   colors = palette,
   type = "scatter",
@@ -226,7 +226,7 @@ icd
 ```
 
 ### Read lengths vs average quality
-```{r}
+```{r, message=FALSE, warning=FALSE}
 reads_by_avg_quality <- reads %>%
   group_by(run, read_length) %>%
   summarize_at("read_quality", mean) %>%
