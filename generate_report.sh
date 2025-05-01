@@ -1,25 +1,24 @@
 #!/bin/sh
 
 # Usage text
-usage="Usage: $(basename "$0") -i input1.rd [input2.rd ...] -o output_file [-f pdf|html] [--dynamic] [-h]
+usage="Usage: $(basename "$0") -i input1.rd [input2.rd ...] -o output_file [--dynamic] [-h]
 
 Arguments:
     -i, --input     Input Rmd file(s)
     -o, --output    Output filename (must end in .html or .pdf)
-    -f, --format    Output format: html or pdf (default: html)
     --dynamic       Enable dynamic plotting, only supported in html (default: static)
     -h, --help      Show help
 "
 
 # Initialize variables
 RDEVAL=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+# Initialize variables
 output_file=""
-output_format="html"
-dynamic="FALSE"
 input_files=()
+dynamic="FALSE"
 parsing_inputs=false
 
-# Parse command line arguments
+# Parse arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -o|--output)
@@ -29,10 +28,6 @@ while [[ $# -gt 0 ]]; do
     -i|--input)
       parsing_inputs=true
       shift
-      ;;
-    -f|--format)
-      output_format="$2"
-      shift 2
       ;;
     -d|--dynamic)
       dynamic="TRUE"
@@ -67,16 +62,13 @@ if [[ -z "$output_file" ]] || [[ "${#input_files[@]}" -eq 0 ]]; then
   exit 1
 fi
 
-# Validate format
-if [[ "$output_format" != "html" && "$output_format" != "pdf" ]]; then
-  echo "Error: Output format must be 'html' or 'pdf'."
-  exit 1
-fi
-
-# Validate output extension
-if [[ "$output_format" == "html" && "$output_file" != *.html ]] || \
-   [[ "$output_format" == "pdf" && "$output_file" != *.pdf ]]; then
-  echo "Error: Output file must end with .$output_format"
+# Validate output extension and infer output format
+if [[ "$output_file" == *.html ]]; then
+  output_format="html"
+elif [[ "$output_file" == *.pdf ]]; then
+  output_format="pdf"
+else
+  echo "Error: Output file must end with .html or .pdf"
   exit 1
 fi
 
