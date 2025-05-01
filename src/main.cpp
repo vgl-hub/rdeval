@@ -15,7 +15,7 @@
 #include "stream-obj.h"
 #include "input.h"
 
-std::string version = "0.0.6";
+std::string version = "0.0.7";
 
 //global
 std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now(); // immediately start the clock when the program is run

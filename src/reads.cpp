@@ -952,6 +952,7 @@ void InReads::printTableCompressed(std::string outFile) {
     Bytef *source = new Bytef[sourceLen];
     uLong destLen = compressBound(sourceLen);
     Bytef *dest = new Bytef[destLen];
+	std::memset(source, 0, sourceLen);
 
     unsigned char* ptr = source;
 
