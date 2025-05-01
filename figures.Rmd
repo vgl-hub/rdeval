@@ -18,7 +18,8 @@ source('rdeval_interface.R')
 
 ```{r results = 'asis'}
 # Set color palette (jco from ggsci package)
-palette <- c("#4A6990", "#A73030", "#3B3B3B", "#8F7700", "#003C67", "#7AA6DC", "#CD534C", "#868686", "#EFC000", "#0073C2")
+palette <- palette <- c("#0073C2", "#EFC000","#868686", "#CD534C", "#7AA6DC", 
+             "#003C67", "#8F7700", "#3B3B3B", "#A73030", "#4A6990")
 
 # Inverse Cumulative Distribution Function
 icdf <- function(read_lengths) {
@@ -49,6 +50,10 @@ for (file in files) {
   cat(printRdSummary(rdFile))
 }
 
+# Map colors to each run explicitly because plotly doesn't use colors by order
+run_levels <- sort(unique(reads$run))
+palette <- setNames(palette[1:length(run_levels)], run_levels)
+reads$run <- factor(reads$run, levels = run_levels)
 ```
 
 ### Violin Plot
@@ -94,7 +99,7 @@ if (params$dynamic) {
   scale_x_discrete(name = ("Run")) +
   scale_y_continuous(name = ("Read Length"),
                      labels = scales::label_comma()) +
-  scale_fill_manual(guide = "none", values = palette) +
+  scale_fill_manual(guide = "none", values = rev(palette)) +
   theme_bw()
 }
 
@@ -154,7 +159,7 @@ read_lengths <- plot_ly(
                      expand = expansion(mult = c(0, 0))) +
   scale_y_continuous(name = "Count", labels = scales::label_comma(),
                      expand = expansion(mult = c(0, 0.05))) +
-  scale_fill_manual(name = "Run", values = palette) +
+  scale_fill_manual(name = "Run", values = rev(palette)) +
   theme_bw() 
 }
 
@@ -218,7 +223,7 @@ if (params$dynamic) {
   scale_y_continuous(name = "Count", 
                      labels = scales::label_comma(),
                      expand = expansion(mult = c(0, 0.05))) +
-  scale_fill_manual(name = "Run", values = palette) +
+  scale_fill_manual(name = "Run", values = rev(palette)) +
   theme_bw() 
 }
 read_lengths_log
@@ -268,7 +273,7 @@ if (params$dynamic) {
                      expand = expansion(mult = c(0.05, 0.05))) +
   scale_y_continuous(name = "Cumulative yield (Gbp)",
                      expand = expansion(mult = c(0.05, 0.05))) +
-  scale_color_manual(name = "Run", values = palette) +
+  scale_color_manual(name = "Run", values = rev(palette)) +
   theme_bw() 
 }
 icd
@@ -285,118 +290,120 @@ if (params$dynamic) {
   reads_by_avg_quality %>% 
   filter(row_number() %% 4 == 1)
 
-# Scatterplot with 2D density contour lines overlaid
-# Base plot with no data yet
-scatter_with_density <- plot_ly()
-
-# Step 1: Add scatter points
-scatter_with_density <- scatter_with_density %>%
-  add_markers(
+  # Scatterplot with 2D density contour lines overlaid
+  # Base plot with no data yet
+  scatter_with_density <- plot_ly()
+  
+  # Step 1: Add scatter points
+  scatter_with_density <- scatter_with_density %>%
+    add_markers(
+      data = reads_by_avg_quality,
+      x = ~read_length_kbp,
+      y = ~read_quality,
+      color = ~run,
+      colors = palette,
+      marker = list(size = 1.5, opacity = 0.2),
+      width = 5,
+      customdata = ~run,
+      text = ~paste(
+        "Run:", run,
+        "<br>Read length (kbp):", round(read_length_kbp, 2),
+        "<br>Avg Quality:", round(read_quality, 2)
+      ),
+      hoverinfo = "text",
+      layer = "below",
+      legendgroup = ~run,
+      showlegend = TRUE
+    )
+  
+  # Step 2: Add density contour
+  if (sum(reads_by_avg_quality$read_quality) > 0) {
+    scatter_with_density <- scatter_with_density %>%
+      add_histogram2dcontour(
+        data = reads_by_avg_quality,
+        x = ~read_length_kbp,
+        y = ~read_quality,
+        contours = list(coloring = "lines"),
+        colorscale = "Viridis",
+        ncontours = 20,
+        line = list(width = 2, color = "black"),
+        opacity = 1,
+        showscale = FALSE,
+        hoverinfo = "skip",
+        layer = "above",
+        showlegend = TRUE,
+        name = "Density (all runs)"
+      )
+  }
+  
+  # Step 3: Customize layout
+  scatter_with_density <- scatter_with_density %>%
+    layout(
+      xaxis = list(title = "Read Length (kbp)", showgrid = FALSE, zeroline = FALSE),
+      yaxis = list(title = "Average Quality", showgrid = FALSE, zeroline = FALSE),
+      showlegend = TRUE
+    )
+  
+  # X histogram
+  hist_top <- plot_ly(
     data = reads_by_avg_quality,
     x = ~read_length_kbp,
+    color = ~run,
+    colors = palette,
+    type = "histogram",
+    nbinsx = 25,
+    opacity = 0.75,
+    legendgroup = ~run,
+    showlegend = FALSE,
+    layer = 'below',
+    customdata = ~run,
+    hovertemplate = paste(
+      "<b>Run:</b> %{customdata}<br>",
+      "<b>Read Length:</b> %{x:.2f} kbp<br>",
+      "<b>Count:</b> %{y}<extra></extra>"
+    )
+  ) %>% layout(barmode = "overlay")
+  
+  # Y histogram
+  hist_right <- plot_ly(
+    data = reads_by_avg_quality,
     y = ~read_quality,
     color = ~run,
     colors = palette,
-    marker = list(size = 1.5, opacity = 0.2),
-    width = 5,
-    customdata = ~run,
-    text = ~paste(
-      "Run:", run,
-      "<br>Read length (kbp):", round(read_length_kbp, 2),
-      "<br>Avg Quality:", round(read_quality, 2)
-    ),
-    hoverinfo = "text",
-    layer = "below",
+    type = "histogram",
+    nbinsy = 25,
+    opacity = 0.75,
     legendgroup = ~run,
-    showlegend = TRUE
-  )
-
-# Step 2: Add density contour
-scatter_with_density <- scatter_with_density %>%
-  add_histogram2dcontour(
-    data = reads_by_avg_quality,
-    x = ~read_length_kbp,
-    y = ~read_quality,
-    contours = list(coloring = "lines"),
-    colorscale = "Viridis",
-    ncontours = 20,
-    line = list(width = 2, color = "black"),
-    opacity = 1,
-    showscale = FALSE,
-    hoverinfo = "skip",
-    layer = "above",
-    showlegend = TRUE,
-    name = "Density (all runs)"
-  )
-
-# Step 3: Customize layout
-scatter_with_density <- scatter_with_density %>%
-  layout(
-    xaxis = list(title = "Read Length (kbp)", showgrid = FALSE, zeroline = FALSE),
-    yaxis = list(title = "Average Quality", showgrid = FALSE, zeroline = FALSE),
-    showlegend = TRUE
-  )
-
-# X histogram
-hist_top <- plot_ly(
-  data = reads_by_avg_quality,
-  x = ~read_length_kbp,
-  color = ~run,
-  colors = palette,
-  type = "histogram",
-  nbinsx = 25,
-  opacity = 0.75,
-  legendgroup = ~run,
-  showlegend = FALSE,
-  layer = 'below',
-  customdata = ~run,
-  hovertemplate = paste(
-    "<b>Run:</b> %{customdata}<br>",
-    "<b>Read Length:</b> %{x:.2f} kbp<br>",
-    "<b>Count:</b> %{y}<extra></extra>"
-  )
-) %>% layout(barmode = "overlay")
-
-# Y histogram
-hist_right <- plot_ly(
-  data = reads_by_avg_quality,
-  y = ~read_quality,
-  color = ~run,
-  colors = palette,
-  type = "histogram",
-  nbinsy = 25,
-  opacity = 0.75,
-  legendgroup = ~run,
-  showlegend = FALSE,
-  layer = 'above',
-  customdata = ~run,
-  hovertemplate = paste(
-    "<b>Run:</b> %{customdata}<br>",
-    "<b>Read Quality:</b> %{y:.2f} kbp<br>",
-    "<b>Count:</b> %{x}<extra></extra>"
-  )
-) %>% layout(barmode = "overlay")
-
-# Dummy empty plot for top-left corner
-empty <- plotly_empty()
-
-final_plot <- subplot(
-  hist_top,       empty,
-  scatter_with_density,     hist_right,
-  nrows = 2,
-  shareX = TRUE,
-  shareY = TRUE,
-  titleX = TRUE,
-  titleY = TRUE,
-  widths = c(0.8, 0.2),
-  heights = c(0.2, 0.8)
-) %>%
-  layout(
-    xaxis = list(title = "Read length (kbp)"),
-    yaxis = list(title = ""),
-    xaxis2 = list(title = ""),
-    yaxis2 = list(title = "Average Read Quality")
-  )
+    showlegend = FALSE,
+    layer = 'above',
+    customdata = ~run,
+    hovertemplate = paste(
+      "<b>Run:</b> %{customdata}<br>",
+      "<b>Read Quality:</b> %{y:.2f} kbp<br>",
+      "<b>Count:</b> %{x}<extra></extra>"
+    )
+  ) %>% layout(barmode = "overlay")
+  
+  # Dummy empty plot for top-left corner
+  empty <- plotly_empty()
+  
+  final_plot <- subplot(
+    hist_top,       empty,
+    scatter_with_density,     hist_right,
+    nrows = 2,
+    shareX = TRUE,
+    shareY = TRUE,
+    titleX = TRUE,
+    titleY = TRUE,
+    widths = c(0.8, 0.2),
+    heights = c(0.2, 0.8)
+  ) %>%
+    layout(
+      xaxis = list(title = "Read length (kbp)"),
+      yaxis = list(title = ""),
+      xaxis2 = list(title = ""),
+      yaxis2 = list(title = "Average Read Quality")
+    )
 } else {
   g <- reads_by_avg_quality %>%
     ggplot(aes(x = read_length/1000, y = read_quality, fill = run, color = run)) +
@@ -407,12 +414,14 @@ final_plot <- subplot(
     scale_x_continuous(name = ("Read length (kbp)"),
                        labels = scales::label_comma()) +
     scale_y_continuous(name = ("Average Read Quality")) +
-    scale_color_manual(guide = "none", values = palette) +
+    scale_color_manual(guide = "none", values = rev(palette)) +
     ##ggnewscale::new_scale_color() +
-    geom_density_2d(aes(x = read_length / 1000, y = read_quality, group = 1), color = 'black', linewidth = 0.5, inherit.aes = FALSE) +
     #scale_color_viridis_c(guide = "none") +
     scale_fill_discrete(guide = "none") +
     theme_bw() 
+  if (sum(reads_by_avg_quality$read_quality) > 0) {
+     g <- g + geom_density_2d(aes(x = read_length / 1000, y = read_quality, group = 1), color = 'black', linewidth = 0.5, inherit.aes = FALSE)
+  }
   final_plot <- ggMarginal(g + theme(legend.position = "left"), type = "histogram", groupColour = TRUE, groupFill = TRUE)
   final_plot
 }
