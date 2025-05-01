@@ -8,7 +8,7 @@ Arguments:
     -o, --output    Output filename (must end in .html or .pdf)
     -f, --format    Output format: html or pdf (default: html)
     --dynamic       Enable dynamic plotting, only supported in html (default: static)
-    -h              Show help
+    -h, --help      Show help
 "
 
 # Initialize variables
