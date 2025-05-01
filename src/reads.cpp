@@ -983,7 +983,7 @@ void InReads::printTableCompressed(std::string outFile) {
     memcpy(ptr, &readLens64[0], len64 * sizeof(readLens64[0]));
     ptr += len64 * sizeof(readLens64[0]);
 
-    compress(dest, &destLen, source, sourceLen);
+	compress2(dest, &destLen, source, sourceLen, Z_BEST_COMPRESSION);
     delete[] source;
     
     std::ofstream ofs(outFile, std::fstream::trunc | std::ios::out | std::ios::binary);
