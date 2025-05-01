@@ -1,12 +1,12 @@
 #!/bin/sh
 
 # Usage text
-usage="Usage: $(basename "$0") -i input1.rd [input2.rd ...] -o output_file [--dynamic] [-h]
+usage="Usage: $(basename "$0") -i input1.rd [input2.rd ...] -o output_file [--interactive] [-h]
 
 Arguments:
     -i, --input     Input Rmd file(s)
     -o, --output    Output filename (must end in .html or .pdf)
-    --dynamic       Enable dynamic plotting, only supported in html (default: static)
+    --interactive       Enable interactive plotting, only supported in html (default: static)
     -h, --help      Show help
 "
 
@@ -15,7 +15,7 @@ RDEVAL=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # Initialize variables
 output_file=""
 input_files=()
-dynamic="FALSE"
+interactive="FALSE"
 parsing_inputs=false
 
 # Parse arguments
@@ -29,8 +29,8 @@ while [[ $# -gt 0 ]]; do
       parsing_inputs=true
       shift
       ;;
-    -d|--dynamic)
-      dynamic="TRUE"
+    -d|--interactive)
+      interactive="TRUE"
       shift
       ;;
     -h|--help)
@@ -72,10 +72,10 @@ else
   exit 1
 fi
 
-# If dynamic is TRUE but format is PDF, override and warn
-if [[ "$dynamic" == "TRUE" && "$output_format" == "pdf" ]]; then
-  echo "Warning: Dynamic plotting is only supported with HTML. Switching to static plotting."
-  dynamic="FALSE"
+# If interactive is TRUE but format is PDF, override and warn
+if [[ "$interactive" == "TRUE" && "$output_format" == "pdf" ]]; then
+  echo "Warning: Interactive plotting is only supported with HTML. Switching to static plotting."
+  interactive="FALSE"
 fi
 
 # Construct input file vector for R
@@ -86,4 +86,4 @@ done
 r_vector="${r_vector%,})"  # Remove trailing comma and close
 
 # Run the R command with additional parameters
-R -e "rmarkdown::render('${RDEVAL}/figures.Rmd', output_file='$(pwd)/$output_file', output_format='${output_format}_document', params=list(input_files = $r_vector, dynamic = $dynamic))"
+R -e "rmarkdown::render('${RDEVAL}/figures.Rmd', output_file='$(pwd)/$output_file', output_format='${output_format}_document', params=list(input_files = $r_vector, interactive = $interactive))"
