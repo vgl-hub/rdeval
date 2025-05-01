@@ -4,7 +4,7 @@ title: "Read Summary and Figures"
 date: "`r Sys.Date()`"
 params:
   input_files: !r NULL
-  dynamic: FALSE
+  interactive: FALSE
 ---
 
 ```{r setup, include=FALSE}
@@ -61,7 +61,7 @@ reads$run <- factor(reads$run, levels = run_levels)
 reads$read_length_kbp <- reads$read_length / 1000 # Read length to kbp
 reads_downsampled <- reads %>% filter(row_number() %% 10 == 1)
 
-if (params$dynamic) {
+if (params$interactive) {
   violin <- reads_downsampled %>%
     plot_ly(
       x = ~run,
@@ -112,7 +112,7 @@ violin
 # Split data by run
 split_reads <- split(reads, reads$run)
 
-if (params$dynamic) {
+if (params$interactive) {
   # Apply density function to each run and bind results
 densities <- do.call(rbind, lapply(split_reads, function(df) {
   run_id <- unique(df$run)
@@ -168,7 +168,7 @@ read_lengths
 
 ### Read lengths (log transformed)
 ```{r}
-if (params$dynamic) {
+if (params$interactive) {
   densities <- do.call(rbind, lapply(split_reads, function(df) {
     run_id <- unique(df$run)
     x <- df$read_length
@@ -233,7 +233,7 @@ read_lengths_log
 ```{r}
 inv_cs$read_length_kb <- inv_cs$read_length/1000
 
-if (params$dynamic) {
+if (params$interactive) {
   inv_cs <- inv_cs %>% filter(row_number() %% 3 == 1)
   
   icd <- plot_ly(
@@ -286,7 +286,7 @@ reads_by_avg_quality <- reads %>%
   summarize_at("read_quality", mean) %>%
   mutate(read_length_kbp = read_length / 1000) 
 
-if (params$dynamic) {
+if (params$interactive) {
   reads_by_avg_quality %>% 
   filter(row_number() %% 4 == 1)
 
