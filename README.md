@@ -20,7 +20,7 @@ Typical metrics include:
 
 ## Installation
 
-Either download the [latest release](https://github.com/vgl-hub/rdeval/releases/tag/v0.0.7) or follow the instructions in the [ReadTheDocs documentation](https://rdeval-documentation.readthedocs.io/en/latest/usage.html#installation).
+Either download the [latest release](https://github.com/vgl-hub/rdeval/releases) or follow the instructions in the [ReadTheDocs documentation](https://rdeval-documentation.readthedocs.io/en/latest/usage.html#installation).
 
 ## Usage
 
