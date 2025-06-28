@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
     bool isPipe = false; // to check if input is from pipe
     UserInputRdeval userInput; // initialize input object
     std::string cmd;
-    char helpStr[] = "rdeval input.fa*[.gz]|bam|cram|rd [expected genome size]";
+    char helpStr[] = "rdeval input.fa*[.gz]|bam|cram|rd [expected genome size as uint]";
     
     if (argc == 1) { // gfastats with no arguments
         printf("%s\n", helpStr);
