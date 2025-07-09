@@ -317,7 +317,7 @@ if (params$interactive) {
     )
   
   # Step 2: Add density contour
-  if (sum(reads_by_avg_quality$read_quality) > 0) {
+  if (sum(reads_by_avg_quality$read_quality) > 0 & sd(reads_by_avg_quality$read_quality) > 0) {
     scatter_with_density <- scatter_with_density %>%
       add_histogram2dcontour(
         data = reads_by_avg_quality,
