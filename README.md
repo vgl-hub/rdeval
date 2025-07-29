@@ -40,8 +40,9 @@ Additional documentation for rdeval is available in [ReadTheDocs](https://rdeval
 
 **Rdeval** is part of the gfastar tool suite. If you use **rdeval** in your work, please cite:
 
-Gfastats: conversion, evaluation and manipulation of genome sequences using assembly graphs
+Evaluation of sequencing reads at scale using rdeval.
 
-Giulio Formenti, Linelle Abueg, Angelo Brajuka, Nadolina Brajuka, Cristo Gallardo, Alice Giani, Olivier Fedrigo, Erich D. Jarvis
+Formenti G, Koo B, Sollitto M, Balacco J, Brajuka N, Burhans R, Duarte E, Giani AM, McCaffrey K, Medico JA, Myers EW, Smeds P, Nekrutenko A, Jarvis ED. Bioinformatics. 2025 Jul 22:btaf416
 
-doi: https://doi.org/10.1093/bioinformatics/btac460
+doi: https://doi.org/10.1093/bioinformatics/btaf416
+PMID: 40694478
