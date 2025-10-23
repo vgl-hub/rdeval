@@ -28,7 +28,9 @@
 
 #include "reads.h"
 
-#define bam1_seq_seti(s, i, c) ( (s)[(i)>>1] = ((s)[(i)>>1] & 0xf<<(((i)&1)<<2)) | (c)<<((~(i)&1)<<2) )
+float newRand() {
+	return (static_cast <float> (random()) / static_cast <float> (RAND_MAX));
+}
 
 void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHeader, std::string* seqComment, std::string* sequence, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t seqPos, std::string* sequenceQuality, float avgQuality, std::vector<Tag>* inSequenceTags, uint64_t* N) {
     
@@ -76,6 +78,7 @@ void InReads::load() {
     std::size_t numFiles = userInput.inFiles.size();
     uint32_t batchN = 0;
     uint64_t processedLength = 0;
+	bool sample = userInput.ratio < 1 ? true : false; // read subsampling
     md5s.reserve(numFiles); // to avoid invalidating the vector during thread concurrency
     lg.verbose("Processing " + std::to_string(numFiles) + " files");
     
@@ -132,8 +135,12 @@ void InReads::load() {
 									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
 									exit(EXIT_FAILURE);
 								}
+								if (sample && newRand() > userInput.ratio) {
+										delete inSequence;
+										continue;
+								}
                                 readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence});
-                                seqPos++;
+                                ++seqPos;
                                 processedLength += inSequence->size();
                                 
                                 if (processedLength > batchSize) {
@@ -173,7 +180,10 @@ void InReads::load() {
 									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
 									exit(EXIT_FAILURE);
 								}
-                                
+								if (sample && newRand() > userInput.ratio) {
+										delete inSequence;
+										continue;
+								}
                                 readBatch->sequences.push_back(new Sequence {seqHeader, seqComment, inSequence, inSequenceQuality});
                                 ++seqPos;
                                 processedLength += inSequence->size();
@@ -231,6 +241,10 @@ void InReads::load() {
                         if (tag != 0)
                             inSequenceQuality = new std::string((char*)tag++,len);
                     }
+					if (sample && newRand() > userInput.ratio) {
+							delete inSequence;
+							continue;
+					}
                     readBatch->sequences.push_back(new Sequence {bam_get_qname(bamdata), std::string(), inSequence, inSequenceQuality});
                     seqPos++;
                     processedLength += inSequence->size();
@@ -365,8 +379,6 @@ void InReads::filterRecords() {
 	totReads = readLens.size();
 }
 
-
-
 inline bool InReads::filterRead(Sequence* sequence) {
     
     uint64_t size = sequence->sequence->size();
@@ -400,10 +412,6 @@ inline bool InReads::applyFilter(uint64_t size, float avgQuality) {
     return true;
 }
 
-float newRand() {
-    return (static_cast <float> (random()) / static_cast <float> (RAND_MAX));
-}
-
 bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
 
     Log threadLog;
@@ -418,7 +426,6 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
     bool include = includeList.size();
     bool exclude = excludeList.size();
     bool filter = userInput.filter != "none" ? true : false;
-    bool sample = userInput.ratio < 1 ? true : false; // read subsampling
 
     for (Sequence* sequence : readBatch->sequences) {
         
@@ -433,10 +440,6 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
         if (filter) {
             bool filtered = filterRead(sequence);
             if (filtered)
-                continue;
-        }
-        if (sample) {
-            if (newRand() > userInput.ratio)
                 continue;
         }
         read = traverseInRead(&threadLog, sequence, readBatch->batchN+readN++);
