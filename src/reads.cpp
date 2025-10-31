@@ -491,7 +491,7 @@ bool InReads::traverseInReads(Sequences* readBatch) { // traverse the read
         totG+=batchG;
         totN+=batchN;
         totReads += readN;
-        logs.push_back(threadLog);
+        threadLog.print();
     }
     writerMutexCondition.notify_one();
     return true;
