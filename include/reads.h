@@ -70,6 +70,20 @@ class InReads {
     // filters
     char lSign = '0', qSign = '0', logicalOperator = '0';
     uint64_t l = 0, q = 0;
+	
+	const static phmap::flat_hash_map<std::string,int> fileType_to_case{
+		{"fasta",1},
+		{"fa",1},
+		{"fasta.gz",1},
+		{"fa.gz",1},
+		{"fastq",2},
+		{"fq",2},
+		{"fastq.gz",2},
+		{"fq.gz",2},
+		{"bam",3},
+		{"cram",3},
+		{"rd",4}
+	};
     
 public:
     
@@ -127,11 +141,13 @@ public:
     
     inline bool applyFilter(uint64_t size, float avgQuality);
     
-    bool traverseInReads(Sequences* readBatch);
+	bool extractInReads();
+    
+	bool traverseInReads(Sequences* readBatch);
     
     InRead* traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seqPos);
     
-    void appendReads(Sequences* readBatch);
+    void processReads(Sequences* readBatch);
     
     uint64_t getTotReadLen();
 
