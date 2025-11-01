@@ -33,8 +33,9 @@ float newRand() {
 }
 
 void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHeader, std::string* seqComment, std::string* sequence, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t seqPos, std::string* sequenceQuality, float avgQuality, std::vector<Tag>* inSequenceTags, uint64_t* N) {
-    
-    //threadLog->add("Processing read: " + seqHeader + " (uId: " + std::to_string(uId) + ", iId: " + std::to_string(iId) + ")"); <-- these should be turned into preprocessor directives for debugging
+#ifdef DEBUG
+    threadLog->add("Processing read: " + seqHeader + " (uId: " + std::to_string(uId) + ", iId: " + std::to_string(iId) + ")");
+#endif
     uint64_t seqSize = 0;
     this->setiId(iId); // set temporary sId internal to scaffold
     this->setuId(uId); // set absolute id
@@ -46,29 +47,24 @@ void InRead::set(Log* threadLog, uint32_t uId, uint32_t iId, std::string seqHead
     if (inSequenceTags != NULL)
         this->setSeqTags(inSequenceTags);
     
-    if (sequence != NULL && *sequence != "*") {
+    if (sequence != NULL && *sequence != "*")
         this->setInSequence(sequence);
-    //    threadLog->add("Segment sequence set");
-    }
         
-    if (sequenceQuality != NULL) {
+    if (sequenceQuality != NULL)
         this->setInSequenceQuality(sequenceQuality);
-    //    threadLog->add("Segment sequence quality set");
-    }
+	
     this->avgQuality = avgQuality;
-    
     this->setACGT(A, C, G, T, N);
-    // threadLog->add("Increased ACGT counts");
     this->setLowerCount(lowerCount);
-    // threadLog->add("Increased total count of lower bases");
     
     if (sequence != NULL && *sequence != "*") {
         seqSize = *A + *C + *G + *T;
     }else{
-        
         seqSize = *lowerCount;
         this->setLowerCount(&seqSize);
-        //threadLog->add("No seq input. Length (" + std::to_string(seqSize) + ") recorded in lower count");
+#ifdef DEBUG
+        threadLog->add("No seq input. Length (" + std::to_string(seqSize) + ") recorded in lower count");
+#endif
     }
 }
 

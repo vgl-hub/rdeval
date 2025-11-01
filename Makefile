@@ -43,6 +43,10 @@ GFALIBS_DIR := $(CURDIR)/gfalibs
 head: $(BINS) gfalibs | $(BUILD)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(BUILD)/$(TARGET) $(BINDIR)/* $(GFALIBS_DIR)/*.o $(LIBS)
 	
+debug: CXXFLAGS += -DDEBUG
+debug: CCFLAGS += -DDEBUG
+debug: head
+	
 # New static target
 static: $(BINS) gfalibs | $(BUILD)
 	$(CXX) $(CXXFLAGS) $(STATIC_LDFLAGS) -o $(BUILD)/$(TARGET) $(BINDIR)/* $(GFALIBS_DIR)/*.o $(STATIC_LIBS)
