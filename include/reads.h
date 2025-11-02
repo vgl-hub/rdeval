@@ -113,6 +113,9 @@ public:
             srandom(userInput.randSeed);
         else
             srandom(time(nullptr));
+		
+		if (userInput.maxMem != 0)
+			batchSize = userInput.maxMem;
     };
     
     void initStream();

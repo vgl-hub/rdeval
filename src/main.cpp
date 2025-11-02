@@ -53,6 +53,7 @@ int main(int argc, char **argv) {
         {"filter", required_argument, 0, 'f'},
         {"include-list", required_argument, 0, 'i'},
         {"threads", required_argument, 0, 'j'},
+		{"max-memory", required_argument, 0, 'm'},
         {"out-format", required_argument, 0, 'o'},
         {"quality", required_argument, 0, 'q'},
         {"input-reads", required_argument, 0, 'r'},
@@ -70,7 +71,7 @@ int main(int argc, char **argv) {
     while (arguments) { // loop through argv
         
         int option_index = 0;
-        c = getopt_long(argc, argv, "-:e:f:i:j:o:r:s:q:c:vh",
+        c = getopt_long(argc, argv, "-:e:f:m:i:j:o:r:s:q:c:vh",
                         long_options, &option_index);
         if (c == -1) // exit the loop if run out of options
             break;
@@ -129,7 +130,7 @@ int main(int argc, char **argv) {
                 ifFileExists(optarg);
                 userInput.inBedExclude = optarg;
                 break;
-            case 'f' : //filtering input
+            case 'f' : // filtering input
                 userInput.filter = optarg;
                 rmChrFromStr(userInput.filter, "'\\");
                 break;
@@ -137,6 +138,9 @@ int main(int argc, char **argv) {
                 ifFileExists(optarg);
                 userInput.inBedInclude = optarg;
                 break;
+			case 'm': // max memory
+				userInput.maxMem = atoi(optarg);
+				break;
             case 's':
                 userInput.sizeOutType = *optarg;
                 userInput.outSize_flag = 1;
@@ -176,7 +180,8 @@ int main(int argc, char **argv) {
                 printf("\t--md5 print md5 of .rd files.\n");
                 printf("\t--tabular tabular output.\n");
                 printf("\t--verbose verbose output.\n");
-                printf("\t-j --threads <int> numbers of threads (default:5).\n");
+				printf("\t-m --max-memory <int> max number of bases in ring buffer (default:1000000).\n");
+				printf("\t-j --threads <int> numbers of threads (default:5).\n");
                 printf("\t-v --version software version.\n");
                 printf("\t--cmd print $0 to stdout.\n");
                 exit(0);
@@ -195,6 +200,7 @@ int main(int argc, char **argv) {
     Input in;
     in.load(userInput); // load user input
     lg.verbose("Loaded user input");
+	maxMem = (userInput.maxMem == 0 ? get_mem_total(3) * 0.9 : userInput.maxMem); // set memory limit
     in.read();
     threadPool.join(); // join threads
     exit(EXIT_SUCCESS);
