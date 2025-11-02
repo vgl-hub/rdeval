@@ -81,10 +81,10 @@ void InReads::load() {
 	for (size_t t = 0; t < N_CONS; ++t) {
 		consumers.emplace_back([&]{
 			for (;;) {
-				std::unique_ptr<Sequences2> readBatch = filled_q.pop();           // may sleep if empty
+				std::unique_ptr<Sequences2> readBatch = filled_q.pop(); // may sleep if empty
 				if (!readBatch) { break; }
 				traverseInReads(*readBatch);
-				readBatch->sequences.clear();                  // keep capacity for reuse
+				readBatch->recycle_keep_capacity(); // keep capacity for reuse
 				free_pool.push(std::move(readBatch));
 			}
 		});
@@ -98,7 +98,7 @@ void InReads::extractInReads() {
 	
 	std::string newLine, seqHeader, seqComment, line, bedHeader;
 	std::size_t numFiles = userInput.inFiles.size();
-	uint32_t batchN = 0;
+	uint32_t batchN = 0, batchCounter = 0; // batch number, read position in the batch
 	uint64_t processedLength = 0;
 	bool sample = userInput.ratio < 1 ? true : false; // read subsampling
 	md5s.reserve(numFiles); // to avoid invalidating the vector during thread concurrency
@@ -156,14 +156,15 @@ void InReads::extractInReads() {
 								if (sample && newRand() > userInput.ratio)
 										continue;
 								processedLength += inSequence->size();
-								readBatch->sequences.emplace_back(std::make_unique<Sequence2>(seqHeader, seqComment, std::move(inSequence)));
-                                ++seqPos;
+								readBatch->add(seqPos++, batchCounter++, std::move(seqHeader), std::move(seqComment), std::move(inSequence));
+								
                                 if (processedLength > batchSize) {
                                     readBatch->batchN = batchN++;
                                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
 									filled_q.push(std::move(readBatch));
                                     readBatch = free_pool.pop();
                                     processedLength = 0;
+									batchCounter = 0;
                                 }
                                 //lg.verbose("Individual fasta sequence read: " + seqHeader);
                             }
@@ -198,15 +199,15 @@ void InReads::extractInReads() {
 								if (sample && newRand() > userInput.ratio)
 										continue;
 								processedLength += inSequence->size();
-								readBatch->sequences.emplace_back(std::make_unique<Sequence2>(seqHeader, seqComment, std::move(inSequence), std::move(inSequenceQuality)));
-                                ++seqPos;
-                                
+								readBatch->add(seqPos++, batchCounter++, std::move(seqHeader), std::move(seqComment), std::move(inSequence), std::move(inSequenceQuality));
+								
                                 if (processedLength > batchSize) {
                                     readBatch->batchN = batchN++;
                                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
 									filled_q.push(std::move(readBatch));
                                     readBatch = free_pool.pop();
                                     processedLength = 0;
+									batchCounter = 0;
                                 }
                                 //lg.verbose("Individual fastq sequence read: " + seqHeader);
                             }
@@ -233,42 +234,41 @@ void InReads::extractInReads() {
                     lg.verbose("Failed to generate decompression threadpool with " + std::to_string(userInput.decompression_threads) + " threads. Continuing single-threaded");
                 
                 while(sam_read1(fp_in,bamHdr,bamdata) > 0) {
-                    
+					
                     uint32_t len = bamdata->core.l_qseq; // length of the read.
                     uint8_t *seq = bam_get_seq(bamdata); // seq string
 					std::unique_ptr<std::string> inSequenceQuality;
-                    
+
 					std::unique_ptr<std::string> inSequence = std::make_unique<std::string>();
                     inSequence->resize(len);
                     for(uint32_t i=0; i<len; ++i)
                         inSequence->at(i) = seq_nt16_str[bam_seqi(seq,i)]; //gets nucleotide id and converts them into IUPAC id.
-                    
-                    if (bam_get_qual(bamdata)[0] != (uint8_t)-1) {
-                        inSequenceQuality = std::make_unique<std::string>((char*)bam_get_qual(bamdata),len);
-                        
-                        for(uint32_t i=0; i<len; ++i)
-                            inSequenceQuality->at(i) += 33;
-                    }else{
-                        uint8_t* tag = bam_aux_get(bamdata, "mq");
-                        if (tag != 0)
-                            inSequenceQuality = std::make_unique<std::string>((char*)tag++,len);
-                    }
+
+					uint8_t* qual = bam_get_qual(bamdata);
+					if (qual && (len > 0) && qual[0] != 0xFF) {
+						inSequenceQuality = std::make_unique<std::string>(len, '\0');
+						for (uint32_t i = 0; i < len; ++i)
+							(*inSequenceQuality)[i] = static_cast<char>(qual[i] + 33);
+					} else {
+						inSequenceQuality = std::make_unique<std::string>(len, '!'); // No per-base qualities; synthesize minimal qualities
+					}
+
 					if (sample && newRand() > userInput.ratio)
 							continue;
 					processedLength += inSequence->size();
-					readBatch->sequences.emplace_back(std::make_unique<Sequence2>(bam_get_qname(bamdata), std::string(), std::move(inSequence), std::move(inSequenceQuality)));
-                    seqPos++;
-                    
+
+					std::string qname(bam_get_qname(bamdata));
+					readBatch->add(seqPos++, batchCounter++, std::move(qname), std::string(), std::move(inSequence), std::move(inSequenceQuality));
+
                     if (processedLength > batchSize) {
                         readBatch->batchN = batchN++;
                         lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
 						filled_q.push(std::move(readBatch));
                         readBatch = free_pool.pop();
                         processedLength = 0;
-
+						batchCounter = 0;
                     }
                     lg.verbose("Individual fastq sequence read: " + seqHeader);
-
                 }
                 readBatch->batchN = batchN++;
                 lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
