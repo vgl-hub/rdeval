@@ -7,6 +7,7 @@
 
 #include "len-vector.h"
 #include "output.h"
+#include "blocking-queue.h"
 
 struct UserInputRdeval : UserInput {
 
@@ -70,10 +71,15 @@ class InReads {
     // filters
     char lSign = '0', qSign = '0', logicalOperator = '0';
     uint64_t l = 0, q = 0;
+	
+	// MPMC
+	size_t NUM_BUFFERS, QCAP;
+	BlockingQueue<std::unique_ptr<Sequences2>> free_pool, filled_q;
+	size_t N_CONS = userInput.maxThreads;
     
 public:
     
-    InReads(UserInputRdeval &userInput) : userInput(userInput) {
+    InReads(UserInputRdeval &userInput) : userInput(userInput), NUM_BUFFERS(10), QCAP(32), free_pool(QCAP), filled_q(QCAP) {
         
         const static phmap::flat_hash_map<std::string,int> string_to_case{ // supported read outputs
             {"fasta",1},
@@ -123,15 +129,15 @@ public:
 	
 	void filterRecords();
     
-    inline bool filterRead(Sequence* sequence);
+    inline bool filterRead(Sequence2* sequence);
     
     inline bool applyFilter(uint64_t size, float avgQuality);
+	
+	void extractInReads();
     
-    bool traverseInReads(Sequences* readBatch);
+    bool traverseInReads(Sequences2 &readBatch);
     
-    InRead* traverseInRead(Log* threadLog, Sequence* sequence, uint32_t seqPos);
-    
-    void appendReads(Sequences* readBatch);
+    InRead* traverseInRead(Log* threadLog, Sequence2* sequence, uint32_t seqPos);
     
     uint64_t getTotReadLen();
 
