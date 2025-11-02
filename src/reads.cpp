@@ -741,6 +741,10 @@ void InReads::printQualities() {
 }
 void InReads::printContent() {
     
+	std::sort(readSummaryBatches.begin(), readSummaryBatches.end(), [](const std::pair<std::vector<InRead*>,uint32_t>& a, const std::pair<std::vector<InRead*>,uint32_t>& b) {
+		return a.second < b.second;
+	});
+	
     std::cout<<"Header\tComment\tLength\tA\tC\tG\tT\tN\tGC\tAverage Quality\n";
     for (std::pair<std::vector<InRead*>,uint32_t> inReads : readSummaryBatches){
         for (InRead* read : inReads.first){
