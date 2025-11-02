@@ -121,7 +121,7 @@ class InReads {
     
 public:
     
-    InReads(UserInputRdeval &userInput) : userInput(userInput), NUM_BUFFERS(10), QCAP(32), free_pool(QCAP), filled_q(QCAP) {
+    InReads(UserInputRdeval &userInput) : userInput(userInput), NUM_BUFFERS(userInput.maxThreads*2), QCAP(NUM_BUFFERS), free_pool(QCAP), filled_q(QCAP) {
         
         const static phmap::flat_hash_map<std::string,int> string_to_case{ // supported read outputs
             {"fasta",1},
