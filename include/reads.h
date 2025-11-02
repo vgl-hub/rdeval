@@ -23,16 +23,58 @@ struct UserInputRdeval : UserInput {
     uint8_t decompression_threads = 4, compression_threads = 6;
 };
 
-class InRead : InSegment {
+struct InRead {
+	std::string seqHeader;
+	std::string seqComment;
+	std::unique_ptr<std::string> inSequence;
+	std::unique_ptr<std::string> inSequenceQuality;
+	uint64_t A = 0, C = 0, G = 0, T = 0, N = 0, lowerCount = 0;
+	unsigned int uId = 0, iId = 0, seqPos = 0;
+	std::vector<Tag> tags;
+	std::vector<std::deque<DBGpath>> variants;
+	float avgQuality = 0.0f;
+	
+	InRead() = default;
 
-    float avgQuality = 0;
-        
-public:
-    
-    void set(Log* threadLog, uint32_t uId, uint32_t iId, std::string readHeader, std::string* readComment, std::string* read, uint64_t* A, uint64_t* C, uint64_t* G, uint64_t* T, uint64_t* lowerCount, uint32_t readPos, std::string* sequenceQuality, float avgQuality, std::vector<Tag>* inReadTags = NULL, uint64_t* N = NULL);
-    
-friend class InReads;
+	// COPY: disable
+	InRead(const InRead&) = delete;
+	InRead& operator=(const InRead&) = delete;
 
+	// MOVE: enable
+	InRead(InRead&&) noexcept = default;
+	InRead& operator=(InRead&&) noexcept = default;
+
+	// main constructor
+	InRead(Log* threadLog,
+		   uint32_t uId, uint32_t iId,
+		   std::string header, std::string comment,
+		   std::unique_ptr<std::string> sequence,
+		   std::unique_ptr<std::string> sequenceQuality,
+		   uint32_t readPos,
+		   uint64_t A, uint64_t C, uint64_t G, uint64_t T,
+		   uint64_t N, uint64_t lowerCount,
+		   float avgQuality,
+		   const std::vector<Tag>* tags = nullptr)
+		: seqHeader(std::move(header)),
+		  seqComment(std::move(comment)),
+		  inSequence(std::move(sequence)),
+		  inSequenceQuality(std::move(sequenceQuality)),
+		  A(A), C(C), G(G), T(T), N(N), lowerCount(lowerCount),
+		  uId(uId), iId(iId), seqPos(readPos), avgQuality(avgQuality)
+	{
+		if (tags) this->tags = *tags;
+#ifdef DEBUG
+		if (threadLog)
+			threadLog->add("Processing read: " + seqHeader +
+						   " (uId: " + std::to_string(uId) +
+						   ", iId: " + std::to_string(iId) + ")");
+#endif
+	}
+
+	void dropPayload() {
+		inSequence.reset();
+		inSequenceQuality.reset();
+	}
 };
 
 class InReads {
@@ -43,7 +85,7 @@ class InReads {
     
     UserInputRdeval &userInput;
     std::vector<std::pair<std::vector<bam1_t*>,uint32_t>> readBatches;
-    std::vector<std::pair<std::vector<InRead*>,uint32_t>> readSummaryBatches; // could be avoided in the future
+    std::vector<std::pair<std::vector<InRead>,uint32_t>> readSummaryBatches; // could be avoided in the future
     uint64_t totReads = 0;
     
     uint32_t seqPos = 0; // to keep track of the original sequence order
@@ -140,7 +182,7 @@ public:
     
     bool traverseInReads(Sequences2 &readBatch);
     
-    InRead* traverseInRead(Log* threadLog, Sequence2* sequence, uint32_t seqPos);
+    InRead traverseInRead(Log* threadLog, Sequence2* sequence, uint32_t seqPos);
     
     uint64_t getTotReadLen();
 
