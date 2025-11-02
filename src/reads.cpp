@@ -181,6 +181,9 @@ void InReads::extractInReads() {
                     readBatch->batchN = batchN++; // process residual reads
                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
 					filled_q.push(std::move(readBatch));
+					readBatch = free_pool.pop();
+					processedLength = 0;
+					batchCounter = 0;
                 }
                 break;
             }
@@ -234,9 +237,12 @@ void InReads::extractInReads() {
                     }
                     lg.verbose("Individual fastq sequence read: " + seqHeader);
                 }
-                readBatch->batchN = batchN++;
+                readBatch->batchN = batchN++; // process residual reads
                 lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
 				filled_q.push(std::move(readBatch));
+				readBatch = free_pool.pop();
+				processedLength = 0;
+				batchCounter = 0;
                 bam_destroy1(bamdata);
                 sam_close(fp_in);
                 if (tpool_read.pool)
