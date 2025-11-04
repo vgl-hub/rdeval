@@ -1,4 +1,4 @@
-testFiles/random1.fastq  testFiles/random1.fastq.gz testFiles/random2.rd testFiles/random3.bam
+testFiles/random1.fastq testFiles/random1.fastq.gz testFiles/random2.rd testFiles/random3.bam
 embedded
 +++Read summary+++: 
 # reads: 79

@@ -44,7 +44,7 @@ int main(int, char **argv) {
     };
 
     const std::map<std::set<std::string>, std::vector<std::string>> file_args = {
-        {{"random1.fastq"}, {"-s u", "-s s", "-s h", "-s c", "testFiles/random1.fastq.gz testFiles/random2.rd testFiles/random3.bam"}},
+        {{"random1.fastq"}, {"-s u", "-s s", "-s h", "-s c", "testFiles/random1.fastq.gz testFiles/random2.rd testFiles/random3.bam", "testFiles/random1.fasta testFiles/random1.fasta.gz testFiles/random1.fastq testFiles/random1.fastq.gz testFiles/random2.fastq testFiles/random2.rd testFiles/random3.bam testFiles/random3.cram testFiles/random1.fasta testFiles/random1.fasta.gz testFiles/random1.fastq testFiles/random1.fastq.gz testFiles/random2.fastq testFiles/random2.rd testFiles/random3.bam testFiles/random3.cram"}},
         {{"random2.fastq"}, {"-f 'l>10000' -qa", "-f 'l<9000 & q>10' -qa", "-f 'l>9000 & q>90' -qa", "-f 'q>89' -ql", "-i testFiles/random2.ls", "-e testFiles/random2.ls", "--sample 0.3 --random-seed 42"}},
         {{"random2.rd"}, {"-f 'l>10000' -qa", "-f 'l<9000 & q>10' -qa", "-f 'l>9000 & q>90' -qa", "-f 'q>89' -ql"}},
         {{"random3.bam"}, {""}}
