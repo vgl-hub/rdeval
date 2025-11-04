@@ -105,6 +105,12 @@ calculateN50 <- function(read_lengths) {
   return(read_lengths[i - 1])
 }
 
+calculateAvgReadQuality <- function(read_lengths, read_qualities) {
+  n <- length(read_qualities)
+  sum_qualities <- sum(read_lengths * (10 ** -(read_qualities/10)))
+  return(-10 * log10(sum_qualities/sum(read_lengths)))
+}
+
 printRdSummary <- function(rdFile) {
   if (class(rdFile)[1] == 'rdFileClass') {
     gc_content = round(
@@ -127,7 +133,7 @@ printRdSummary <- function(rdFile) {
                  rdFile$C_count, ":", 
                  rdFile$T_count, ":",
                  rdFile$G_count, "\n\n"))
-    cat(paste0("Average read quality: ", round(mean(rdFile$qualities)), "\n\n"))
+    cat(paste0("Average per base quality: ", round(calculateAvgReadQuality(rdFile$lengths, rdFile$qualities), 2), "\n\n"))
     cat()
   } else {
     print('Input is not of class rdFileClass.')
