@@ -34,12 +34,22 @@ float newRand() {
 
 void InReads::load() {
 	
+	md5s.reserve(userInput.inFiles.size()); // to avoid invalidating the vector during thread concurrency
+	
 	// Preallocate exactly N buffers
 	for (size_t i = 0; i < NUM_BUFFERS; ++i) {
 		std::unique_ptr<Sequences2> b(new Sequences2);
 		free_pool.push(std::move(b));
 	}
-	std::thread producer([&]{ return extractInReads(); });
+	lg.verbose("Processing " + std::to_string(userInput.inFiles.size()) + " files");
+	uint32_t producersN = std::min<uint32_t>(userInput.inFiles.size(), 2);
+	
+	std::vector<std::thread> producers;
+	for (size_t t = 0; t < producersN; ++t) {
+		producers.emplace_back([&]{
+				extractInReads();
+		});
+	}
 	
 	std::vector<std::thread> consumers;
 	for (size_t t = 0; t < N_CONS; ++t) {
@@ -53,8 +63,7 @@ void InReads::load() {
 			}
 		});
 	}
-	
-	producer.join();
+	for (auto& th : producers) th.join();
 	for (auto& th : consumers) th.join();
 }
 
@@ -65,9 +74,7 @@ void InReads::extractInReads() {
 	uint32_t batchN = 0, batchCounter = 0; // batch number, read position in the batch
 	uint64_t processedLength = 0;
 	bool sample = userInput.ratio < 1 ? true : false; // read subsampling
-	md5s.reserve(numFiles); // to avoid invalidating the vector during thread concurrency
 	std::unique_ptr<Sequences2> readBatch = free_pool.pop();
-	lg.verbose("Processing " + std::to_string(numFiles) + " files");
 	
 	const static phmap::flat_hash_map<std::string,int> string_to_case{
 		{"fasta",1},
@@ -83,8 +90,12 @@ void InReads::extractInReads() {
 		{"rd",3}
 	};
     
-    for (uint32_t i = 0; i < numFiles; i++) {
-        
+	while (true) {
+		
+		uint32_t i = fileCounterStarted.fetch_add(1, std::memory_order_relaxed);
+		if (i >= numFiles)
+			break;
+		
         std::string file = userInput.file('r', i);
         std::string ext = getFileExt(file);
         if (ext != "rd") {
@@ -95,7 +106,8 @@ void InReads::extractInReads() {
                 
             case 1: { // fa*[.gz]
 				StreamObj streamObj;
-                stream = streamObj.openStream(userInput, 'r', i);
+				std::shared_ptr<std::istream> stream = streamObj.openStream(userInput, 'r', i);
+				
                 if (stream) {
                     
                     switch (stream->peek()) {
@@ -189,11 +201,11 @@ void InReads::extractInReads() {
             }
             case 2: { // bam, cram
                 
-                samFile *fp_in = hts_open(userInput.file('r', i).c_str(),"r"); //open bam file
+                samFile *fp_in = hts_open(file.c_str(),"r"); //open bam file
                 bam_hdr_t *bamHdr = sam_hdr_read(fp_in); //read header
                 bam1_t *bamdata = bam_init1(); //initialize an alignment
                 
-                tpool_read = {NULL, 0};
+				htsThreadPool tpool_read = {NULL, 0};
                 tpool_read.pool = hts_tpool_init(userInput.decompression_threads);
                 if (tpool_read.pool)
                     hts_set_opt(fp_in, HTS_OPT_THREAD_POOL, &tpool_read);
@@ -254,12 +266,14 @@ void InReads::extractInReads() {
                 break;
             }
             default: { // fasta[.gz]
-                fprintf(stderr, "cannot recognize input (must be: fasta, fastq, bam, cram).\n");
+                fprintf(stderr, "cannot recognize input (%s). Must be: fasta, fastq, bam, cram.\n", file.c_str());
                 exit(EXIT_FAILURE);
             }
         }
+		if (fileCounterCompleted.fetch_add(1, std::memory_order_relaxed) + 1 == numFiles) {
+			for (size_t i = 0; i < N_CONS; ++i) filled_q.push(std::unique_ptr<Sequences2>(nullptr)); // sentinels
+		}
     }
-	for (size_t i = 0; i < N_CONS; ++i) filled_q.push(std::unique_ptr<Sequences2>(nullptr)); // sentinels
 }
 
 float InReads::computeAvgQuality(std::string &sequenceQuality) {

@@ -78,10 +78,10 @@ struct InRead {
 };
 
 class InReads {
-    
-    uint32_t batchSize = 1000000; // number of bases processed by a thread
+	
+	uint32_t batchSize = 1000000; // number of bases processed by a thread
+	std::atomic<uint32_t> fileCounterStarted{0}, fileCounterCompleted{0}; // next file to read
     std::vector<Log> logs;
-    std::shared_ptr<std::istream> stream;
     
     UserInputRdeval &userInput;
     std::vector<std::pair<std::vector<bam1_t*>,uint32_t>> readBatches;
@@ -101,7 +101,7 @@ class InReads {
     
     htsFile *fp; // htslib file pointer
     bam_hdr_t *hdr; // htslib sam header pointer
-    htsThreadPool tpool_read, tpool_write; // htslib threadpool pointer
+    htsThreadPool tpool_write; // htslib threadpool pointer
     bool bam = false;
     
     std::vector<std::pair<std::string,std::string>> md5s;
