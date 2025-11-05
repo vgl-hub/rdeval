@@ -124,7 +124,7 @@ public:
     
     InReads(UserInputRdeval &userInput) :
 	userInput(userInput),
-	producersN(userInput.outFiles.size() ? 1 : std::min<uint32_t>(userInput.inFiles.size(), userInput.parallel_files)),
+	producersN(userInput.outFiles.size() && getFileExt(userInput.outFiles.at(0)) != "rd" ? 1 : std::min<uint32_t>(userInput.inFiles.size(), userInput.parallel_files)),
 	NUM_BUFFERS((userInput.maxThreads+producersN)*2),
 	QCAP(NUM_BUFFERS),
 	free_pool(QCAP),
