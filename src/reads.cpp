@@ -44,7 +44,9 @@ void InReads::load() {
 		free_pool.push(std::move(b));
 	}
 	lg.verbose("Processing " + std::to_string(userInput.inFiles.size()) + " files");
-	uint32_t producersN = std::min<uint32_t>(userInput.inFiles.size(), 2);
+	uint32_t producersN = std::min<uint32_t>(userInput.inFiles.size(), userInput.parallel_files);
+	if (streamOutput)
+		producersN = 1; // need to guarantee the output is ordered as the input
 	
 	std::vector<std::thread> producers;
 	for (size_t t = 0; t < producersN; ++t) {

@@ -20,7 +20,7 @@ struct UserInputRdeval : UserInput {
     int stats_flag = 1; // by default we output the stats
     int32_t randSeed = -1;
 	int maxThreads = 8;
-    uint8_t decompression_threads = 4, compression_threads = 6;
+    uint16_t parallel_files = 4, decompression_threads = 4, compression_threads = 6;
 };
 
 struct InRead {

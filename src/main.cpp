@@ -45,6 +45,7 @@ int main(int argc, char **argv) {
         {"homopolymer-compress", required_argument, 0, 0},
         {"sample", required_argument, 0, 0},
         {"random-seed", required_argument, 0, 0},
+		{"parallel-files", required_argument, 0, 0},
         {"decompression-threads", required_argument, 0, 0},
         {"compression-threads", required_argument, 0, 0},
         {"sequence-report",no_argument, 0, 0},
@@ -104,6 +105,8 @@ int main(int argc, char **argv) {
                     userInput.outSize_flag = false;
                     userInput.quality_flag = false;
                 }
+				if(strcmp(long_options[option_index].name,"parallel-files") == 0)
+					userInput.parallel_files = atoi(optarg);
                 if(strcmp(long_options[option_index].name,"decompression-threads") == 0)
                     userInput.decompression_threads = atoi(optarg);
                 if(strcmp(long_options[option_index].name,"compression-threads") == 0)
@@ -178,10 +181,14 @@ int main(int argc, char **argv) {
                 printf("\t--sample <float> fraction of reads to subsample.\n");
                 printf("\t--random-seed <int> an optional random seed to make subsampling reproducible.\n");
                 printf("\t--md5 print md5 of .rd files.\n");
+				printf("\t--parallel-files <int> numbers of files that can be opened and processed in parallel (default:4).\n");
+				printf("\t--decompression-threads <int> numbers of decompression threads used by htslib for bam/cram (default:4).\n");
+				printf("\t--compression-threads <int> numbers of compression threads used by htslib for bam/cram (default:6).\n");
                 printf("\t--tabular tabular output.\n");
                 printf("\t--verbose verbose output.\n");
 				printf("\t-m --max-memory <int> max number of bases in ring buffer (default:1000000).\n");
-				printf("\t-j --threads <int> numbers of threads (default:5).\n");
+				printf("\t-j --threads <int> numbers of threads (default:8).\n");
+
                 printf("\t-v --version software version.\n");
                 printf("\t--cmd print $0 to stdout.\n");
                 exit(0);
