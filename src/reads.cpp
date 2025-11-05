@@ -36,6 +36,8 @@ void InReads::load() {
 	
 	md5s.reserve(userInput.inFiles.size()); // to avoid invalidating the vector during thread concurrency
 	
+	readSummaryBatches.resize(userInput.inFiles.size()); // resize to accommodate batches from multiple files
+	
 	// Preallocate exactly N buffers
 	for (size_t i = 0; i < NUM_BUFFERS; ++i) {
 		std::unique_ptr<Sequences2> b(new Sequences2);
@@ -71,7 +73,7 @@ void InReads::extractInReads() {
 	
 	std::string newLine, seqHeader, seqComment, line, bedHeader;
 	std::size_t numFiles = userInput.inFiles.size();
-	uint32_t batchN = 0, batchCounter = 0; // batch number, read position in the batch
+	uint32_t batchCounter = 0; // batch number, read position in the batch
 	uint64_t processedLength = 0;
 	bool sample = userInput.ratio < 1 ? true : false; // read subsampling
 	std::unique_ptr<Sequences2> readBatch = free_pool.pop();
@@ -96,6 +98,7 @@ void InReads::extractInReads() {
 		if (i >= numFiles)
 			break;
 		
+		uint32_t batchN = 0;
         std::string file = userInput.file('r', i);
         std::string ext = getFileExt(file);
         if (ext != "rd") {
@@ -136,6 +139,7 @@ void InReads::extractInReads() {
 								
                                 if (processedLength > batchSize) {
                                     readBatch->batchN = batchN++;
+									readBatch->fileN = i;
                                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
 									filled_q.push(std::move(readBatch));
                                     readBatch = free_pool.pop();
@@ -179,6 +183,7 @@ void InReads::extractInReads() {
 								
                                 if (processedLength > batchSize) {
                                     readBatch->batchN = batchN++;
+									readBatch->fileN = i;
                                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
 									filled_q.push(std::move(readBatch));
                                     readBatch = free_pool.pop();
@@ -191,6 +196,7 @@ void InReads::extractInReads() {
                         }
                     }
                     readBatch->batchN = batchN++; // process residual reads
+					readBatch->fileN = i;
                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
 					filled_q.push(std::move(readBatch));
 					readBatch = free_pool.pop();
@@ -241,6 +247,7 @@ void InReads::extractInReads() {
 
                     if (processedLength > batchSize) {
                         readBatch->batchN = batchN++;
+						readBatch->fileN = i;
                         lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
 						filled_q.push(std::move(readBatch));
                         readBatch = free_pool.pop();
@@ -250,6 +257,7 @@ void InReads::extractInReads() {
                     lg.verbose("Individual fastq sequence read: " + seqHeader);
                 }
                 readBatch->batchN = batchN++; // process residual reads
+				readBatch->fileN = i;
                 lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
 				filled_q.push(std::move(readBatch));
 				readBatch = free_pool.pop();
@@ -472,7 +480,7 @@ bool InReads::traverseInReads(Sequences2 &readBatch) { // traverse the read
     {
         std::unique_lock<std::mutex> lck(mtx);
         readBatches.emplace_back(inReadsBatch,readBatch.batchN);
-        readSummaryBatches.emplace_back(std::move(inReadsSummaryBatch),readBatch.batchN);
+        readSummaryBatches.at(readBatch.fileN).emplace_back(std::move(inReadsSummaryBatch),readBatch.batchN);
         readLens.insert(readLensBatch);
         totA+=batchA;
         totT+=batchT;
@@ -687,25 +695,28 @@ void InReads::printQualities() {
     }
 }
 void InReads::printContent() {
-	std::sort(readSummaryBatches.begin(), readSummaryBatches.end(),
-			  [](const std::pair<std::vector<InRead>, uint32_t>& a,
-				 const std::pair<std::vector<InRead>, uint32_t>& b) {
-				  return a.second < b.second;
-			  });
-
+	
+	for (auto& readSummaryBatch : readSummaryBatches) {
+		std::sort(readSummaryBatch.begin(), readSummaryBatch.end(),
+				  [](const std::pair<std::vector<InRead>, uint32_t>& a,
+					 const std::pair<std::vector<InRead>, uint32_t>& b) {
+			return a.second < b.second;
+		});
+	}
 	std::cout << "Header\tComment\tLength\tA\tC\tG\tT\tN\tGC\tAverage Quality\n";
-
-	for (const auto& inReads : readSummaryBatches) {              // <-- no copy
-		for (const auto& read : inReads.first) {                  // <-- no copy
-			const uint64_t A = read.A, C = read.C, G = read.G, T = read.T, N = read.N;
-			const uint64_t total = A + C + G + T + N;
-			const float gc = total ? gfa_round(static_cast<float>(G + C) / total) : 0.0f;
-			std::cout << read.seqHeader << '\t'
-					  << read.seqComment << '\t'
-					  << total << '\t'
-					  << A << '\t' << C << '\t' << G << '\t' << T << '\t' << N << '\t'
-					  << gc << '\t'
-					  << read.avgQuality << '\n';
+	for (auto& readSummaryBatch : readSummaryBatches) {
+		for (const auto& inReads : readSummaryBatch) {              // <-- no copy
+			for (const auto& read : inReads.first) {                  // <-- no copy
+				const uint64_t A = read.A, C = read.C, G = read.G, T = read.T, N = read.N;
+				const uint64_t total = A + C + G + T + N;
+				const float gc = total ? gfa_round(static_cast<float>(G + C) / total) : 0.0f;
+				std::cout << read.seqHeader << '\t'
+				<< read.seqComment << '\t'
+				<< total << '\t'
+				<< A << '\t' << C << '\t' << G << '\t' << T << '\t' << N << '\t'
+				<< gc << '\t'
+				<< read.avgQuality << '\n';
+			}
 		}
 	}
 }

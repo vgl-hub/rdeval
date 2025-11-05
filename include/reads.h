@@ -85,7 +85,7 @@ class InReads {
     
     UserInputRdeval &userInput;
     std::vector<std::pair<std::vector<bam1_t*>,uint32_t>> readBatches;
-    std::vector<std::pair<std::vector<InRead>,uint32_t>> readSummaryBatches; // could be avoided in the future
+	std::vector<std::vector<std::pair<std::vector<InRead>,uint32_t>>> readSummaryBatches; // could be avoided in the future
     uint64_t totReads = 0;
     
     uint32_t seqPos = 0; // to keep track of the original sequence order
