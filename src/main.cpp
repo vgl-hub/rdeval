@@ -181,13 +181,13 @@ int main(int argc, char **argv) {
                 printf("\t--sample <float> fraction of reads to subsample.\n");
                 printf("\t--random-seed <int> an optional random seed to make subsampling reproducible.\n");
                 printf("\t--md5 print md5 of .rd files.\n");
-				printf("\t--parallel-files <int> numbers of files that can be opened and processed in parallel (default:4).\n");
+				printf("\t--parallel-files <int> numbers of files that can be opened and processed in parallel (producer threads, default:4).\n");
 				printf("\t--decompression-threads <int> numbers of decompression threads used by htslib for bam/cram (default:4).\n");
 				printf("\t--compression-threads <int> numbers of compression threads used by htslib for bam/cram (default:6).\n");
                 printf("\t--tabular tabular output.\n");
                 printf("\t--verbose verbose output.\n");
 				printf("\t-m --max-memory <int> max number of bases in ring buffer (default:1000000).\n");
-				printf("\t-j --threads <int> numbers of threads (default:8).\n");
+				printf("\t-j --threads <int> numbers of consumer threads (default:8).\n");
 
                 printf("\t-v --version software version.\n");
                 printf("\t--cmd print $0 to stdout.\n");
