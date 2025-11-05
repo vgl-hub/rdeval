@@ -1,5 +1,3 @@
-testFiles/random2.rd -f 'l>9000 & q>90' -qa
+testFiles/random2.rd -f 'l<9000 & q>10' -qa
 embedded
-12401,91.58
-14538,90.84
-15820,91.65
+7979,92.85
