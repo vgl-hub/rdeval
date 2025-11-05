@@ -115,13 +115,20 @@ class InReads {
     uint64_t l = 0, q = 0;
 	
 	// MPMC
+	uint32_t producersN = 1; // need to guarantee the output is ordered as the input (see initializer)
 	size_t NUM_BUFFERS, QCAP;
 	BlockingQueue<std::unique_ptr<Sequences2>> free_pool, filled_q;
 	size_t N_CONS = userInput.maxThreads;
     
 public:
     
-    InReads(UserInputRdeval &userInput) : userInput(userInput), NUM_BUFFERS(userInput.maxThreads*2), QCAP(NUM_BUFFERS), free_pool(QCAP), filled_q(QCAP) {
+    InReads(UserInputRdeval &userInput) :
+	userInput(userInput),
+	producersN(userInput.outFiles.size() ? 1 : std::min<uint32_t>(userInput.inFiles.size(), userInput.parallel_files)),
+	NUM_BUFFERS((userInput.maxThreads+producersN)*2),
+	QCAP(NUM_BUFFERS),
+	free_pool(QCAP),
+	filled_q(QCAP) {
         
         const static phmap::flat_hash_map<std::string,int> string_to_case{ // supported read outputs
             {"fasta",1},
