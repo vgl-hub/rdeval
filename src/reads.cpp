@@ -35,8 +35,8 @@ float newRand() {
 void InReads::load() {
 	
 	md5s.reserve(userInput.inFiles.size()); // to avoid invalidating the vector during thread concurrency
-	
 	readSummaryBatches.resize(userInput.inFiles.size()); // resize to accommodate batches from multiple files
+	readBatches.resize(userInput.inFiles.size()); // resize to accommodate batches from multiple files
 	
 	// Preallocate exactly N buffers
 	for (size_t i = 0; i < NUM_BUFFERS; ++i) {
@@ -44,6 +44,8 @@ void InReads::load() {
 		free_pool.push(std::move(b));
 	}
 	lg.verbose("Processing " + std::to_string(userInput.inFiles.size()) + " files");
+	lg.verbose("Using " + std::to_string(producersN) + " producers");
+	lg.verbose("Using " + std::to_string(consumersN) + " consumers");
 	
 	std::vector<std::thread> producers;
 	for (size_t t = 0; t < producersN; ++t) {
@@ -53,7 +55,7 @@ void InReads::load() {
 	}
 	
 	std::vector<std::thread> consumers;
-	for (size_t t = 0; t < N_CONS; ++t) {
+	for (size_t t = 0; t < consumersN; ++t) {
 		consumers.emplace_back([&]{
 			for (;;) {
 				std::unique_ptr<Sequences2> readBatch = filled_q.pop(); // may sleep if empty
@@ -278,7 +280,7 @@ void InReads::extractInReads() {
             }
         }
 		if (fileCounterCompleted.fetch_add(1, std::memory_order_relaxed) + 1 == numFiles) {
-			for (size_t i = 0; i < N_CONS; ++i) filled_q.push(std::unique_ptr<Sequences2>(nullptr)); // sentinels
+			for (size_t i = 0; i < consumersN; ++i) filled_q.push(std::unique_ptr<Sequences2>(nullptr)); // sentinels
 		}
     }
 }
@@ -478,7 +480,7 @@ bool InReads::traverseInReads(Sequences2 &readBatch) { // traverse the read
     
     {
         std::unique_lock<std::mutex> lck(mtx);
-        readBatches.emplace_back(inReadsBatch,readBatch.batchN);
+		readBatches.at(readBatch.fileN).emplace_back(inReadsBatch,readBatch.batchN);
         readSummaryBatches.at(readBatch.fileN).emplace_back(std::move(inReadsSummaryBatch),readBatch.batchN);
         readLens.insert(readLensBatch);
         totA+=batchA;
@@ -861,8 +863,11 @@ void InReads::closeBam() {
 
 void InReads::writeToStream() {
 
-    uint64_t batchCounter = 0;
-    std::vector<std::pair<std::vector<bam1_t*>,uint32_t>> readBatchesCpy;
+	size_t numFiles = userInput.inFiles.size();
+	std::vector<uint32_t> batchCounter;
+	batchCounter.resize(numFiles);
+	std::vector<std::vector<std::pair<std::vector<bam1_t*>,uint32_t>>> readBatchesCpy;
+	readBatchesCpy.resize(numFiles);
     
     tpool_write = {NULL, 0}; // init htslib threadpool
     tpool_write.pool = hts_tpool_init(userInput.compression_threads);
@@ -870,46 +875,56 @@ void InReads::writeToStream() {
         hts_set_opt(fp, HTS_OPT_THREAD_POOL, &tpool_write);
     else
         lg.verbose("Failed to generate compression threadpool with " + std::to_string(userInput.compression_threads) + " threads. Continuing single-threaded");
-    
+	
     while (true) {
-        
-        {
-            std::unique_lock<std::mutex> lck(mtx);
-            writerMutexCondition.wait(lck, [this, &readBatchesCpy] {
-                return !streamOutput || readBatches.size() || readBatchesCpy.size();
-            });
-            if (!streamOutput && !readBatches.size() && !readBatchesCpy.size()) {
-                if (bam)
-                    closeBam();
-                sam_close(fp); // close file
-                if (tpool_write.pool)
-                    hts_tpool_destroy(tpool_write.pool);
-                return;
-            }
-            readBatchesCpy.insert(readBatchesCpy.begin(), readBatches.begin(), readBatches.end());
-            readBatches.clear();
+		{
+			std::unique_lock<std::mutex> lck(mtx);
+			uint32_t originalN = 0, cpy = 0;
+			writerMutexCondition.wait(lck, [this, &readBatchesCpy, &originalN, &cpy, numFiles] {
+				
+				originalN = 0, cpy = 0;
+				for (uint32_t i = 0; i < numFiles; ++i) {
+					originalN += readBatches.at(i).size();
+					cpy += readBatchesCpy.at(i).size();
+				}
+				
+				return !streamOutput || originalN || cpy;
+			});
+			if (!streamOutput && !originalN && !cpy) {
+				if (bam)
+					closeBam();
+				sam_close(fp); // close file
+				if (tpool_write.pool)
+					hts_tpool_destroy(tpool_write.pool);
+				return;
+			}
+			for (uint32_t i = 0; i < numFiles; ++i) {
+				readBatchesCpy.at(i).insert(readBatchesCpy.at(i).begin(), readBatches.at(i).begin(), readBatches.at(i).end());
+				readBatches.at(i).clear();
+			}
         }
-                
-        for (std::vector<std::pair<std::vector<bam1_t*>,uint32_t>>::iterator it = readBatchesCpy.begin(); it != readBatchesCpy.end();) {
-            
-            auto &inReads = *it;
-            
-            if (inReads.second != batchCounter) {
-                ++it;
-                continue;
-            }
-            lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
-                
-            for (bam1_t* q : inReads.first){
-                if (sam_write1(fp, hdr, q) < 0) {
-                    printf("Failed to write data\n");
-                    exit(EXIT_FAILURE);
-                }
-                bam_destroy1(q);
-            }
-            it = readBatchesCpy.erase(it);
-            ++batchCounter;
-        }
+		for (uint32_t i = 0; i < numFiles; ++i) {
+			for (std::vector<std::pair<std::vector<bam1_t*>,uint32_t>>::iterator it = readBatchesCpy.at(i).begin(); it != readBatchesCpy.at(i).end();) {
+				
+				auto &inReads = *it;
+				
+				if (inReads.second != batchCounter.at(i)) {
+					++it;
+					continue;
+				}
+				lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
+				
+				for (bam1_t* q : inReads.first){
+					if (sam_write1(fp, hdr, q) < 0) {
+						printf("Failed to write data\n");
+						exit(EXIT_FAILURE);
+					}
+					bam_destroy1(q);
+				}
+				it = readBatchesCpy.at(i).erase(it);
+				++batchCounter.at(i);
+			}
+		}
     }
 }
 

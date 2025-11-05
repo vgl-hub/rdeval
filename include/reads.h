@@ -84,7 +84,7 @@ class InReads {
     std::vector<Log> logs;
     
     UserInputRdeval &userInput;
-    std::vector<std::pair<std::vector<bam1_t*>,uint32_t>> readBatches;
+	std::vector<std::vector<std::pair<std::vector<bam1_t*>,uint32_t>>> readBatches;
 	std::vector<std::vector<std::pair<std::vector<InRead>,uint32_t>>> readSummaryBatches; // could be avoided in the future
     uint64_t totReads = 0;
     
@@ -118,7 +118,7 @@ class InReads {
 	uint32_t producersN = 1; // need to guarantee the output is ordered as the input (see initializer)
 	size_t NUM_BUFFERS, QCAP;
 	BlockingQueue<std::unique_ptr<Sequences2>> free_pool, filled_q;
-	size_t N_CONS = userInput.maxThreads;
+	size_t consumersN = userInput.maxThreads;
     
 public:
     
