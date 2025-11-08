@@ -13,6 +13,9 @@ library(tidyverse)
 library(plotly)
 library(ggExtra)
 library(bit64)
+library(data.table)
+library(ggrastr)
+library(cowplot)
 source('rdeval_interface.R')
 ```
 
@@ -29,17 +32,17 @@ icdf <- function(read_lengths) {
   vals <- unique(read_lengths)
   inv_cs <- sum - cumsum(as.numeric(tabulate(match(read_lengths, vals)) * vals))
   inv_cs_gb <- inv_cs/10^9
-  return(tibble(read_length = vals, inv_cs = inv_cs, inv_cs_gb = inv_cs_gb))
+  return(data.table(read_length = vals, inv_cs = inv_cs, inv_cs_gb = inv_cs_gb))
 }
 
-reads <- tibble(read_length = numeric(), read_quality = numeric(), run = character())
-inv_cs <- tibble(read_length = numeric(), inv_cs = numeric(), run = character())
+reads <- data.table(read_length = numeric(), read_quality = numeric(), run = character())
+inv_cs <- data.table(read_length = numeric(), inv_cs = numeric(), inv_cs_gb = numeric(), run = character())
 
 files <- params$input_files
 n_runs <- length(files)
 for (file in files) {
   rdFile <- generateRdFile(file)
-  df <- tibble(read_length = rdFile$lengths, 
+  df <- data.table(read_length = rdFile$lengths, 
                    read_quality = rdFile$qualities)
   run <- strsplit(basename(file), '[.]')[[1]][1]
   df$run <- run
@@ -62,13 +65,12 @@ reads$read_length_kbp <- reads$read_length / 1000 # Read length to kbp
 reads_downsampled <- reads %>% filter(row_number() %% 10 == 1)
 
 if (params$interactive) {
-  violin <- reads_downsampled %>%
-    plot_ly(
-      x = ~run,
-      y = ~read_length_kbp,
-      split = ~run,
+  violin <- plot_ly(
+      x = reads_downsampled$run,
+      y = reads_downsampled$read_length_kbp,
+      split = reads_downsampled$run,
       type = 'violin',
-      color = ~run,
+      color = reads_downsampled$run,
       colors = palette,
       hoverinfo = "y",
       points = FALSE,
@@ -130,12 +132,11 @@ densities <- do.call(rbind, lapply(split_reads, function(df) {
 
 # Plot using plotly
 read_lengths <- plot_ly(
-  data = densities,
-  x = ~x,
-  y = ~y,
-  color = ~run,
+  x = densities$x,
+  y = densities$y,
+  color = densities$run,
   colors = palette,
-  type = 'scatter',
+  type = 'scattergl',
   mode = 'lines',
   fill = 'tozeroy',
   opacity = 0.5,
@@ -144,7 +145,7 @@ read_lengths <- plot_ly(
     "<b>Read length (kbp):</b> %{x:.2f}<br>",
     "<b>Count:</b> %{y:.0f}<extra></extra>"
   ),
-  customdata = ~run
+  customdata = densities$run
 ) %>%
   layout(
     xaxis = list(title = "Read length (kbp)", tickformat = ","),
@@ -192,11 +193,11 @@ if (params$interactive) {
   
   read_lengths_log <- plot_ly(
     data = densities,
-    x = ~x,
-    y = ~y,
+    x = densities$x,
+    y = densities$y,
     color = ~run,
     colors = palette,
-    type = 'scatter',
+    type = 'scattergl',
     mode = 'lines',
     fill = 'tozeroy',
     opacity = 0.5,
@@ -205,7 +206,7 @@ if (params$interactive) {
       "<b>Read length (kbp):</b> %{x:.2f}<br>",
       "<b>Count:</b> %{y:.0f}<extra></extra>"
     ),
-    customdata = ~run
+    customdata = densities$run
   ) %>%
     layout(
       xaxis = list(title = "Read length", type = "log",
@@ -234,18 +235,17 @@ read_lengths_log
 inv_cs$read_length_kb <- inv_cs$read_length/1000
 
 if (params$interactive) {
-  inv_cs <- inv_cs %>% filter(row_number() %% 3 == 1)
   
   icd <- plot_ly(
     data = inv_cs,
-    x = ~read_length_kb,
-    y = ~inv_cs_gb,
-    color = ~run,
+    x = inv_cs$read_length_kb,
+    y = inv_cs$inv_cs_gb,
+    color = inv_cs$run,
     colors = palette,
-    type = "scatter",
+    type = "scattergl",
     mode = "markers",
     marker = list(size = 6, opacity = 0.8),
-    customdata = ~run,
+    customdata = inv_cs$run,
     hovertemplate = paste(
       "<b>Run:</b> %{customdata}<br>",
       "<b>Read length (kbp):</b> %{x:,}<br>",
@@ -281,15 +281,10 @@ icd
 
 ### Read lengths vs average quality
 ```{r, message=FALSE, warning=FALSE}
-reads_by_avg_quality <- reads %>%
-  group_by(run, read_length) %>%
-  summarize_at("read_quality", mean) %>%
-  mutate(read_length_kbp = read_length / 1000) 
-
 if (params$interactive) {
-  reads_by_avg_quality %>% 
-  filter(row_number() %% 4 == 1)
-
+  reads %>% 
+    filter(row_number() %% 5 == 1)
+  
   # Scatterplot with 2D density contour lines overlaid
   # Base plot with no data yet
   scatter_with_density <- plot_ly()
@@ -297,32 +292,33 @@ if (params$interactive) {
   # Step 1: Add scatter points
   scatter_with_density <- scatter_with_density %>%
     add_markers(
-      data = reads_by_avg_quality,
-      x = ~read_length_kbp,
-      y = ~read_quality,
-      color = ~run,
+      x = reads$read_length_kbp,
+      y = reads$read_quality,
+      type = "scattergl",
+      color = reads$run,
       colors = palette,
-      marker = list(size = 1.5, opacity = 0.2),
-      width = 5,
-      customdata = ~run,
+      marker = list(size = 1, opacity = 0.2),
+      width = 3,
+      customdata = reads$run,
       text = ~paste(
         "Run:", run,
-        "<br>Read length (kbp):", round(read_length_kbp, 2),
-        "<br>Avg Quality:", round(read_quality, 2)
+        "<br>Read length (kbp):", round(reads$read_length_kbp, 2),
+        "<br>Avg Quality:", round(reads$read_quality, 2)
       ),
       hoverinfo = "text",
       layer = "below",
-      legendgroup = ~run,
-      showlegend = TRUE
+      legendgroup = reads$run,
+      showlegend = TRUE,
+      simplify = FALSE
     )
   
   # Step 2: Add density contour
-  if (sum(reads_by_avg_quality$read_quality) > 0 & sd(reads_by_avg_quality$read_quality) > 0) {
+  if (sum(reads$read_quality) > 0 & sd(reads$read_quality) > 0) {
     scatter_with_density <- scatter_with_density %>%
       add_histogram2dcontour(
-        data = reads_by_avg_quality,
-        x = ~read_length_kbp,
-        y = ~read_quality,
+        data = reads,
+        x = reads$read_length_kbp,
+        y = reads$read_quality,
         contours = list(coloring = "lines"),
         colorscale = "Viridis",
         ncontours = 20,
@@ -346,14 +342,13 @@ if (params$interactive) {
   
   # X histogram
   hist_top <- plot_ly(
-    data = reads_by_avg_quality,
-    x = ~read_length_kbp,
-    color = ~run,
+    x = reads$read_length_kbp,
+    color = reads$run,
     colors = palette,
     type = "histogram",
-    nbinsx = 25,
+    nbinsx = 40,
     opacity = 0.75,
-    legendgroup = ~run,
+    legendgroup = reads$run,
     showlegend = FALSE,
     layer = 'below',
     customdata = ~run,
@@ -366,17 +361,16 @@ if (params$interactive) {
   
   # Y histogram
   hist_right <- plot_ly(
-    data = reads_by_avg_quality,
-    y = ~read_quality,
-    color = ~run,
+    y = reads$read_quality,
+    color = reads$run,
     colors = palette,
     type = "histogram",
-    nbinsy = 25,
+    nbinsy = 40,
     opacity = 0.75,
-    legendgroup = ~run,
+    legendgroup = reads$run,
     showlegend = FALSE,
     layer = 'above',
-    customdata = ~run,
+    customdata = reads$run,
     hovertemplate = paste(
       "<b>Run:</b> %{customdata}<br>",
       "<b>Read Quality:</b> %{y:.2f} kbp<br>",
@@ -405,22 +399,47 @@ if (params$interactive) {
       yaxis2 = list(title = "Average Read Quality")
     )
 } else {
-  g <- reads_by_avg_quality %>%
+  scatterplot <- reads %>%
     ggplot(aes(x = read_length/1000, y = read_quality, fill = run, color = run)) +
     geom_point(size = 0.75, 
                alpha = 0.2) +
-    scale_color_viridis_c(guide = "none") +
     scale_x_continuous(name = ("Read length (kbp)"),
                        labels = scales::label_comma()) +
     scale_y_continuous(name = ("Average Read Quality")) +
     scale_color_manual(guide = "none", values = rev(palette)) +
     scale_fill_discrete(guide = "none") +
-    theme_bw() 
-  if (sum(reads_by_avg_quality$read_quality) > 0 & sd(reads_by_avg_quality$read_quality) > 0) {
-     g <- g + geom_density_2d(aes(x = read_length / 1000, y = read_quality, group = 1), color = 'black', linewidth = 0.5, inherit.aes = FALSE)
+    theme_bw(base_size = 11)
+  if (sum(reads$read_quality) > 0 & sd(reads$read_quality) > 0) {
+     scatterplot <- scatterplot + geom_density_2d(aes(x = read_length / 1000, y = read_quality, group = 1), color = 'black', linewidth = 0.5, inherit.aes = FALSE)
   }
-  final_plot <- ggMarginal(g + theme(legend.position = "left"), type = "histogram", groupColour = TRUE, groupFill = TRUE)
-  final_plot
+  # Top marginal histogram
+  x_hist <- ggplot(reads, aes(x = read_length / 1000, fill = run)) +
+    geom_histogram(position = "identity", bins = 40) +
+    scale_fill_manual(values = rev(palette), guide = "none") +
+    theme_void() +
+    theme(
+      plot.margin = margin()
+    )
+  # Right marginal histogram
+  y_hist <- ggplot(reads, aes(x = read_quality, fill = run)) +
+    geom_histogram(position = "identity", bins = 40) +
+    coord_flip() +
+    scale_fill_manual(values = rev(palette), guide = "none") +
+    theme_void() +
+    theme(
+      plot.margin = margin()
+    )
+  # Align histograms with scatterplot
+  aligned_x_hist <- align_plots(x_hist, scatterplot, align = "v")[[1]]
+  aligned_y_hist <- align_plots(y_hist, scatterplot, align = "h")[[1]]
+  
+  final_plot <- plot_grid(
+    aligned_x_hist, NULL,
+    scatterplot, aligned_y_hist,
+    ncol = 2, nrow = 2,
+    rel_heights = c(0.2, 1),
+    rel_widths = c(1, 0.2)
+  )
 }
 
 final_plot
