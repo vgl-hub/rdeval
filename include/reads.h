@@ -1,6 +1,17 @@
 #ifndef READS_H
 #define READS_H
 
+#include <atomic>
+#include <condition_variable>
+#include <cstdint>
+#include <deque>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <vector>
+
 #include <htslib/sam.h>
 #include <htslib/bgzf.h>
 #include <htslib/hts.h>
@@ -9,42 +20,56 @@
 #include "output.h"
 #include "blocking-queue.h"
 
-struct UserInputRdeval : UserInput {
+// -------------------------------------------------------------
+// UserInputRdeval
+// -------------------------------------------------------------
 
-    std::string filter = "none";
-    
-    char sizeOutType = 'u'; //default output from this flag is unsorted sizes
-    char qualityOut = 'a'; // average quality per read
-    int outSize_flag = 0, quality_flag = 0, content_flag = 0, md5_flag = 0, cmd_flag = 0;
-    float ratio = 1.0f;
-    int stats_flag = 1; // by default we output the stats
-    int32_t randSeed = -1;
-	int maxThreads = 8;
-    uint16_t parallel_files = 4, decompression_threads = 4, compression_threads = 6;
+struct UserInputRdeval : UserInput {
+	std::string filter = "none", outPrefix = "";
+
+	char sizeOutType = 'u';
+	char qualityOut  = 'a';
+
+	int outSize_flag  = 0;
+	int quality_flag  = 0;
+	int content_flag  = 0;
+	int md5_flag      = 0;
+	int cmd_flag      = 0;
+	int stats_flag    = 1;
+
+	float    ratio       = 1.0f;
+	int32_t  randSeed    = -1;
+	int      maxThreads  = 8;
+	uint16_t parallel_files         = 4;
+	uint16_t decompression_threads  = 4;
+	uint16_t compression_threads    = 6;
 };
+
+
+// -------------------------------------------------------------
+// InRead structure
+// -------------------------------------------------------------
 
 struct InRead {
 	std::string seqHeader;
 	std::string seqComment;
 	std::unique_ptr<std::string> inSequence;
 	std::unique_ptr<std::string> inSequenceQuality;
-	uint64_t A = 0, C = 0, G = 0, T = 0, N = 0, lowerCount = 0;
-	unsigned int uId = 0, iId = 0, seqPos = 0;
+
+	uint64_t A=0, C=0, G=0, T=0, N=0, lowerCount=0;
+	uint32_t uId=0, iId=0, seqPos=0;
+
 	std::vector<Tag> tags;
 	std::vector<std::deque<DBGpath>> variants;
 	float avgQuality = 0.0f;
-	
+
 	InRead() = default;
 
-	// COPY: disable
-	InRead(const InRead&) = delete;
+	InRead(const InRead&)            = delete;
 	InRead& operator=(const InRead&) = delete;
-
-	// MOVE: enable
-	InRead(InRead&&) noexcept = default;
+	InRead(InRead&&) noexcept        = default;
 	InRead& operator=(InRead&&) noexcept = default;
 
-	// main constructor
 	InRead(Log* threadLog,
 		   uint32_t uId, uint32_t iId,
 		   std::string header, std::string comment,
@@ -64,10 +89,11 @@ struct InRead {
 	{
 		if (tags) this->tags = *tags;
 #ifdef DEBUG
-		if (threadLog)
+		if (threadLog) {
 			threadLog->add("Processing read: " + seqHeader +
 						   " (uId: " + std::to_string(uId) +
 						   ", iId: " + std::to_string(iId) + ")");
+		}
 #endif
 	}
 
@@ -77,155 +103,148 @@ struct InRead {
 	}
 };
 
+
+// -------------------------------------------------------------
+// ReadBatch and container structures
+// -------------------------------------------------------------
+
+template<typename T>
+struct ReadBatch {
+	std::vector<T> reads;
+	uint32_t batchN = 0;    // within-file batch index
+	uint32_t fileN  = 0;    // file ID
+};
+
+template<typename T>
+struct ReadBatches {
+	std::vector<std::unique_ptr<ReadBatch<T>>> readBatches;
+};
+
+template<typename T>
+struct FileBatches {
+	std::vector<ReadBatches<T>> files;
+};
+
+
+// -------------------------------------------------------------
+// InReads class
+// -------------------------------------------------------------
+
 class InReads {
-	
-	uint32_t batchSize = 1000000; // number of bases processed by a thread
-	std::atomic<uint32_t> fileCounterStarted{0}, fileCounterCompleted{0}; // next file to read
-    std::vector<Log> logs;
-    
-    UserInputRdeval &userInput;
-	std::vector<std::vector<std::pair<std::vector<bam1_t*>,uint32_t>>> readBatches;
-	std::vector<std::vector<std::pair<std::vector<InRead>,uint32_t>>> readSummaryBatches; // could be avoided in the future
-    uint64_t totReads = 0;
-    
-    uint32_t seqPos = 0; // to keep track of the original sequence order
-    
-    std::vector<uint64_t> readNstars{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    std::vector<uint32_t> readLstars{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    LenVector<float> readLens;
-    uint64_t totA=0, totT=0, totC=0, totG=0, totN=0;
-    
-    bool streamOutput = false;
-    std::thread writer;
-    std::condition_variable writerMutexCondition;
-    
-    htsFile *fp; // htslib file pointer
-    bam_hdr_t *hdr; // htslib sam header pointer
-    htsThreadPool tpool_write; // htslib threadpool pointer
-    bool bam = false;
-    
-    std::vector<std::pair<std::string,std::string>> md5s;
-    
-    // dictionaries
-    phmap::parallel_flat_hash_set<std::string> includeList;
-    phmap::parallel_flat_hash_set<std::string> excludeList;
-    
-    // filters
-    char lSign = '0', qSign = '0', logicalOperator = '0';
-    uint64_t l = 0, q = 0;
-	
-	// MPMC
-	uint32_t producersN = 1; // need to guarantee the output is ordered as the input (see initializer)
-	size_t NUM_BUFFERS, QCAP;
-	BlockingQueue<std::unique_ptr<Sequences2>> free_pool, filled_q;
-	size_t consumersN = userInput.maxThreads;
-    
 public:
-    
-    InReads(UserInputRdeval &userInput) :
-	userInput(userInput),
-	producersN(userInput.outFiles.size() && getFileExt(userInput.outFiles.at(0)) != "rd" ? 1 : std::min<uint32_t>(userInput.inFiles.size(), userInput.parallel_files)),
-	NUM_BUFFERS((userInput.maxThreads+producersN)*2),
-	QCAP(NUM_BUFFERS),
-	free_pool(QCAP),
-	filled_q(QCAP) {
-        
-        const static phmap::flat_hash_map<std::string,int> string_to_case{ // supported read outputs
-            {"fasta",1},
-            {"fa",1},
-            {"fasta.gz",1},
-            {"fa.gz",1},
-            {"fastq",2},
-            {"fq",2},
-            {"fastq.gz",2},
-            {"fq.gz",2},
-            {"bam",3},
-            {"cram",3}
-        };
-        
-        if (userInput.outFiles.size()) {
-            for (std::string file : userInput.outFiles) {
-                if (string_to_case.find(getFileExt(file)) != string_to_case.end())
-                    streamOutput = true;
-                
-                if (getFileExt(file) == "bam" || getFileExt(file) == "cram")
-                    bam = true;
-            }
-        }
-        if(userInput.inBedInclude != "" || userInput.inBedExclude != "")
-            initDictionaries();
-        if(userInput.filter != "none")
-            initFilters();
-        
-        
-        if (userInput.randSeed != -1)
-            srandom(userInput.randSeed);
-        else
-            srandom(time(nullptr));
-		
-		if (userInput.maxMem != 0)
-			batchSize = userInput.maxMem;
-    };
-    
-    void initStream();
-    
-    void closeStream();
-    
-    void load();
+	using BamBatch    = ReadBatch<bam1_t*>;
+	using InReadBatch = ReadBatch<InRead>;
 
-    void initDictionaries();
-    
-    void initFilters();
-    
-    float computeAvgQuality(std::string &sequenceQuality);
-	
-	void filterRecords();
-    
-    inline bool filterRead(Sequence2* sequence);
-    
-    inline bool applyFilter(uint64_t size, float avgQuality);
-	
-	void extractInReads();
-    
-    bool traverseInReads(Sequences2 &readBatch);
-    
-    InRead traverseInRead(Log* threadLog, Sequence2* sequence, uint32_t seqPos);
-    
-    uint64_t getTotReadLen();
+private:
+	// Configuration
+	uint32_t batchSize = 1'000'000;
+	std::atomic<uint32_t> fileCounterStarted{0};
+	std::atomic<uint32_t> fileCounterCompleted{0};
 
-    double computeGCcontent();
-    
-    double computeAvgReadLen();
-    
-    uint64_t getReadN50();
+	std::vector<Log> logs;
 
-    uint64_t getSmallestRead();
+	UserInputRdeval& userInput;
 
-    uint64_t getLargestRead();
+	FileBatches<bam1_t*> fileBatches;
+	FileBatches<InRead>  readSummaryBatches;
 
-    double getAvgQuality();
-    
-    void report();
+	uint64_t totReads = 0;
+	uint32_t seqPos   = 0;
 
-    void printReadLengths();
+	std::vector<uint64_t> readNstars{0,0,0,0,0,0,0,0,0,0};
+	std::vector<uint32_t> readLstars{0,0,0,0,0,0,0,0,0,0};
+	LenVector<float>      readLens;
 
-    void printQualities();
+	uint64_t totA = 0, totT = 0, totC = 0, totG = 0, totN = 0;
 
-    void printContent();
-    
-    void evalNstars();
-    
-    void writeToStream();
-    
-    void printTableCompressed(std::string outFile);
-    
-    void readTableCompressed(std::string inFile);
-    
-    void printMd5();
-    
-    void writeHeader();
-    
-    void closeBam();
+	bool streamOutput = false;
+	std::thread writer;
+
+	std::mutex              writerMutex;
+	std::condition_variable writerMutexCondition;
+
+	// htslib
+	bam_hdr_t* hdrTemplate = nullptr;          // template header (e.g. from first input)
+	std::vector<htsFile*>   fps;              // output handles: [0] or per-file
+	std::vector<bam_hdr_t*> hdrs;             // per-output header (dup of hdrTemplate)
+
+	htsThreadPool tpool_write{nullptr, 0};
+
+	// mode: if true, map input fileN -> output slot fileN
+	// if false, everything maps to output slot 0
+	bool splitOutputByFile = false;
+
+	// filters and dictionaries
+	std::vector<std::pair<std::string,std::string>> md5s;
+
+	phmap::parallel_flat_hash_set<std::string> includeList;
+	phmap::parallel_flat_hash_set<std::string> excludeList;
+
+	char lSign='0', qSign='0', logicalOperator='0';
+	uint64_t l=0, q=0;
+
+	// MPMC system
+	size_t   consumersN = 0;
+	uint32_t producersN = 1;
+
+	size_t inBuffersN  = 0;
+	size_t outBuffersN = 0;
+
+	// Input queues
+	BlockingQueue<std::unique_ptr<Sequences2>> free_pool_in;
+	BlockingQueue<std::unique_ptr<Sequences2>> filled_q_in;
+
+	// Output queues (BAM batches)
+	BlockingQueue<std::unique_ptr<BamBatch>> free_pool_out;
+	BlockingQueue<std::unique_ptr<BamBatch>> filled_q_out;
+
+public:
+
+	explicit InReads(UserInputRdeval& userInput);
+
+	// Initialization / IO
+	void initStream();
+	void closeStream();
+	void load();
+
+	// Filters / dictionaries
+	void initDictionaries();
+	void initFilters();
+	inline bool filterRead(Sequence2* sequence);
+	inline bool applyFilter(uint64_t size, float avgQuality);
+
+	// Processing
+	float computeAvgQuality(std::string& sequenceQuality);
+	void  filterRecords();
+	void  extractInReads();
+	bool  traverseInReads(Sequences2& readBatch);
+	InRead traverseInRead(Log* threadLog, Sequence2* sequence, uint32_t seqPos);
+
+	// Statistics
+	uint64_t getTotReadLen();
+	double   computeGCcontent();
+	double   computeAvgReadLen();
+	uint64_t getReadN50();
+	uint64_t getSmallestRead();
+	uint64_t getLargestRead();
+	double   getAvgQuality();
+
+	void report();
+	void printReadLengths();
+	void printQualities();
+	void printContent();
+	void evalNstars();
+
+	// Writing
+	void openOutputForFile(size_t outId);
+	void writeToStream();
+
+	// Table + md5
+	void printTableCompressed(std::string outFile);
+	void readTableCompressed(std::string inFile);
+	void printMd5();
+	void writeHeader();
+	void closeBam();
 };
 
 #endif /* READS_H */

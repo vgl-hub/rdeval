@@ -55,7 +55,8 @@ int main(int argc, char **argv) {
         {"include-list", required_argument, 0, 'i'},
         {"threads", required_argument, 0, 'j'},
 		{"max-memory", required_argument, 0, 'm'},
-        {"out-format", required_argument, 0, 'o'},
+        {"output-file", required_argument, 0, 'o'},
+		{"output-prefix", required_argument, 0, 'p'},
         {"quality", required_argument, 0, 'q'},
         {"input-reads", required_argument, 0, 'r'},
         {"out-size", required_argument, 0, 's'},
@@ -72,7 +73,7 @@ int main(int argc, char **argv) {
     while (arguments) { // loop through argv
         
         int option_index = 0;
-        c = getopt_long(argc, argv, "-:e:f:m:i:j:o:r:s:q:c:vh",
+        c = getopt_long(argc, argv, "-:e:f:m:i:j:o:p:r:s:q:c:vh",
                         long_options, &option_index);
         if (c == -1) // exit the loop if run out of options
             break;
@@ -159,6 +160,9 @@ int main(int argc, char **argv) {
             case 'o':
                 userInput.outFiles.push_back(optarg);
                 break;
+			case 'p':
+				userInput.outPrefix = optarg;
+				break;
             case 'j': // max threads
                 userInput.maxThreads = atoi(optarg);
                 break;
@@ -173,7 +177,8 @@ int main(int argc, char **argv) {
                 printf("\t-e --exclude-list <file> generates output on a excluding list of headers.\n");
                 printf("\t-f --filter <exp> filter reads using <exp> in quotes, e.g. 'l>10' for longer than 10bp or 'l>10 & q>10' to further exclude reads by quality (default: none).\n");
                 printf("\t-i --include-list <file> generates output on a subset list of headers.\n");
-                printf("\t-o --out-format <file> output file (fa*[.gz], bam, cram, rd). Optionally write reads to file or generate rd summary file.\n");
+                printf("\t-o --out-file <file> output file (fa*[.gz], bam, cram, rd). Optionally write reads to file or generate rd summary file.\n");
+				printf("\t-o --out-prefix <prefix> a prefix for the names of the files when generating multiple outputs. Inputs names will be used for each file.\n");
                 printf("\t-q --quality q|a generates list of average quality for each read (q) or both length and quality (a).\n");
                 printf("\t-r --input-reads <file1> <file2> <file n> input file (fa*[.gz], bam, cram, rd).\n");
                 printf("\t-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cumulative table).\n");

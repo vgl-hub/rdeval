@@ -28,6 +28,62 @@
 
 #include "reads.h"
 
+InReads::InReads(UserInputRdeval& ui)
+	: userInput(ui),
+	  splitOutputByFile(ui.outPrefix != "" ? true : false),
+	  consumersN(static_cast<size_t>(ui.maxThreads)),
+	  producersN(
+		  ui.outFiles.size() &&
+		  getFileExt(ui.outFiles.at(0)) != "rd"
+			  ? 1u
+			  : std::min<uint32_t>(ui.inFiles.size(), ui.parallel_files)
+	  ),
+	  inBuffersN((consumersN + producersN) * 2),
+	  outBuffersN(consumersN * 2 + 1),
+	  free_pool_in(inBuffersN),
+	  filled_q_in(inBuffersN),
+	  free_pool_out(outBuffersN),
+	  filled_q_out(outBuffersN)
+{
+	static const phmap::flat_hash_map<std::string,int> string_to_case{
+		{"fasta",1}, {"fa",1}, {"fasta.gz",1}, {"fa.gz",1},
+		{"fastq",2}, {"fq",2}, {"fastq.gz",2},{"fq.gz",2},
+		{"bam",3},   {"cram",3}
+	};
+
+	if (!userInput.outFiles.empty()) {
+		for (const std::string& file : userInput.outFiles) {
+			auto ext = getFileExt(file);
+			if (string_to_case.find(ext) != string_to_case.end())
+				streamOutput = true;
+		}
+	}
+	
+	if (splitOutputByFile)
+		streamOutput = true;
+	
+	const size_t numFiles = userInput.inFiles.size();
+	const size_t outCount = splitOutputByFile ? numFiles : 1;
+
+	if (outCount > 0) {
+		fps.assign(outCount, nullptr);
+		hdrs.assign(outCount, nullptr);
+	}
+
+	if (!userInput.inBedInclude.empty() || !userInput.inBedExclude.empty())
+		initDictionaries();
+	if (userInput.filter != "none")
+		initFilters();
+
+	if (userInput.randSeed != -1)
+		srandom(userInput.randSeed);
+	else
+		srandom(time(nullptr));
+
+	if (userInput.maxMem != 0)
+		batchSize = userInput.maxMem;
+}
+
 float newRand() {
 	return (static_cast <float> (random()) / static_cast <float> (RAND_MAX));
 }
@@ -35,13 +91,20 @@ float newRand() {
 void InReads::load() {
 	
 	md5s.reserve(userInput.inFiles.size()); // to avoid invalidating the vector during thread concurrency
-	readSummaryBatches.resize(userInput.inFiles.size()); // resize to accommodate batches from multiple files
-	readBatches.resize(userInput.inFiles.size()); // resize to accommodate batches from multiple files
+	readSummaryBatches.files.resize(userInput.inFiles.size()); // resize to accommodate batches from multiple files
+	fileBatches.files.resize(userInput.inFiles.size()); // resize to accommodate batches from multiple files
 	
 	// Preallocate exactly N buffers
-	for (size_t i = 0; i < NUM_BUFFERS; ++i) {
+	for (size_t i = 0; i < inBuffersN; ++i) {
 		std::unique_ptr<Sequences2> b(new Sequences2);
-		free_pool.push(std::move(b));
+		free_pool_in.push(std::move(b));
+	}
+	if (streamOutput) {
+		for (size_t i = 0; i < outBuffersN; ++i) {
+			auto batch = std::make_unique<BamBatch>();
+			batch->reads.reserve(1024);
+			free_pool_out.push(std::move(batch));
+		}
 	}
 	lg.verbose("Processing " + std::to_string(userInput.inFiles.size()) + " files");
 	lg.verbose("Using " + std::to_string(producersN) + " producers");
@@ -58,16 +121,17 @@ void InReads::load() {
 	for (size_t t = 0; t < consumersN; ++t) {
 		consumers.emplace_back([&]{
 			for (;;) {
-				std::unique_ptr<Sequences2> readBatch = filled_q.pop(); // may sleep if empty
+				std::unique_ptr<Sequences2> readBatch = filled_q_in.pop(); // may sleep if empty
 				if (!readBatch) { break; }
 				traverseInReads(*readBatch);
 				readBatch->recycle_keep_capacity(); // keep capacity for reuse
-				free_pool.push(std::move(readBatch));
+				free_pool_in.push(std::move(readBatch));
 			}
 		});
 	}
 	for (auto& th : producers) th.join();
 	for (auto& th : consumers) th.join();
+	filled_q_out.push(std::unique_ptr<BamBatch>()); // sentinel
 }
 
 void InReads::extractInReads() {
@@ -77,7 +141,7 @@ void InReads::extractInReads() {
 	uint32_t batchCounter = 0; // batch number, read position in the batch
 	uint64_t processedLength = 0;
 	bool sample = userInput.ratio < 1 ? true : false; // read subsampling
-	std::unique_ptr<Sequences2> readBatch = free_pool.pop();
+	std::unique_ptr<Sequences2> readBatch = free_pool_in.pop();
 	
 	const static phmap::flat_hash_map<std::string,int> string_to_case{
 		{"fasta",1},
@@ -142,8 +206,8 @@ void InReads::extractInReads() {
                                     readBatch->batchN = batchN++;
 									readBatch->fileN = i;
                                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-									filled_q.push(std::move(readBatch));
-                                    readBatch = free_pool.pop();
+									filled_q_in.push(std::move(readBatch));
+                                    readBatch = free_pool_in.pop();
                                     processedLength = 0;
 									batchCounter = 0;
                                 }
@@ -186,8 +250,8 @@ void InReads::extractInReads() {
                                     readBatch->batchN = batchN++;
 									readBatch->fileN = i;
                                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-									filled_q.push(std::move(readBatch));
-                                    readBatch = free_pool.pop();
+									filled_q_in.push(std::move(readBatch));
+                                    readBatch = free_pool_in.pop();
                                     processedLength = 0;
 									batchCounter = 0;
                                 }
@@ -199,8 +263,8 @@ void InReads::extractInReads() {
                     readBatch->batchN = batchN++; // process residual reads
 					readBatch->fileN = i;
                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-					filled_q.push(std::move(readBatch));
-					readBatch = free_pool.pop();
+					filled_q_in.push(std::move(readBatch));
+					readBatch = free_pool_in.pop();
 					processedLength = 0;
 					batchCounter = 0;
                 }
@@ -250,8 +314,8 @@ void InReads::extractInReads() {
                         readBatch->batchN = batchN++;
 						readBatch->fileN = i;
                         lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-						filled_q.push(std::move(readBatch));
-                        readBatch = free_pool.pop();
+						filled_q_in.push(std::move(readBatch));
+                        readBatch = free_pool_in.pop();
                         processedLength = 0;
 						batchCounter = 0;
                     }
@@ -260,8 +324,8 @@ void InReads::extractInReads() {
                 readBatch->batchN = batchN++; // process residual reads
 				readBatch->fileN = i;
                 lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-				filled_q.push(std::move(readBatch));
-				readBatch = free_pool.pop();
+				filled_q_in.push(std::move(readBatch));
+				readBatch = free_pool_in.pop();
 				processedLength = 0;
 				batchCounter = 0;
                 bam_destroy1(bamdata);
@@ -280,7 +344,7 @@ void InReads::extractInReads() {
             }
         }
 		if (fileCounterCompleted.fetch_add(1, std::memory_order_relaxed) + 1 == numFiles) {
-			for (size_t i = 0; i < consumersN; ++i) filled_q.push(std::unique_ptr<Sequences2>(nullptr)); // sentinels
+			for (size_t i = 0; i < consumersN; ++i) filled_q_in.push(std::unique_ptr<Sequences2>(nullptr)); // sentinels
 		}
     }
 }
@@ -412,88 +476,139 @@ inline bool InReads::applyFilter(uint64_t size, float avgQuality) {
     return true;
 }
 
-bool InReads::traverseInReads(Sequences2 &readBatch) { // traverse the read
+bool InReads::traverseInReads(Sequences2& readBatchIn)
+{
+	Log threadLog;
+	threadLog.setId(readBatchIn.batchN);
+	
+	// One output BAM batch per input batch (if streaming)
+	std::unique_ptr<BamBatch> readBatchOut;
+	if (streamOutput) {
+		readBatchOut = free_pool_out.pop();    // from MPMC pool
+		readBatchOut->reads.clear();
+		readBatchOut->fileN  = readBatchIn.fileN;
+		readBatchOut->batchN = readBatchIn.batchN;
+	}
+	
+	std::vector<InRead> inReadsSummaryBatch;
+	uint32_t readN = 0;
+	LenVector<float> readLensBatch;
 
-    Log threadLog;
-    threadLog.setId(readBatch.batchN);
-    std::vector<bam1_t*> inReadsBatch;
-    std::vector<InRead> inReadsSummaryBatch;
-    uint32_t readN = 0;
-    LenVector<float> readLensBatch;
+	uint64_t batchA = 0, batchT = 0, batchC = 0, batchG = 0, batchN_ = 0;
 
-    uint64_t batchA = 0, batchT = 0, batchC = 0, batchG = 0, batchN = 0;
-    bool include = includeList.size();
-    bool exclude = excludeList.size();
-    bool filter = userInput.filter != "none" ? true : false;
+	const bool hasInclude = !includeList.empty();
+	const bool hasExclude = !excludeList.empty();
+	const bool hasFilter  = (userInput.filter != "none");
 
-    for (const auto& sequence : readBatch.sequences) {
-        
-        if (include) {
-            if (includeList.find(sequence->header) == includeList.end())
-                continue;
-        }
-        if (exclude) {
-            if (excludeList.find(sequence->header) != excludeList.end())
-                continue;
-        }
-        if (filter) {
-            bool filtered = filterRead(sequence.get());
-            if (filtered)
-                continue;
-        }
-        InRead read = traverseInRead(&threadLog, sequence.get(), readBatch.batchN+readN++);
-        std::pair<uint64_t, float> lenQual(read.A+read.C+read.G+read.T+read.N, read.avgQuality);
-        readLensBatch.push_back(lenQual);
-        batchA += read.A;
-        batchT += read.T;
-        batchC += read.C;
-        batchG += read.G;
-        batchN += read.N;
+	for (const auto& sequencePtr : readBatchIn.sequences) {
+		Sequence2* sequence = sequencePtr.get();
 
-        if (streamOutput) {
-            
-            bam1_t *q;
-            if (!(q = bam_init1())) {
-                printf("Failed to initialize bamdata\n");
-                exit(EXIT_FAILURE);
-            }
+		if (hasInclude &&
+			includeList.find(sequence->header) == includeList.end())
+			continue;
 
-            if (read.inSequenceQuality == NULL)
-                read.inSequenceQuality = std::make_unique<std::string>(read.inSequence->size(),'!');
-            
-            if (bam_set1(q, strlen(read.seqHeader.c_str()), read.seqHeader.c_str(), BAM_FUNMAP, -1, -1, 0, 0, NULL, -1, -1, 0, strlen(read.inSequence->c_str()), read.inSequence->c_str(), NULL, 0) < 0) {
-                printf("Failed to set data\n");
-                exit(EXIT_FAILURE);
-            }
-            uint8_t *s = bam_get_seq(q);
-            s = bam_get_qual(q);
-            for (size_t i = 0; i < read.inSequenceQuality->size(); ++i)
-                s[i] = read.inSequenceQuality->at(i) - 33;
-            
-            inReadsBatch.push_back(q);
-        }
+		if (hasExclude &&
+			excludeList.find(sequence->header) != excludeList.end())
+			continue;
+
+		if (hasFilter && filterRead(sequence))
+			continue;
+
+		InRead read = traverseInRead(&threadLog,
+									 sequence,
+									 readBatchIn.batchN + readN++);
+
+		const uint64_t len = read.A + read.C + read.G + read.T + read.N;
+		readLensBatch.push_back(std::make_pair(len, read.avgQuality));
+
+		batchA += read.A;
+		batchT += read.T;
+		batchC += read.C;
+		batchG += read.G;
+		batchN_ += read.N;
+
+		// STREAMING OUTPUT: convert to BAM record and append to batch
+		if (streamOutput) {
+			bam1_t* q = bam_init1();
+			if (!q) {
+				fprintf(stderr, "Failed to initialize bam1_t\n");
+				std::abort();
+			}
+
+			if (!read.inSequenceQuality) {
+				read.inSequenceQuality =
+					std::make_unique<std::string>(read.inSequence->size(), '!');
+			}
+
+			const int32_t l_qname = static_cast<int32_t>(read.seqHeader.size());
+			const int32_t l_seq   = static_cast<int32_t>(read.inSequence->size());
+
+			if (bam_set1(q,
+						 l_qname,
+						 read.seqHeader.c_str(),
+						 BAM_FUNMAP,
+						 -1, -1,
+						 0, 0,
+						 nullptr,
+						 -1, -1,
+						 0,
+						 l_seq,
+						 read.inSequence->c_str(),
+						 nullptr,
+						 0) < 0) {
+				fprintf(stderr, "Failed to set BAM data\n");
+				std::abort();
+			}
+
+			uint8_t* qual = bam_get_qual(q);
+			for (size_t i = 0; i < read.inSequenceQuality->size(); ++i)
+				qual[i] = static_cast<uint8_t>(read.inSequenceQuality->at(i) - 33);
+
+			readBatchOut->reads.push_back(q);
+		}
+
 		if (userInput.content_flag)
 			inReadsSummaryBatch.push_back(std::move(read));
+
 		sequence->sequence.reset();
 		sequence->sequenceQuality.reset();
-    }
-    
-    {
-        std::unique_lock<std::mutex> lck(mtx);
-		readBatches.at(readBatch.fileN).emplace_back(inReadsBatch,readBatch.batchN);
-        readSummaryBatches.at(readBatch.fileN).emplace_back(std::move(inReadsSummaryBatch),readBatch.batchN);
-        readLens.insert(readLensBatch);
-        totA+=batchA;
-        totT+=batchT;
-        totC+=batchC;
-        totG+=batchG;
-        totN+=batchN;
-        totReads += readN;
-        threadLog.print();
-    }
-    writerMutexCondition.notify_one();
-    return true;
+	}
+
+	// Push batch to output queue (if any reads)
+	if (streamOutput && readBatchOut && !readBatchOut->reads.empty()) {
+		filled_q_out.push(std::move(readBatchOut));
+	}
+
+	// Update global stats and summaries
+	{
+		std::unique_lock<std::mutex> lck(writerMutex);
+
+		if (userInput.content_flag && !inReadsSummaryBatch.empty()) {
+			if (readBatchIn.fileN >= readSummaryBatches.files.size())
+				readSummaryBatches.files.resize(readBatchIn.fileN + 1);
+
+			auto& rbVec = readSummaryBatches.files[readBatchIn.fileN].readBatches;
+			auto  summaryBatch = std::make_unique<InReadBatch>();
+			summaryBatch->reads  = std::move(inReadsSummaryBatch);
+			summaryBatch->batchN = readBatchIn.batchN;
+			summaryBatch->fileN  = readBatchIn.fileN;
+			rbVec.emplace_back(std::move(summaryBatch));
+		}
+
+		readLens.insert(readLensBatch);
+		totA    += batchA;
+		totT    += batchT;
+		totC    += batchC;
+		totG    += batchG;
+		totN    += batchN_;
+		totReads += readN;
+
+		threadLog.print();
+	}
+	writerMutexCondition.notify_one();
+	return true;
 }
+
 
 InRead InReads::traverseInRead(Log* threadLog, Sequence2* sequence, uint32_t seqPos) {
 	std::vector<std::pair<uint64_t, uint64_t>> bedCoords;
@@ -564,7 +679,6 @@ void InReads::evalNstars() { // clean up once len-vector iterator is available, 
 
     uint64_t sum = 0, totLen = getTotReadLen();
     uint8_t N = 1;
-    
     for(unsigned int i = 0; i < readLens.size(); ++i) { // for each length
         sum += readLens[i].first; // increase sum
         while (sum >= ((double) totLen / 10 * N) && N<= 10) { // conditionally add length.at or pos to each N/L* bin
@@ -695,33 +809,51 @@ void InReads::printQualities() {
         }
     }
 }
+
 void InReads::printContent() {
-	
-	for (auto& readSummaryBatch : readSummaryBatches) {
-		std::sort(readSummaryBatch.begin(), readSummaryBatch.end(),
-				  [](const std::pair<std::vector<InRead>, uint32_t>& a,
-					 const std::pair<std::vector<InRead>, uint32_t>& b) {
-			return a.second < b.second;
-		});
-	}
+
+	// Header
 	std::cout << "Header\tComment\tLength\tA\tC\tG\tT\tN\tGC\tAverage Quality\n";
-	for (auto& readSummaryBatch : readSummaryBatches) {
-		for (const auto& inReads : readSummaryBatch) {              // <-- no copy
-			for (const auto& read : inReads.first) {                  // <-- no copy
-				const uint64_t A = read.A, C = read.C, G = read.G, T = read.T, N = read.N;
+
+	// Iterate over files
+	for (auto& fileRB : readSummaryBatches.files) {
+		auto& batches = fileRB.readBatches; // vector<std::unique_ptr<InReadBatch>>
+
+		// Collect raw pointers to sort by batchN
+		std::vector<InReadBatch*> sorted;
+		sorted.reserve(batches.size());
+		for (auto& ptr : batches) {
+			if (ptr) sorted.push_back(ptr.get());
+		}
+
+		std::sort(sorted.begin(), sorted.end(),
+				  [](const InReadBatch* a, const InReadBatch* b) {
+					  return a->batchN < b->batchN;
+				  });
+
+		// Print reads in sorted batch order
+		for (const InReadBatch* batch : sorted) {
+			for (const InRead& read : batch->reads) {
+				const uint64_t A = read.A;
+				const uint64_t C = read.C;
+				const uint64_t G = read.G;
+				const uint64_t T = read.T;
+				const uint64_t N = read.N;
 				const uint64_t total = A + C + G + T + N;
-				const float gc = total ? gfa_round(static_cast<float>(G + C) / total) : 0.0f;
-				std::cout << read.seqHeader << '\t'
-				<< read.seqComment << '\t'
-				<< total << '\t'
-				<< A << '\t' << C << '\t' << G << '\t' << T << '\t' << N << '\t'
-				<< gc << '\t'
-				<< read.avgQuality << '\n';
+				const float gc = total
+					? gfa_round(static_cast<float>(G + C) / static_cast<float>(total))
+					: 0.0f;
+
+				std::cout << read.seqHeader  << '\t'
+						  << read.seqComment << '\t'
+						  << total           << '\t'
+						  << A << '\t' << C << '\t' << G << '\t' << T << '\t' << N << '\t'
+						  << gc              << '\t'
+						  << read.avgQuality << '\n';
 			}
 		}
 	}
 }
-
 
 void dump_read(bam1_t* b) {
     printf("->core.tid:(%d)\n", b->core.tid);
@@ -782,150 +914,299 @@ void dump_read(bam1_t* b) {
 }
 
 void InReads::initStream() {
-    
-    if (streamOutput) {
-        
-        if(userInput.outFiles.size() > 1) {
-            fprintf(stderr, "Error: rdeval does not support more than one output at a time. Terminating.\n");
-            exit(EXIT_FAILURE);
-        }
-        
-        std::string ext = getFileExt(userInput.outFiles[0]); // variable to handle output path and extension
-        const static phmap::flat_hash_map<std::string,int> string_to_case{
-            {"fasta",1},
-            {"fa",1},
-            {"fasta.gz",1},
-            {"fa.gz",1},
-            {"fastq",2},
-            {"fq",2},
-            {"fastq.gz",2},
-            {"fq.gz",2},
-            {"bam",3},
-            {"cram",4}
-        };
-        
-        switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
-            case 1:   // fasta[.gz]
-            case 2: { // fastq[.gz]
-                char mode[4] = "w";
-                if (sam_open_mode(mode + 1, userInput.outFiles[0].c_str(), NULL) < 0) {
-                    printf("Invalid file name\n");
-                    exit(EXIT_FAILURE);
-                }
-                if (!(fp = sam_open(userInput.outFiles[0].c_str(), mode))) {
-                    printf("Could not open %s\n", userInput.outFiles[0].c_str());
-                    exit(EXIT_FAILURE);
-                }
-                break;
-            }
-            case 3: {  // bam
-                fp = sam_open(userInput.outFiles[0].c_str(),"wb");
-                break;
-            }
-            case 4: {  // cram
-                htsFormat fmt4 = {sequence_data, cram, {3, 1}, gzip, 6, NULL};
-                hts_parse_format(&fmt4, "cram,no_ref=1");
-                fp = sam_open_format(userInput.outFiles[0].c_str(), "wc", &fmt4);
-                break;
-            }
-        }
-        if (bam)
-            writeHeader();
-        writer = std::thread(&InReads::writeToStream, this);
-    }
+
+	if (!streamOutput)
+		return;
+
+	writeHeader();  // initializes hdrTemplate only (no file IO)
+
+	// Writer thread will open output files lazily via openOutputForFile()
+	writer = std::thread(&InReads::writeToStream, this);
 }
 
 void InReads::closeStream() {
-    
-    if (writer.joinable()) {
-        {
-            std::unique_lock<std::mutex> lck(mtx);
-            streamOutput = false;
-        }
-        writerMutexCondition.notify_one();
-        writer.join();
-    }
+
+	if (writer.joinable()) {
+		// nullptr unique_ptr<BamBatch> is the sentinel
+		filled_q_out.push(std::unique_ptr<BamBatch>());  // signals writer to stop
+		writer.join();
+	}
 }
 
 void InReads::writeHeader() {
-    
-    const char init_header[] = "@HD\tVN:1.4\tSO:unknown\n";
-    hdr = bam_hdr_init();
-    hdr->l_text = strlen(init_header);
-    hdr->text = strdup(init_header);
-    hdr->n_targets = 0;
-    std::ignore = sam_hdr_write(fp,hdr);
+
+	const char init_header[] = "@HD\tVN:1.4\tSO:unknown\n";
+
+	// Destroy any previous template header if present
+	if (hdrTemplate) {
+		bam_hdr_destroy(hdrTemplate);
+		hdrTemplate = nullptr;
+	}
+
+	hdrTemplate = bam_hdr_init();
+	if (!hdrTemplate) {
+		fprintf(stderr, "Failed to allocate BAM header\n");
+		std::exit(EXIT_FAILURE);
+	}
+
+	hdrTemplate->l_text   = static_cast<int>(std::strlen(init_header));
+	hdrTemplate->text     = ::strdup(init_header);  // ownership by hdrTemplate
+	hdrTemplate->n_targets = 0;
+	hdrTemplate->target_len = nullptr;
+	hdrTemplate->target_name = nullptr;
+
+	// The header will be written in openOutputForFile() to each fp[outId]
+	// using sam_hdr_write(fps[outId], hdrs[outId]);
 }
 
 void InReads::closeBam() {
-    bam_hdr_destroy(hdr);
+
+	if (hdrTemplate) {
+		bam_hdr_destroy(hdrTemplate);
+		hdrTemplate = nullptr;
+	}
 }
 
-void InReads::writeToStream() {
+void InReads::openOutputForFile(size_t outId)
+{
+	const size_t numFiles = userInput.inFiles.size();
+	const size_t outCount = splitOutputByFile ? numFiles : 1;
 
-	size_t numFiles = userInput.inFiles.size();
-	std::vector<uint32_t> batchCounter;
-	batchCounter.resize(numFiles);
-	std::vector<std::vector<std::pair<std::vector<bam1_t*>,uint32_t>>> readBatchesCpy;
-	readBatchesCpy.resize(numFiles);
-    
-    tpool_write = {NULL, 0}; // init htslib threadpool
-    tpool_write.pool = hts_tpool_init(userInput.compression_threads);
-    if (tpool_write.pool)
-        hts_set_opt(fp, HTS_OPT_THREAD_POOL, &tpool_write);
-    else
-        lg.verbose("Failed to generate compression threadpool with " + std::to_string(userInput.compression_threads) + " threads. Continuing single-threaded");
-	
-    while (true) {
-		{
-			std::unique_lock<std::mutex> lck(mtx);
-			uint32_t originalN = 0, cpy = 0;
-			writerMutexCondition.wait(lck, [this, &readBatchesCpy, &originalN, &cpy, numFiles] {
-				
-				originalN = 0, cpy = 0;
-				for (uint32_t i = 0; i < numFiles; ++i) {
-					originalN += readBatches.at(i).size();
-					cpy += readBatchesCpy.at(i).size();
-				}
-				
-				return !streamOutput || originalN || cpy;
-			});
-			if (!streamOutput && !originalN && !cpy) {
-				if (bam)
-					closeBam();
-				sam_close(fp); // close file
-				if (tpool_write.pool)
-					hts_tpool_destroy(tpool_write.pool);
-				return;
-			}
-			for (uint32_t i = 0; i < numFiles; ++i) {
-				readBatchesCpy.at(i).insert(readBatchesCpy.at(i).begin(), readBatches.at(i).begin(), readBatches.at(i).end());
-				readBatches.at(i).clear();
-			}
-        }
-		for (uint32_t i = 0; i < numFiles; ++i) {
-			for (std::vector<std::pair<std::vector<bam1_t*>,uint32_t>>::iterator it = readBatchesCpy.at(i).begin(); it != readBatchesCpy.at(i).end();) {
-				
-				auto &inReads = *it;
-				
-				if (inReads.second != batchCounter.at(i)) {
-					++it;
-					continue;
-				}
-				lg.verbose("Writing read batch " + std::to_string(inReads.second) + " to file (" + std::to_string(inReads.first.size())  + ")");
-				
-				for (bam1_t* q : inReads.first){
-					if (sam_write1(fp, hdr, q) < 0) {
-						printf("Failed to write data\n");
-						exit(EXIT_FAILURE);
-					}
-					bam_destroy1(q);
-				}
-				it = readBatchesCpy.at(i).erase(it);
-				++batchCounter.at(i);
-			}
+	if (outId >= outCount) {
+		lg.verbose("openOutputForFile: invalid outId " + std::to_string(outId));
+		return;
+	}
+
+	if (fps[outId] != nullptr) {
+		// already open
+		return;
+	}
+
+	// Decide output file name
+	std::string outName;
+	if (splitOutputByFile) {
+		// One output per input file; typically prefix + per-file suffix
+		if (outId >= userInput.inFiles.size()) {
+			lg.verbose("openOutputForFile: outId " + std::to_string(outId) +
+					   " has no corresponding outFiles entry");
+			std::abort();
 		}
-    }
+		outName = userInput.outPrefix + getFileName(userInput.inFiles[outId]);
+	} else {
+		// Single-output mode => everything maps to slot 0
+		if (userInput.outFiles.empty()) {
+			lg.verbose("openOutputForFile: no output file specified");
+			std::abort();
+		}
+		outName = userInput.outFiles[0];
+	}
+
+	// Choose mode based on extension
+	std::string ext = getFileExt(userInput.inFiles[outId]);
+	const static phmap::flat_hash_map<std::string,int> string_to_case{
+		{"fasta",   1},
+		{"fa",      1},
+		{"fasta.gz",1},
+		{"fa.gz",   1},
+		{"fastq",   2},
+		{"fq",      2},
+		{"fastq.gz",2},
+		{"fq.gz",   2},
+		{"bam",     3},
+		{"cram",    4}
+	};
+
+	int fmt_case = string_to_case.count(ext) ? string_to_case.at(ext) : 0;
+	htsFile* ofp = nullptr;
+	
+	switch (fmt_case) {
+		case 1:   // fasta[.gz]
+		case 2: { // fastq[.gz]
+			char mode[4] = "w";
+			if (sam_open_mode(mode + 1, outName.c_str(), NULL) < 0) {
+				printf("Invalid file name\n");
+				exit(EXIT_FAILURE);
+			}
+			if (!(ofp = sam_open(outName.c_str(), mode))) {
+				printf("Could not open %s\n", outName.c_str());
+				exit(EXIT_FAILURE);
+			}
+			break;
+		}
+		case 3: {  // bam
+			ofp = sam_open(outName.c_str(),"wb");
+			break;
+		}
+		case 4: {  // cram
+			htsFormat fmt4 = {sequence_data, cram, {3, 1}, gzip, 6, NULL};
+			hts_parse_format(&fmt4, "cram,no_ref=1");
+			ofp = sam_open_format(outName.c_str(), "wc", &fmt4);
+			break;
+		}
+	}
+
+	if (!ofp) {
+		lg.verbose("Failed to open output file: " + outName);
+		std::abort();
+	}
+
+	if (!hdrTemplate) {
+		lg.verbose("openOutputForFile: hdrTemplate is null (no BAM header)");
+		std::abort();
+	}
+
+	// Duplicate and write BAM/CRAM header
+	bam_hdr_t* ohdr = bam_hdr_dup(hdrTemplate);
+	if (!ohdr) {
+		lg.verbose("Failed to duplicate BAM header");
+		std::abort();
+	}
+
+	// Attach thread pool if available
+	if (tpool_write.pool) {
+		hts_set_opt(ofp, HTS_OPT_THREAD_POOL, &tpool_write);
+	}
+
+	if (sam_hdr_write(ofp, ohdr) < 0) {
+		lg.verbose("Failed to write BAM/CRAM header to " + outName);
+		std::abort();
+	}
+
+	fps[outId]  = ofp;
+	hdrs[outId] = ohdr;
+
+	lg.verbose("Opened output file '" + outName +
+			   "' for outId " + std::to_string(outId));
+}
+
+void InReads::writeToStream()
+{
+	// Init threadpool once
+	tpool_write = {nullptr, 0};
+	tpool_write.pool = hts_tpool_init(userInput.compression_threads);
+	if (!tpool_write.pool) {
+		lg.verbose("Failed to generate compression threadpool with " +
+				   std::to_string(userInput.compression_threads) +
+				   " threads. Continuing single-threaded");
+	}
+
+	const size_t numFiles = userInput.inFiles.size();
+	if (numFiles == 0) {
+		// nothing to write
+		if (tpool_write.pool) {
+			hts_tpool_destroy(tpool_write.pool);
+			tpool_write.pool = nullptr;
+		}
+		return;
+	}
+
+	const size_t outCount = splitOutputByFile ? numFiles : 1;
+	if (fps.size() < outCount)  fps.assign(outCount, nullptr);
+	if (hdrs.size() < outCount) hdrs.assign(outCount, nullptr);
+
+	// Per-input-file reorder state
+	std::vector<uint64_t> nextBatch(numFiles, 0);
+	std::vector<std::map<uint64_t, std::unique_ptr<BamBatch>>> pending(numFiles);
+
+	for (;;) {
+		std::unique_ptr<BamBatch> batch = filled_q_out.pop();
+
+		// nullptr sentinel => no more batches
+		if (!batch) break;
+
+		const uint32_t fileId = batch->fileN;
+		const uint64_t id     = batch->batchN;
+
+		if (fileId >= numFiles) {
+			// Defensive: bad file index, recycle
+			for (bam1_t* rec : batch->reads)
+				bam_destroy1(rec);
+			batch->reads.clear();
+			free_pool_out.push(std::move(batch));
+			continue;
+		}
+
+		auto& filePending = pending[fileId];
+		filePending.emplace(id, std::move(batch));
+
+		auto& next = nextBatch[fileId];
+		auto  it   = filePending.find(next);
+
+		while (it != filePending.end()) {
+			std::unique_ptr<BamBatch> bptr = std::move(it->second);
+			filePending.erase(it);
+
+			// Map input fileId -> output slot
+			const size_t outId = splitOutputByFile ? static_cast<size_t>(fileId) : 0;
+			openOutputForFile(outId);
+
+			htsFile*   ofp  = fps[outId];
+			bam_hdr_t* ohdr = hdrs[outId];
+
+			lg.verbose("Writing " + std::to_string(bptr->reads.size()) +
+					   " reads (batch " + std::to_string(bptr->batchN) +
+					   ") to outId " + std::to_string(outId) +
+					   " (fileId " + std::to_string(fileId) + ")");
+
+			for (bam1_t* rec : bptr->reads) {
+				if (sam_write1(ofp, ohdr, rec) < 0) {
+					fprintf(stderr, "Error writing BAM record (outId %zu)\n", outId);
+					std::abort();
+				}
+				bam_destroy1(rec);
+			}
+
+			bptr->reads.clear();
+			free_pool_out.push(std::move(bptr));
+
+			++next;
+			it = filePending.find(next);
+		}
+	}
+
+	// Final flush of any leftover pending batches (should be rare)
+	for (size_t fileId = 0; fileId < numFiles; ++fileId) {
+		auto& filePending = pending[fileId];
+		for (auto& kv : filePending) {
+			std::unique_ptr<BamBatch>& bptr = kv.second;
+
+			const size_t outId = splitOutputByFile ? fileId : 0;
+			openOutputForFile(outId);
+
+			htsFile*   ofp  = fps[outId];
+			bam_hdr_t* ohdr = hdrs[outId];
+
+			for (bam1_t* rec : bptr->reads) {
+				if (sam_write1(ofp, ohdr, rec) < 0) {
+					fprintf(stderr, "Error writing BAM record during final flush (outId %zu)\n", outId);
+					std::abort();
+				}
+				bam_destroy1(rec);
+			}
+
+			bptr->reads.clear();
+			free_pool_out.push(std::move(bptr));
+		}
+		filePending.clear();
+	}
+
+	// Close all outputs
+	const size_t outCountFinal = splitOutputByFile ? numFiles : 1;
+	for (size_t outId = 0; outId < outCountFinal; ++outId) {
+		if (fps[outId]) {
+			sam_close(fps[outId]);
+			fps[outId] = nullptr;
+		}
+		if (hdrs[outId]) {
+			bam_hdr_destroy(hdrs[outId]);
+			hdrs[outId] = nullptr;
+		}
+	}
+
+	if (tpool_write.pool) {
+		hts_tpool_destroy(tpool_write.pool);
+		tpool_write.pool = nullptr;
+	}
 }
 
 void InReads::printTableCompressed(std::string outFile) {
