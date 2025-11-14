@@ -1081,6 +1081,9 @@ void InReads::openOutputForFile(size_t outId)
 
 void InReads::writeToStream()
 {
+	const size_t numFiles = userInput.inFiles.size();
+	if (numFiles == 0)
+		return;
 	// Init threadpool once
 	tpool_write = {nullptr, 0};
 	tpool_write.pool = hts_tpool_init(userInput.compression_threads);
@@ -1088,16 +1091,6 @@ void InReads::writeToStream()
 		lg.verbose("Failed to generate compression threadpool with " +
 				   std::to_string(userInput.compression_threads) +
 				   " threads. Continuing single-threaded");
-	}
-
-	const size_t numFiles = userInput.inFiles.size();
-	if (numFiles == 0) {
-		// nothing to write
-		if (tpool_write.pool) {
-			hts_tpool_destroy(tpool_write.pool);
-			tpool_write.pool = nullptr;
-		}
-		return;
 	}
 
 	const size_t outCount = splitOutputByFile ? numFiles : 1;
