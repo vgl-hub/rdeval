@@ -36,6 +36,7 @@ struct UserInputRdeval : UserInput {
 	int md5_flag      = 0;
 	int cmd_flag      = 0;
 	int stats_flag    = 1;
+	int scifiCombinations_flag = 0;
 
 	float    ratio       = 1.0f;
 	int32_t  randSeed    = -1;
@@ -43,6 +44,10 @@ struct UserInputRdeval : UserInput {
 	uint16_t parallel_files         = 4;
 	uint16_t decompression_threads  = 4;
 	uint16_t compression_threads    = 6;
+	
+	// scifi
+	bool inputScifi = false;
+	std::string restrictionEnzyme = "";
 };
 
 
@@ -125,15 +130,14 @@ struct FileBatches {
 	std::vector<ReadBatches<T>> files;
 };
 
+using BamBatch    = ReadBatch<bam1_t*>;
+using InReadBatch = ReadBatch<InRead>;
 
 // -------------------------------------------------------------
 // InReads class
 // -------------------------------------------------------------
 
 class InReads {
-public:
-	using BamBatch    = ReadBatch<bam1_t*>;
-	using InReadBatch = ReadBatch<InRead>;
 
 private:
 	// Configuration

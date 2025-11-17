@@ -26,6 +26,7 @@
 #include "output.h"
 #include "len-vector.h"
 
+#include "scifi.h"
 #include "reads.h"
 
 InReads::InReads(UserInputRdeval& ui)
@@ -42,8 +43,8 @@ InReads::InReads(UserInputRdeval& ui)
 	  outBuffersN(consumersN * 2 + 1),
 	  free_pool_in(inBuffersN),
 	  filled_q_in(inBuffersN),
-	  free_pool_out(outBuffersN),
-	  filled_q_out(outBuffersN)
+	  free_pool_out(outBuffersN + outBuffersN * userInput.inputScifi), // two buffers per consumer, double that if scifi (PE output)
+	  filled_q_out(outBuffersN + outBuffersN * userInput.inputScifi)
 {
 	static const phmap::flat_hash_map<std::string,int> string_to_case{
 		{"fasta",1}, {"fa",1}, {"fasta.gz",1}, {"fa.gz",1},
@@ -61,9 +62,11 @@ InReads::InReads(UserInputRdeval& ui)
 	
 	if (splitOutputByFile)
 		streamOutput = true;
-	
+
 	const size_t numFiles = userInput.inFiles.size();
-	const size_t outCount = splitOutputByFile ? numFiles : 1;
+	size_t outCount = 1;
+	if (splitOutputByFile)
+		outCount = userInput.scifiCombinations_flag ? numFiles * 2 : numFiles;
 
 	if (outCount > 0) {
 		fps.assign(outCount, nullptr);
@@ -484,7 +487,7 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 	// One output BAM batch per input batch (if streaming)
 	std::unique_ptr<BamBatch> readBatchOut;
 	if (streamOutput) {
-		readBatchOut = free_pool_out.pop();    // from MPMC pool
+		readBatchOut = free_pool_out.pop(); // from MPMC pool
 		readBatchOut->reads.clear();
 		readBatchOut->fileN  = readBatchIn.fileN;
 		readBatchOut->batchN = readBatchIn.batchN;
@@ -528,59 +531,85 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 		batchN_ += read.N;
 
 		// STREAMING OUTPUT: convert to BAM record and append to batch
-		if (streamOutput) {
-			bam1_t* q = bam_init1();
-			if (!q) {
-				fprintf(stderr, "Failed to initialize bam1_t\n");
-				std::abort();
-			}
-
+		if (streamOutput && !userInput.inputScifi) {
+			// Ensure quality exists
 			if (!read.inSequenceQuality) {
 				read.inSequenceQuality =
 					std::make_unique<std::string>(read.inSequence->size(), '!');
 			}
 
-			const int32_t l_qname = static_cast<int32_t>(read.seqHeader.size());
-			const int32_t l_seq   = static_cast<int32_t>(read.inSequence->size());
-
-			if (bam_set1(q,
-						 l_qname,
-						 read.seqHeader.c_str(),
-						 BAM_FUNMAP,
-						 -1, -1,
-						 0, 0,
-						 nullptr,
-						 -1, -1,
-						 0,
-						 l_seq,
-						 read.inSequence->c_str(),
-						 nullptr,
-						 0) < 0) {
-				fprintf(stderr, "Failed to set BAM data\n");
-				std::abort();
-			}
-
-			uint8_t* qual = bam_get_qual(q);
-			for (size_t i = 0; i < read.inSequenceQuality->size(); ++i)
-				qual[i] = static_cast<uint8_t>(read.inSequenceQuality->at(i) - 33);
+			bam1_t* q = make_unmapped_bam(
+				read.seqHeader,              // name
+				*read.inSequence,            // seq
+				*read.inSequenceQuality,     // qual (ASCII+33)
+				0                            // extra_flags (none, just BAM_FUNMAP)
+			);
 
 			readBatchOut->reads.push_back(q);
-		}
+			
+		}else if (streamOutput && userInput.inputScifi) {
+			
+			if (userInput.scifiCombinations_flag) {
+				// SCIFI + COMBINATIONS: two *separate* BamBatch outputs
 
+				if (!read.inSequenceQuality) {
+					read.inSequenceQuality =
+						std::make_unique<std::string>(read.inSequence->size(), '!');
+				}
+
+				EnzymeInfo enz = get_enzyme(userInput.restrictionEnzyme);
+
+				// One batch for all R1s, one for all R2s
+				BamBatch R1_batch;
+				BamBatch R2_batch;
+
+				R1_batch.batchN = readBatchOut->batchN;  // or any scheme you like
+				R1_batch.fileN  = readBatchOut->fileN;
+				R2_batch.batchN = readBatchOut->batchN;
+				R2_batch.fileN  = readBatchOut->fileN + 1;
+
+				build_pe_bambatches(read, enz, R1_batch, R2_batch);
+
+				if (!R1_batch.reads.empty()) {
+					auto outR1 = std::make_unique<BamBatch>(std::move(R1_batch));
+					filled_q_out.push(std::move(outR1));   // enqueue all R1s for this read
+				}
+
+				if (!R2_batch.reads.empty()) {
+					auto outR2 = std::make_unique<BamBatch>(std::move(R2_batch));
+					filled_q_out.push(std::move(outR2));   // enqueue all R2s for this read
+				}
+			}else{
+				// SCIFI, NO COMBINATIONS: just chop into fragments in this batch
+				if (!read.inSequenceQuality) {
+					read.inSequenceQuality =
+					std::make_unique<std::string>(read.inSequence->size(), '!');
+				}
+				
+				EnzymeInfo enz = get_enzyme(userInput.restrictionEnzyme);
+				
+				BamBatch tmp = chop_read_to_bambatch(
+													 read,
+													 enz,
+													 readBatchOut->batchN,
+													 readBatchOut->fileN
+													 );
+				
+				// append chopped fragments into our current batch
+				readBatchOut->reads.insert(readBatchOut->reads.end(),
+										   tmp.reads.begin(), tmp.reads.end());
+			}
+		}
 		if (userInput.content_flag)
 			inReadsSummaryBatch.push_back(std::move(read));
 
 		sequence->sequence.reset();
 		sequence->sequenceQuality.reset();
-	}
-
-	// Push batch to output queue (if any reads)
-	if (streamOutput && readBatchOut && !readBatchOut->reads.empty()) {
+	}	
+	if (streamOutput && readBatchOut && !readBatchOut->reads.empty()) // Push batch to output queue (if any reads)
 		filled_q_out.push(std::move(readBatchOut));
-	}
 
-	// Update global stats and summaries
-	{
+	{ 	// Update global stats and summaries
 		std::unique_lock<std::mutex> lck(writerMutex);
 
 		if (userInput.content_flag && !inReadsSummaryBatch.empty()) {
@@ -977,21 +1006,27 @@ void InReads::openOutputForFile(size_t outId)
 		return;
 	}
 
-	if (fps[outId] != nullptr) {
-		// already open
+	if (fps[outId] != nullptr) // already open
 		return;
-	}
 
 	// Decide output file name
 	std::string outName;
-	if (splitOutputByFile) {
-		// One output per input file; typically prefix + per-file suffix
-		if (outId >= userInput.inFiles.size()) {
-			lg.verbose("openOutputForFile: outId " + std::to_string(outId) +
-					   " has no corresponding outFiles entry");
-			std::abort();
+	if (splitOutputByFile) { // One/two outputs per input file; typically prefix + per-file suffix
+		
+		if (userInput.scifiCombinations_flag) {
+			
+			if (outId >= userInput.inFiles.size()) {
+				lg.verbose("openOutputForFile: outId " + std::to_string(outId) +
+						   " has no corresponding outFiles entry");
+				std::abort();
+			}
+			outName = userInput.outPrefix + getFileName(userInput.inFiles[outId]);
+			
+		}else{
+			
+			
+			
 		}
-		outName = userInput.outPrefix + getFileName(userInput.inFiles[outId]);
 	} else {
 		// Single-output mode => everything maps to slot 0
 		if (userInput.outFiles.empty()) {
@@ -1082,7 +1117,11 @@ void InReads::openOutputForFile(size_t outId)
 void InReads::writeToStream()
 {
 	const size_t numFiles = userInput.inFiles.size();
-	if (numFiles == 0)
+	size_t outCount = 1;
+	if (splitOutputByFile)
+		outCount = userInput.scifiCombinations_flag ? numFiles * 2 : numFiles;
+	
+	if (outCount == 0)
 		return;
 	// Init threadpool once
 	tpool_write = {nullptr, 0};
@@ -1093,13 +1132,12 @@ void InReads::writeToStream()
 				   " threads. Continuing single-threaded");
 	}
 
-	const size_t outCount = splitOutputByFile ? numFiles : 1;
 	if (fps.size() < outCount)  fps.assign(outCount, nullptr);
 	if (hdrs.size() < outCount) hdrs.assign(outCount, nullptr);
 
 	// Per-input-file reorder state
-	std::vector<uint64_t> nextBatch(numFiles, 0);
-	std::vector<std::map<uint64_t, std::unique_ptr<BamBatch>>> pending(numFiles);
+	std::vector<uint64_t> nextBatch(outCount, 0);
+	std::vector<std::map<uint64_t, std::unique_ptr<BamBatch>>> pending(outCount);
 
 	for (;;) {
 		std::unique_ptr<BamBatch> batch = filled_q_out.pop();
@@ -1110,7 +1148,7 @@ void InReads::writeToStream()
 		const uint32_t fileId = batch->fileN;
 		const uint64_t id     = batch->batchN;
 
-		if (fileId >= numFiles) {
+		if (fileId >= outCount) {
 			// Defensive: bad file index, recycle
 			for (bam1_t* rec : batch->reads)
 				bam_destroy1(rec);
@@ -1183,9 +1221,7 @@ void InReads::writeToStream()
 		filePending.clear();
 	}
 
-	// Close all outputs
-	const size_t outCountFinal = splitOutputByFile ? numFiles : 1;
-	for (size_t outId = 0; outId < outCountFinal; ++outId) {
+	for (size_t outId = 0; outId < outCount; ++outId) {	// Close all outputs
 		if (fps[outId]) {
 			sam_close(fps[outId]);
 			fps[outId] = nullptr;
