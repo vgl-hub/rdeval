@@ -638,7 +638,6 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 	return true;
 }
 
-
 InRead InReads::traverseInRead(Log* threadLog, Sequence2* sequence, uint32_t seqPos) {
 	std::vector<std::pair<uint64_t, uint64_t>> bedCoords;
 	if (userInput.hc_cutoff != -1) {
@@ -996,10 +995,11 @@ void InReads::closeBam() {
 	}
 }
 
-void InReads::openOutputForFile(size_t outId)
-{
+void InReads::openOutputForFile(size_t outId) {
 	const size_t numFiles = userInput.inFiles.size();
-	const size_t outCount = splitOutputByFile ? numFiles : 1;
+	size_t outCount = 1;
+	if (splitOutputByFile)
+		outCount = userInput.scifiCombinations_flag ? numFiles * 2 : numFiles;
 
 	if (outId >= outCount) {
 		lg.verbose("openOutputForFile: invalid outId " + std::to_string(outId));
@@ -1008,36 +1008,7 @@ void InReads::openOutputForFile(size_t outId)
 
 	if (fps[outId] != nullptr) // already open
 		return;
-
-	// Decide output file name
-	std::string outName;
-	if (splitOutputByFile) { // One/two outputs per input file; typically prefix + per-file suffix
-		
-		if (userInput.scifiCombinations_flag) {
-			
-			if (outId >= userInput.inFiles.size()) {
-				lg.verbose("openOutputForFile: outId " + std::to_string(outId) +
-						   " has no corresponding outFiles entry");
-				std::abort();
-			}
-			outName = userInput.outPrefix + getFileName(userInput.inFiles[outId]);
-			
-		}else{
-			
-			
-			
-		}
-	} else {
-		// Single-output mode => everything maps to slot 0
-		if (userInput.outFiles.empty()) {
-			lg.verbose("openOutputForFile: no output file specified");
-			std::abort();
-		}
-		outName = userInput.outFiles[0];
-	}
-
-	// Choose mode based on extension
-	std::string ext = getFileExt(userInput.inFiles[outId]);
+	
 	const static phmap::flat_hash_map<std::string,int> string_to_case{
 		{"fasta",   1},
 		{"fa",      1},
@@ -1050,6 +1021,51 @@ void InReads::openOutputForFile(size_t outId)
 		{"bam",     3},
 		{"cram",    4}
 	};
+	// Decide output file name
+	std::string outName;
+	if (splitOutputByFile) { // One/two outputs per input file; typically prefix + per-file suffix
+		if (userInput.scifiCombinations_flag) {
+
+			if (outId >= outCount) {
+				lg.verbose("openOutputForFile: outId " + std::to_string(outId) +
+						   " has no corresponding outFiles entry in scifiCombinations mode");
+				std::abort();
+			}
+			// Determine input file index
+			size_t fileIdx = outId / 2;
+			if (fileIdx >= numFiles) { // Validate
+				lg.verbose("openOutputForFile: computed fileIdx=" + std::to_string(fileIdx) +
+						   " invalid (outId=" + std::to_string(outId) +
+						   ", total files=" + std::to_string(userInput.inFiles.size()) + ")");
+				std::abort();
+			}
+			std::string baseName = getFileName(userInput.inFiles[fileIdx]);	// Base name of the input file
+			std::string ext = getFileExt(userInput.inFiles[fileIdx]);
+			std::string baseNameNoExt = stripKnownExt(baseName, ext);
+			std::string suffix = ((outId % 2) == 0) ? "_1" : "_2"; // Assign _1 or _2 depending on parity
+			outName = userInput.outPrefix + baseNameNoExt + suffix + "." + ext;
+			lg.verbose("SciFi combinations mode: outId=" + std::to_string(outId) +
+					   " fileIdx=" + std::to_string(fileIdx) +
+					   " → " + outName);
+		}else{
+			if (outId >= userInput.inFiles.size()) {
+				lg.verbose("openOutputForFile: outId " + std::to_string(outId) +
+						   " has no corresponding outFiles entry");
+				std::abort();
+			}
+			outName = userInput.outPrefix + getFileName(userInput.inFiles[outId]);
+		}
+	} else {
+		std::cout<<"we are here2"<<std::endl;
+		// Single-output mode => everything maps to slot 0
+		if (userInput.outFiles.empty()) {
+			lg.verbose("openOutputForFile: no output file specified");
+			std::abort();
+		}
+		outName = userInput.outFiles[0];
+	}
+	// Choose mode based on extension
+	std::string ext = getFileExt(outName);
 
 	int fmt_case = string_to_case.count(ext) ? string_to_case.at(ext) : 0;
 	htsFile* ofp = nullptr;

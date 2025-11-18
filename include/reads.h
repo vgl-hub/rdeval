@@ -92,6 +92,7 @@ struct InRead {
 		  A(A), C(C), G(G), T(T), N(N), lowerCount(lowerCount),
 		  uId(uId), iId(iId), seqPos(readPos), avgQuality(avgQuality)
 	{
+		(void)threadLog;
 		if (tags) this->tags = *tags;
 #ifdef DEBUG
 		if (threadLog) {

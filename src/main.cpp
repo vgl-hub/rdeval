@@ -55,8 +55,8 @@ int main(int argc, char **argv) {
         {"include-list", required_argument, 0, 'i'},
         {"threads", required_argument, 0, 'j'},
 		{"max-memory", required_argument, 0, 'm'},
-        {"output-file", required_argument, 0, 'o'},
-		{"output-prefix", required_argument, 0, 'p'},
+        {"out-file", required_argument, 0, 'o'},
+		{"out-prefix", required_argument, 0, 'p'},
         {"quality", required_argument, 0, 'q'},
         {"input-reads", required_argument, 0, 'r'},
         {"out-size", required_argument, 0, 's'},
@@ -185,13 +185,15 @@ int main(int argc, char **argv) {
                 printf("\t-f --filter <exp> filter reads using <exp> in quotes, e.g. 'l>10' for longer than 10bp or 'l>10 & q>10' to further exclude reads by quality (default: none).\n");
                 printf("\t-i --include-list <file> generates output on a subset list of headers.\n");
                 printf("\t-o --out-file <file> output file (fa*[.gz], bam, cram, rd). Optionally write reads to file or generate rd summary file.\n");
-				printf("\t-o --out-prefix <prefix> a prefix for the names of the files when generating multiple outputs. Inputs names will be used for each file.\n");
+				printf("\t-p --out-prefix <prefix> a prefix for the names of the files when generating multiple outputs. Inputs names will be used for each file.\n");
                 printf("\t-q --quality q|a generates list of average quality for each read (q) or both length and quality (a).\n");
                 printf("\t-r --input-reads <file1> <file2> <file n> input file (fa*[.gz], bam, cram, rd).\n");
                 printf("\t-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cumulative table).\n");
                 printf("\t--homopolymer-compress <int> compress all the homopolymers longer than n in the input.\n");
                 printf("\t--sample <float> fraction of reads to subsample.\n");
                 printf("\t--random-seed <int> an optional random seed to make subsampling reproducible.\n");
+				printf("\t--scifi-enzyme <string> the specific enzyme to use for SciFi read digestion.\n");
+				printf("\t--scifi-out-combinations output all per-read combinations of SciFi fragments (default: no).\n");
                 printf("\t--md5 print md5 of .rd files.\n");
 				printf("\t--parallel-files <int> numbers of files that can be opened and processed in parallel (producer threads, default:4).\n");
 				printf("\t--decompression-threads <int> numbers of decompression threads used by htslib for bam/cram (default:4).\n");
