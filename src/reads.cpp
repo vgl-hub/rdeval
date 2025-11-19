@@ -93,7 +93,7 @@ float newRand() {
 
 void InReads::load() {
 	
-	md5s.reserve(userInput.inFiles.size()); // to avoid invalidating the vector during thread concurrency
+	md5s.resize(userInput.inFiles.size()); // to avoid invalidating the vector during thread concurrency
 	readSummaryBatches.files.resize(userInput.inFiles.size()); // resize to accommodate batches from multiple files
 	fileBatches.files.resize(userInput.inFiles.size()); // resize to accommodate batches from multiple files
 	
@@ -135,6 +135,7 @@ void InReads::load() {
 	for (auto& th : producers) th.join();
 	for (auto& th : consumers) th.join();
 	filled_q_out.push(std::unique_ptr<BamBatch>()); // sentinel
+	closeStream();
 }
 
 void InReads::extractInReads() {
@@ -170,8 +171,12 @@ void InReads::extractInReads() {
         std::string file = userInput.file('r', i);
         std::string ext = getFileExt(file);
         if (ext != "rd") {
-            md5s.push_back(std::make_pair(getFileName(file),std::string()));
-            threadPool.queueJob([=]{ return computeMd5(file, md5s.back().second); });
+			threadPool.queueJob([this, i, file]() {
+				std::string md5;
+				computeMd5(file, md5);
+				md5s[i].second = md5;
+				return true;
+			});
         }
         switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
                 
