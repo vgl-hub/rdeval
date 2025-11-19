@@ -149,7 +149,6 @@ void InReads::extractInReads() {
 	uint32_t batchCounter = 0; // batch number, read position in the batch
 	uint64_t processedLength = 0;
 	bool sample = userInput.ratio < 1 ? true : false; // read subsampling
-	std::unique_ptr<Sequences2> readBatch = free_pool_in.pop();
 	
 	const static phmap::flat_hash_map<std::string,int> string_to_case{
 		{"fasta",1},
@@ -171,6 +170,7 @@ void InReads::extractInReads() {
 		if (i >= numFiles)
 			break;
 		
+		std::unique_ptr<Sequences2> readBatch = free_pool_in.pop();
 		uint32_t batchN = 0;
         std::string file = userInput.file('r', i);
         std::string ext = getFileExt(file);
