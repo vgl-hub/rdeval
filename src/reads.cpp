@@ -92,8 +92,12 @@ float newRand() {
 }
 
 void InReads::load() {
-	
-	md5s.resize(userInput.inFiles.size()); // to avoid invalidating the vector during thread concurrency
+	uint32_t newMd5s = 0;
+	for (std::string file : userInput.inFiles) {
+		if (getFileExt(file) != "rd")
+			++newMd5s;
+	}
+	md5s.resize(newMd5s); // to avoid invalidating the vector during thread concurrency
 	readSummaryBatches.files.resize(userInput.inFiles.size()); // resize to accommodate batches from multiple files
 	fileBatches.files.resize(userInput.inFiles.size()); // resize to accommodate batches from multiple files
 	
