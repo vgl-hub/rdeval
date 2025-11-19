@@ -267,7 +267,6 @@ void InReads::extractInReads() {
 					readBatch->fileN = i;
                     lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
 					filled_q_in.push(std::move(readBatch));
-					readBatch = free_pool_in.pop();
 					processedLength = 0;
 					batchCounter = 0;
                 }
@@ -328,7 +327,6 @@ void InReads::extractInReads() {
 				readBatch->fileN = i;
                 lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
 				filled_q_in.push(std::move(readBatch));
-				readBatch = free_pool_in.pop();
 				processedLength = 0;
 				batchCounter = 0;
                 bam_destroy1(bamdata);
