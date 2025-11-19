@@ -40,7 +40,7 @@ InReads::InReads(UserInputRdeval& ui)
 			  : std::min<uint32_t>(ui.inFiles.size(), ui.parallel_files)
 	  ),
 	  inBuffersN((consumersN + producersN) * 2),
-	  outBuffersN(consumersN * 2 + 1),
+	  outBuffersN(consumersN * 4 + 1),
 	  free_pool_in(inBuffersN),
 	  filled_q_in(inBuffersN),
 	  free_pool_out(outBuffersN + outBuffersN * userInput.inputScifi), // two buffers per consumer, double that if scifi (PE output)
@@ -103,7 +103,7 @@ void InReads::load() {
 		free_pool_in.push(std::move(b));
 	}
 	if (streamOutput) {
-		for (size_t i = 0; i < outBuffersN; ++i) {
+		for (size_t i = 0; i < (outBuffersN + outBuffersN * userInput.inputScifi); ++i) {
 			auto batch = std::make_unique<BamBatch>();
 			batch->reads.reserve(1024);
 			free_pool_out.push(std::move(batch));
@@ -484,14 +484,38 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 	Log threadLog;
 	threadLog.setId(readBatchIn.batchN);
 	
-	// One output BAM batch per input batch (if streaming)
 	std::unique_ptr<BamBatch> readBatchOut;
+	std::unique_ptr<BamBatch> R1_batch;
+	std::unique_ptr<BamBatch> R2_batch;
+
 	if (streamOutput) {
-		readBatchOut = free_pool_out.pop(); // from MPMC pool
-		readBatchOut->reads.clear();
-		readBatchOut->fileN  = readBatchIn.fileN;
-		readBatchOut->batchN = readBatchIn.batchN;
+		if (userInput.inputScifi && userInput.scifiCombinations_flag) {
+			// Two output batches per input batch
+			const uint32_t fileIdx = readBatchIn.fileN;
+			const uint32_t baseOut = fileIdx * 2;
+
+			R1_batch = free_pool_out.pop();
+			R2_batch = free_pool_out.pop();
+
+			R1_batch->reads.clear();
+			R2_batch->reads.clear();
+
+			R1_batch->batchN = readBatchIn.batchN;
+			R1_batch->fileN  = baseOut;
+
+			R2_batch->batchN = readBatchIn.batchN;
+			R2_batch->fileN  = baseOut + 1;
+		} else {
+			// existing single-output case
+			readBatchOut = free_pool_out.pop();
+			readBatchOut->reads.clear();
+			readBatchOut->fileN  = readBatchIn.fileN;
+			readBatchOut->batchN = readBatchIn.batchN;
+		}
 	}
+	EnzymeInfo enz;
+	if(userInput.inputScifi)
+		enz = get_enzyme(userInput.restrictionEnzyme);
 	
 	std::vector<InRead> inReadsSummaryBatch;
 	uint32_t readN = 0;
@@ -556,37 +580,13 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 					read.inSequenceQuality =
 						std::make_unique<std::string>(read.inSequence->size(), '!');
 				}
-
-				EnzymeInfo enz = get_enzyme(userInput.restrictionEnzyme);
-
-				// One batch for all R1s, one for all R2s
-				BamBatch R1_batch;
-				BamBatch R2_batch;
-
-				R1_batch.batchN = readBatchOut->batchN;  // or any scheme you like
-				R1_batch.fileN  = readBatchOut->fileN;
-				R2_batch.batchN = readBatchOut->batchN;
-				R2_batch.fileN  = readBatchOut->fileN + 1;
-
-				build_pe_bambatches(read, enz, R1_batch, R2_batch);
-
-				if (!R1_batch.reads.empty()) {
-					auto outR1 = std::make_unique<BamBatch>(std::move(R1_batch));
-					filled_q_out.push(std::move(outR1));   // enqueue all R1s for this read
-				}
-
-				if (!R2_batch.reads.empty()) {
-					auto outR2 = std::make_unique<BamBatch>(std::move(R2_batch));
-					filled_q_out.push(std::move(outR2));   // enqueue all R2s for this read
-				}
+				build_pe_bambatches(read, enz, *R1_batch, *R2_batch);
 			}else{
 				// SCIFI, NO COMBINATIONS: just chop into fragments in this batch
 				if (!read.inSequenceQuality) {
 					read.inSequenceQuality =
 					std::make_unique<std::string>(read.inSequence->size(), '!');
 				}
-				
-				EnzymeInfo enz = get_enzyme(userInput.restrictionEnzyme);
 				
 				BamBatch tmp = chop_read_to_bambatch(
 													 read,
@@ -606,8 +606,17 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 		sequence->sequence.reset();
 		sequence->sequenceQuality.reset();
 	}	
-	if (streamOutput && readBatchOut && !readBatchOut->reads.empty()) // Push batch to output queue (if any reads)
-		filled_q_out.push(std::move(readBatchOut));
+	if (streamOutput) {
+		if (userInput.inputScifi && userInput.scifiCombinations_flag) {
+				filled_q_out.push(std::move(R1_batch));
+				filled_q_out.push(std::move(R2_batch));
+			// If they’re empty, they just get destroyed and their BamBatch
+			// instances are removed from the pool; the writer will add more
+			// via free_pool_out.push after writing other batches.
+		} else {
+			filled_q_out.push(std::move(readBatchOut));
+		}
+	}
 
 	{ 	// Update global stats and summaries
 		std::unique_lock<std::mutex> lck(writerMutex);
@@ -954,11 +963,8 @@ void InReads::initStream() {
 
 void InReads::closeStream() {
 
-	if (writer.joinable()) {
-		// nullptr unique_ptr<BamBatch> is the sentinel
-		filled_q_out.push(std::unique_ptr<BamBatch>());  // signals writer to stop
+	if (writer.joinable())
 		writer.join();
-	}
 }
 
 void InReads::writeHeader() {
@@ -1055,9 +1061,7 @@ void InReads::openOutputForFile(size_t outId) {
 			}
 			outName = userInput.outPrefix + getFileName(userInput.inFiles[outId]);
 		}
-	} else {
-		std::cout<<"we are here2"<<std::endl;
-		// Single-output mode => everything maps to slot 0
+	} else { // Single-output mode => everything maps to slot 0
 		if (userInput.outFiles.empty()) {
 			lg.verbose("openOutputForFile: no output file specified");
 			std::abort();
@@ -1130,8 +1134,7 @@ void InReads::openOutputForFile(size_t outId) {
 			   "' for outId " + std::to_string(outId));
 }
 
-void InReads::writeToStream()
-{
+void InReads::writeToStream() {
 	const size_t numFiles = userInput.inFiles.size();
 	size_t outCount = 1;
 	if (splitOutputByFile)
@@ -1165,7 +1168,7 @@ void InReads::writeToStream()
 		const uint64_t id     = batch->batchN;
 
 		if (fileId >= outCount) {
-			// Defensive: bad file index, recycle
+			// Defensive: bad file index, recycle (shouldn't happen)
 			for (bam1_t* rec : batch->reads)
 				bam_destroy1(rec);
 			batch->reads.clear();
@@ -1212,7 +1215,7 @@ void InReads::writeToStream()
 	}
 
 	// Final flush of any leftover pending batches (should be rare)
-	for (size_t fileId = 0; fileId < numFiles; ++fileId) {
+	for (size_t fileId = 0; fileId < outCount; ++fileId) {
 		auto& filePending = pending[fileId];
 		for (auto& kv : filePending) {
 			std::unique_ptr<BamBatch>& bptr = kv.second;

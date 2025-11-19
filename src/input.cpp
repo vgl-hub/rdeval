@@ -37,11 +37,7 @@ void Input::read() {
     
     inReads.load();
     jobWait(threadPool);
-    lg.verbose("Data loaded");
-    
-    inReads.closeStream(); // close stream output
-    
-    lg.verbose("Generating output");
+    lg.verbose("Data loaded. Generating output");
     
     if (userInput.md5_flag)
        inReads.printMd5();
