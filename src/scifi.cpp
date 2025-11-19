@@ -21,18 +21,14 @@
 // Find enzyme info from name
 EnzymeInfo get_enzyme(const std::string& name) {
 	// Adjust cut_offset if you want exact biological cleavage positions.
-	if (name == "HindIII") {
-		// AAGCTT, cut after the motif (simplified)
-		return EnzymeInfo{"HindIII", "AAGCTT", 6};
-	} else if (name == "NlaIII") {
-		// CATG, cut after motif (simplified)
+	if (name == "HindIII")
+		return EnzymeInfo{"HindIII", "AAGCTT", 1};
+	else if (name == "NlaIII")
 		return EnzymeInfo{"NlaIII", "CATG", 4};
-	} else if (name == "DpnII") {
-		// GATC, cut after motif (simplified)
-		return EnzymeInfo{"DpnII", "GATC", 4};
-	} else {
+	else if (name == "DpnII")
+		return EnzymeInfo{"DpnII", "GATC", 0};
+	else
 		throw std::runtime_error("Unsupported restriction enzyme: " + name);
-	}
 }
 
 std::vector<int> find_cut_positions(const InRead& read, const EnzymeInfo& enz) {
