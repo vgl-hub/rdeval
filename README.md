@@ -44,10 +44,10 @@ Using `--cifi-out-combinations`, rdeval outputs all fragment combinations derive
 
 ```bash
 # Digest reads using enzyme motif
-rdeval --cifi-enzyme DpnII cifi_reads.fastq -o cifi_reads.digested.fastq
+rdeval --cifi-enzyme DpnII cifi_reads.fastq -o testFiles/cifi_reads.digested.fastq
 
 # Digest and output all PE combinations
-rdeval --cifi-enzyme DpnII --cifi-out-combinations cifi_reads.fastq -p rdeval_
+rdeval --cifi-enzyme DpnII --cifi-out-combinations testFiles/cifi_reads.fastq -p rdeval_
 ```
 
 ## Documentation
