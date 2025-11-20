@@ -16,7 +16,7 @@
 #include "functions.h" // global functions
 #include "stream-obj.h"
 
-#include "scifi.h"
+#include "cifi.h"
 
 // Find enzyme info from name
 EnzymeInfo get_enzyme(const std::string& name) {

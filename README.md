@@ -36,7 +36,7 @@ rdeval testFiles/random1.fastq 10 // computes summary statistics, including cove
 
 ## PacBio CiFi support
 
-**rdeval** now supports PacBio CiFi combinatorial indexing** data.  
+**rdeval** now supports **PacBio CiFi** data.  
 Using `--cifi-enzyme`, rdeval performs *in-silico* digestion of reads with a specified restriction enzyme motif.  
 Using `--cifi-out-combinations`, rdeval outputs all fragment combinations derived from each digested read.
 
@@ -44,10 +44,10 @@ Using `--cifi-out-combinations`, rdeval outputs all fragment combinations derive
 
 ```bash
 # Digest reads using enzyme motif
-rdeval --cifi-enzyme DpnII scifi_reads.fastq
+rdeval --cifi-enzyme DpnII cifi_reads.fastq -o cifi_reads.digested.fastq
 
-# Digest and output all combinations
-rdeval --cifi-enzyme DpnII --cifi-out-combinations scifi_reads.fastq
+# Digest and output all PE combinations
+rdeval --cifi-enzyme DpnII --cifi-out-combinations cifi_reads.fastq -p rdeval_
 ```
 
 ## Documentation
