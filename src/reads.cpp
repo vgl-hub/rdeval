@@ -26,7 +26,7 @@
 #include "output.h"
 #include "len-vector.h"
 
-#include "scifi.h"
+#include "cifi.h"
 #include "reads.h"
 
 InReads::InReads(UserInputRdeval& ui)
@@ -43,8 +43,8 @@ InReads::InReads(UserInputRdeval& ui)
 	  outBuffersN(consumersN * 4 + 1),
 	  free_pool_in(inBuffersN),
 	  filled_q_in(inBuffersN),
-	  free_pool_out(outBuffersN + outBuffersN * userInput.inputScifi), // two buffers per consumer, double that if scifi (PE output)
-	  filled_q_out(outBuffersN + outBuffersN * userInput.inputScifi)
+	  free_pool_out(outBuffersN + outBuffersN * userInput.inputCifi), // two buffers per consumer, double that if cifi (PE output)
+	  filled_q_out(outBuffersN + outBuffersN * userInput.inputCifi)
 {
 	static const phmap::flat_hash_map<std::string,int> string_to_case{
 		{"fasta",1}, {"fa",1}, {"fasta.gz",1}, {"fa.gz",1},
@@ -66,7 +66,7 @@ InReads::InReads(UserInputRdeval& ui)
 	const size_t numFiles = userInput.inFiles.size();
 	size_t outCount = 1;
 	if (splitOutputByFile)
-		outCount = userInput.scifiCombinations_flag ? numFiles * 2 : numFiles;
+		outCount = userInput.cifiCombinations_flag ? numFiles * 2 : numFiles;
 
 	if (outCount > 0) {
 		fps.assign(outCount, nullptr);
@@ -107,7 +107,7 @@ void InReads::load() {
 		free_pool_in.push(std::move(b));
 	}
 	if (streamOutput) {
-		for (size_t i = 0; i < (outBuffersN + outBuffersN * userInput.inputScifi); ++i) {
+		for (size_t i = 0; i < (outBuffersN + outBuffersN * userInput.inputCifi); ++i) {
 			auto batch = std::make_unique<BamBatch>();
 			batch->reads.reserve(1024);
 			free_pool_out.push(std::move(batch));
@@ -496,7 +496,7 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 	std::unique_ptr<BamBatch> R2_batch;
 
 	if (streamOutput) {
-		if (userInput.inputScifi && userInput.scifiCombinations_flag) {
+		if (userInput.inputCifi && userInput.cifiCombinations_flag) {
 			// Two output batches per input batch
 			const uint32_t fileIdx = readBatchIn.fileN;
 			const uint32_t baseOut = fileIdx * 2;
@@ -521,7 +521,7 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 		}
 	}
 	EnzymeInfo enz;
-	if(userInput.inputScifi)
+	if(userInput.inputCifi)
 		enz = get_enzyme(userInput.restrictionEnzyme);
 	
 	std::vector<InRead> inReadsSummaryBatch;
@@ -562,7 +562,7 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 		batchN_ += read.N;
 
 		// STREAMING OUTPUT: convert to BAM record and append to batch
-		if (streamOutput && !userInput.inputScifi) {
+		if (streamOutput && !userInput.inputCifi) {
 			// Ensure quality exists
 			if (!read.inSequenceQuality) {
 				read.inSequenceQuality =
@@ -578,9 +578,9 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 
 			readBatchOut->reads.push_back(q);
 			
-		}else if (streamOutput && userInput.inputScifi) {
+		}else if (streamOutput && userInput.inputCifi) {
 			
-			if (userInput.scifiCombinations_flag) {
+			if (userInput.cifiCombinations_flag) {
 				// SCIFI + COMBINATIONS: two *separate* BamBatch outputs
 
 				if (!read.inSequenceQuality) {
@@ -614,7 +614,7 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 		sequence->sequenceQuality.reset();
 	}	
 	if (streamOutput) {
-		if (userInput.inputScifi && userInput.scifiCombinations_flag) {
+		if (userInput.inputCifi && userInput.cifiCombinations_flag) {
 				filled_q_out.push(std::move(R1_batch));
 				filled_q_out.push(std::move(R2_batch));
 			// If they’re empty, they just get destroyed and their BamBatch
@@ -1012,7 +1012,7 @@ void InReads::openOutputForFile(size_t outId) {
 	const size_t numFiles = userInput.inFiles.size();
 	size_t outCount = 1;
 	if (splitOutputByFile)
-		outCount = userInput.scifiCombinations_flag ? numFiles * 2 : numFiles;
+		outCount = userInput.cifiCombinations_flag ? numFiles * 2 : numFiles;
 
 	if (outId >= outCount) {
 		lg.verbose("openOutputForFile: invalid outId " + std::to_string(outId));
@@ -1037,11 +1037,11 @@ void InReads::openOutputForFile(size_t outId) {
 	// Decide output file name
 	std::string outName;
 	if (splitOutputByFile) { // One/two outputs per input file; typically prefix + per-file suffix
-		if (userInput.scifiCombinations_flag) {
+		if (userInput.cifiCombinations_flag) {
 
 			if (outId >= outCount) {
 				lg.verbose("openOutputForFile: outId " + std::to_string(outId) +
-						   " has no corresponding outFiles entry in scifiCombinations mode");
+						   " has no corresponding outFiles entry in cifiCombinations mode");
 				std::abort();
 			}
 			// Determine input file index
@@ -1145,7 +1145,7 @@ void InReads::writeToStream() {
 	const size_t numFiles = userInput.inFiles.size();
 	size_t outCount = 1;
 	if (splitOutputByFile)
-		outCount = userInput.scifiCombinations_flag ? numFiles * 2 : numFiles;
+		outCount = userInput.cifiCombinations_flag ? numFiles * 2 : numFiles;
 	
 	if (outCount == 0)
 		return;

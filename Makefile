@@ -31,7 +31,7 @@ STATIC_LIBS_RAW = $(shell PKG_CONFIG_PATH="$(PKG_CONFIG_PATH)" $(PKG_CONFIG) --l
 STATIC_LIBS = $(shell echo $(STATIC_LIBS_RAW) | tr ' ' '\n' | sort -u | tr '\n' ' ')
 STATIC_LIBS += -lz -lcrypto -lhts -lssl -ldl -lm -lpthread
 
-OBJS := main input reads scifi
+OBJS := main input reads cifi
 BINS := $(addprefix $(BINDIR)/, $(OBJS))
 
 #define

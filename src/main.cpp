@@ -62,8 +62,8 @@ int main(int argc, char **argv) {
         {"out-size", required_argument, 0, 's'},
         {"md5", no_argument, &userInput.md5_flag, 1},
 		
-		{"scifi-enzyme", required_argument, 0, 0},
-		{"scifi-out-combinations", no_argument, &userInput.scifiCombinations_flag, 1},
+		{"cifi-enzyme", required_argument, 0, 0},
+		{"cifi-out-combinations", no_argument, &userInput.cifiCombinations_flag, 1},
         
         {"tabular", no_argument, &tabular_flag, 1},
         {"verbose", no_argument, &verbose_flag, 1},
@@ -115,9 +115,9 @@ int main(int argc, char **argv) {
                     userInput.decompression_threads = atoi(optarg);
                 if(strcmp(long_options[option_index].name,"compression-threads") == 0)
                     userInput.compression_threads = atoi(optarg);
-				if(strcmp(long_options[option_index].name,"scifi-enzyme") == 0) {
+				if(strcmp(long_options[option_index].name,"cifi-enzyme") == 0) {
 					userInput.restrictionEnzyme = optarg;
-					userInput.inputScifi = true;
+					userInput.inputCifi = true;
 				}
                 break;
             default: // handle positional arguments
@@ -192,8 +192,8 @@ int main(int argc, char **argv) {
                 printf("\t--homopolymer-compress <int> compress all the homopolymers longer than n in the input.\n");
                 printf("\t--sample <float> fraction of reads to subsample.\n");
                 printf("\t--random-seed <int> an optional random seed to make subsampling reproducible.\n");
-				printf("\t--scifi-enzyme <string> the specific enzyme to use for SciFi read digestion.\n");
-				printf("\t--scifi-out-combinations output all per-read combinations of SciFi fragments (default: no).\n");
+				printf("\t--cifi-enzyme <string> the specific enzyme to use for SciFi read digestion.\n");
+				printf("\t--cifi-out-combinations output all per-read combinations of SciFi fragments (default: no).\n");
                 printf("\t--md5 print md5 of .rd files.\n");
 				printf("\t--parallel-files <int> numbers of files that can be opened and processed in parallel (producer threads, default:4).\n");
 				printf("\t--decompression-threads <int> numbers of decompression threads used by htslib for bam/cram (default:4).\n");
