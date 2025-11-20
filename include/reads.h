@@ -202,6 +202,9 @@ private:
 	// Output queues (BAM batches)
 	BlockingQueue<std::unique_ptr<BamBatch>> free_pool_out;
 	BlockingQueue<std::unique_ptr<BamBatch>> filled_q_out;
+	
+	// CiFi stats
+	std::atomic<uint64_t> cifiReadN{0};
 
 public:
 

@@ -494,31 +494,40 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 	std::unique_ptr<BamBatch> readBatchOut;
 	std::unique_ptr<BamBatch> R1_batch;
 	std::unique_ptr<BamBatch> R2_batch;
-
-	if (streamOutput) {
+	
+	if (!streamOutput) { // we allocate once as we are not outputting anything
 		if (userInput.inputCifi && userInput.cifiCombinations_flag) {
-			// Two output batches per input batch
-			const uint32_t fileIdx = readBatchIn.fileN;
-			const uint32_t baseOut = fileIdx * 2;
+			R1_batch = std::make_unique<BamBatch>();
+			R2_batch = std::make_unique<BamBatch>();
+		}else{
+			readBatchOut = std::make_unique<BamBatch>();
+		}
+	}
 
+	if (userInput.inputCifi && userInput.cifiCombinations_flag) { // Two output batches per input batch
+		const uint32_t fileIdx = readBatchIn.fileN;
+		const uint32_t baseOut = fileIdx * 2;
+
+		if (streamOutput) {
 			R1_batch = free_pool_out.pop();
 			R2_batch = free_pool_out.pop();
-
-			R1_batch->reads.clear();
-			R2_batch->reads.clear();
-
-			R1_batch->batchN = readBatchIn.batchN;
-			R1_batch->fileN  = baseOut;
-
-			R2_batch->batchN = readBatchIn.batchN;
-			R2_batch->fileN  = baseOut + 1;
-		} else {
-			// existing single-output case
-			readBatchOut = free_pool_out.pop();
-			readBatchOut->reads.clear();
-			readBatchOut->fileN  = readBatchIn.fileN;
-			readBatchOut->batchN = readBatchIn.batchN;
 		}
+
+		R1_batch->reads.clear();
+		R2_batch->reads.clear();
+
+		R1_batch->batchN = readBatchIn.batchN;
+		R1_batch->fileN  = baseOut;
+
+		R2_batch->batchN = readBatchIn.batchN;
+		R2_batch->fileN  = baseOut + 1;
+	} else { // existing single-output case
+		if (streamOutput)
+			readBatchOut = free_pool_out.pop();
+			
+		readBatchOut->reads.clear();
+		readBatchOut->fileN  = readBatchIn.fileN;
+		readBatchOut->batchN = readBatchIn.batchN;
 	}
 	EnzymeInfo enz;
 	if(userInput.inputCifi)
@@ -578,7 +587,7 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 
 			readBatchOut->reads.push_back(q);
 			
-		}else if (streamOutput && userInput.inputCifi) {
+		}else if (userInput.inputCifi) {
 			
 			if (userInput.cifiCombinations_flag) {
 				// SCIFI + COMBINATIONS: two *separate* BamBatch outputs
@@ -613,16 +622,26 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 		sequence->sequence.reset();
 		sequence->sequenceQuality.reset();
 	}	
-	if (streamOutput) {
-		if (userInput.inputCifi && userInput.cifiCombinations_flag) {
-				filled_q_out.push(std::move(R1_batch));
-				filled_q_out.push(std::move(R2_batch));
-			// If they’re empty, they just get destroyed and their BamBatch
-			// instances are removed from the pool; the writer will add more
-			// via free_pool_out.push after writing other batches.
-		} else {
-			filled_q_out.push(std::move(readBatchOut));
+
+	if (userInput.inputCifi && userInput.cifiCombinations_flag) {
+		cifiReadN.fetch_add(R1_batch->reads.size() + R2_batch->reads.size());
+		
+		if (streamOutput) {
+			filled_q_out.push(std::move(R1_batch));
+			filled_q_out.push(std::move(R2_batch));
+		}else{
+			R1_batch->reads.clear();
+			R2_batch->reads.clear();
 		}
+		// If they’re empty, they just get destroyed and their BamBatch
+		// instances are removed from the pool; the writer will add more
+		// via free_pool_out.push after writing other batches.
+	} else {
+		cifiReadN.fetch_add(readBatchOut->reads.size());
+		if (streamOutput)
+			filled_q_out.push(std::move(readBatchOut));
+		else
+			readBatchOut->reads.clear();
 	}
 
 	{ 	// Update global stats and summaries
@@ -766,7 +785,7 @@ void InReads::report() {
         
         if (!tabular_flag)
             std::cout<<output("+++Read summary+++")<<"\n";
-        std::cout<<output("# reads")<<totReads<<std::endl;
+        std::cout<<output("# reads")<<+totReads<<std::endl;
         std::cout<<output("Total read length")<<getTotReadLen()<<std::endl;
         std::cout<<output("Average read length") << gfa_round(computeAvgReadLen())<<std::endl;
         evalNstars(); // read N* statistics
@@ -777,6 +796,12 @@ void InReads::report() {
         std::cout<<output("GC content %")<<gfa_round(computeGCcontent())<<std::endl;
         std::cout<<output("Base composition (A:C:T:G)")<<totA<<":"<<totC<<":"<<totT<<":"<<totG<<std::endl;
         std::cout<<output("Average per base quality")<<std::abs(getAvgQuality())<<std::endl;
+		
+		if (userInput.inputCifi) {
+			if (!tabular_flag)
+				std::cout<<output("+++CiFi summary+++")<<"\n";
+			std::cout<<output("# read fragments")<<+cifiReadN<<std::endl;
+		}
     }
 }
 
