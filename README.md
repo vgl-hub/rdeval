@@ -34,9 +34,9 @@ You can test some typical usage with the files in the `testFiles` folder, e.g.:
 rdeval testFiles/random1.fastq 10 // computes summary statistics, including coverage (expected genome size 10bp)
 ```
 
-## CiFi support
+## PacBio CiFi support
 
-**rdeval** now supports **SciFi/CiFi single-cell combinatorial indexing** data.  
+**rdeval** now supports PacBio CiFi combinatorial indexing** data.  
 Using `--cifi-enzyme`, rdeval performs *in-silico* digestion of reads with a specified restriction enzyme motif.  
 Using `--cifi-out-combinations`, rdeval outputs all fragment combinations derived from each digested read.
 
