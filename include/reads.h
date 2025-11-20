@@ -46,7 +46,7 @@ struct UserInputRdeval : UserInput {
 	uint16_t compression_threads    = 6;
 	
 	// CiFi
-	bool inputScifi = false;
+	bool inputCifi = false;
 	std::string restrictionEnzyme = "";
 };
 
