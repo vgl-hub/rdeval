@@ -1,4 +1,4 @@
-testFiles/cifi_reads.fastq --cifi-enzyme DpnII --cifi-out
+testFiles/cifi_reads.fastq --cifi-enzyme DpnII
 embedded
 +++Read summary+++: 
 # reads: 100
@@ -12,4 +12,4 @@ GC content %: 43.53
 Base composition (A:C:T:G): 190776:146870:190693:147152
 Average per base quality: 26.91
 +++CiFi summary+++: 
-# read fragments: 22270
+# read fragments: 1403
