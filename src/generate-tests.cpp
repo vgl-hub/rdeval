@@ -50,7 +50,7 @@ int main(int, char **argv) {
         {{"random2.fastq"}, {"-f 'l>10000' -qa", "-f 'l<9000 & q>10' -qa", "-f 'l>9000 & q>90' -qa", "-f 'q>89' -ql", "-i testFiles/random2.ls", "-e testFiles/random2.ls", "--sample 0.3 --random-seed 42"}},
         {{"random2.rd"}, {"-f 'l>10000' -qa", "-f 'l<9000 & q>10' -qa", "-f 'l>9000 & q>90' -qa", "-f 'q>89' -ql"}},
         {{"random3.bam"}, {""}},
-		{{"cifi_reads.fastq"}, {"--cifi-enzyme DpnII --cifi-out", "--cifi-enzyme DpnII --cifi-out"}}
+		{{"cifi_reads.fastq"}, {"--cifi-enzyme DpnII", "--cifi-enzyme DpnII --cifi-out"}}
     //     {{"random1.fasta", "random1.fasta.gz", "random1.fastq", "random1.fastq.gz", "random1.gfa"}, {"-r testFiles/random1.fastq.gz", "-a testFiles/random1.agp --stats", "-a testFiles/random1.agp --stats -ofa"}},
     //     {{"random1.fasta"}, {"-k testFiles/random1.instructions.sak", "-ofa -k testFiles/random1.instructions.sak", "-ofa -k testFiles/random1.hc.sak", "-ofa -k testFiles/random1.hdc.sak"}},
     //     {{"random2.noseq.gfa"}, {""}},
