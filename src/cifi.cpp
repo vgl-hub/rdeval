@@ -172,17 +172,12 @@ void build_pe_bambatches(const InRead& read, const EnzymeInfo& enz, BamBatch& R1
 
 			std::string R2_seq;
 			std::string R2_qual;
-
+			
 			if (seq2.size() > static_cast<std::size_t>(trim)) {
 				R2_seq = seq2.substr(trim);
-			} else {
-				R2_seq.clear();
-			}
-
-			if (q2.size() > static_cast<std::size_t>(trim)) {
 				R2_qual = q2.substr(trim);
 			} else {
-				R2_qual.clear();
+				continue;
 			}
 
 			std::string base_id = read.seqHeader + "_" +
