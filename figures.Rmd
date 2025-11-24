@@ -11,17 +11,20 @@ params:
 knitr::opts_chunk$set(echo = FALSE, fig.align = 'center')
 library(tidyverse)
 library(plotly)
-library(ggExtra)
 library(bit64)
 library(data.table)
-library(ggrastr)
 library(cowplot)
+library(base64enc)
+library(ggnewscale)
+library(gridExtra)
+library(gtable)
+library(grid)
 source('rdeval_interface.R')
 ```
 
-```{r results = 'asis'}
+```{r read-data, results = 'asis'}
 # Set color palette (jco from ggsci package)
-palette <- palette <- c("#0073C2", "#EFC000","#868686", "#CD534C", "#7AA6DC", 
+palette <- c("#0073C2", "#EFC000","#868686", "#CD534C", "#7AA6DC", 
              "#003C67", "#8F7700", "#3B3B3B", "#A73030", "#4A6990")
 
 # Inverse Cumulative Distribution Function
@@ -31,12 +34,11 @@ icdf <- function(read_lengths) {
   n <- length(read_lengths)
   vals <- unique(read_lengths)
   inv_cs <- sum - cumsum(as.numeric(tabulate(match(read_lengths, vals)) * vals))
-  inv_cs_gb <- inv_cs/10^9
-  return(data.table(read_length = vals, inv_cs = inv_cs, inv_cs_gb = inv_cs_gb))
+  return(data.table(read_length = vals, read_length_kbp = vals/1000, inv_cs = inv_cs, inv_cs_gb = inv_cs/10^9))
 }
 
 reads <- data.table(read_length = numeric(), read_quality = numeric(), run = character())
-inv_cs <- data.table(read_length = numeric(), inv_cs = numeric(), inv_cs_gb = numeric(), run = character())
+inv_cs <- data.table(read_length = numeric(), read_length_kbp = numeric(), inv_cs = numeric(), inv_cs_gb = numeric(), run = character())
 
 files <- params$input_files
 n_runs <- length(files)
@@ -57,201 +59,232 @@ for (file in files) {
 run_levels <- sort(unique(reads$run))
 palette <- setNames(palette[1:length(run_levels)], run_levels)
 reads$run <- factor(reads$run, levels = run_levels)
+reads$read_length_kbp <- reads$read_length / 1000 # Read length to kbp
 ```
 
-### Violin Plot
-```{r}
-reads$read_length_kbp <- reads$read_length / 1000 # Read length to kbp
-reads_downsampled <- reads %>% filter(row_number() %% 10 == 1)
-
+### Boxplot
+```{r boxplot, warning=FALSE}
 if (params$interactive) {
-  violin <- plot_ly(
-      x = reads_downsampled$run,
-      y = reads_downsampled$read_length_kbp,
-      split = reads_downsampled$run,
-      type = 'violin',
-      color = reads_downsampled$run,
-      colors = palette,
-      hoverinfo = "y",
-      points = FALSE,
-      box = list(
-        visible = FALSE
-      ),
-      meanline = list(
-        visible = TRUE
-      )
-    ) 
+  stats <- reads %>%
+    group_by(run) %>%
+    summarise(
+      q1  = quantile(read_length_kbp, 0.25),
+      q2  = quantile(read_length_kbp, 0.50),
+      q3  = quantile(read_length_kbp, 0.75),
+      mean = mean(read_length_kbp),
+      min = min(read_length_kbp),
+      max = max(read_length_kbp)
+    ) %>%
+    mutate(run = as.character(run))
   
-  violin <- violin %>%
-    layout(
-      xaxis = list(
-        title = "Run",
-        showticklabels = FALSE
-      ),
-      yaxis = list(
-        title = "Read Length (kbp)",
-        zeroline = FALSE
-      ),
-      plot_bgcolor = 'white',
-      paper_bgcolor = 'white'
+  boxplot <- plot_ly(type = "box")
+  
+  for (i in seq_len(nrow(stats))) {
+    boxplot <- boxplot %>% add_trace(
+      type = "box",
+      name = stats$run[i],
+      x = stats$run[i],     # ensure discrete axis
+      color = I(palette[i]),
+  
+      # quartiles and median
+      q1     = stats$q1[i],
+      median = stats$q2[i],
+      q3     = stats$q3[i],
+  
+      # whiskers (min/max)
+      lowerfence = stats$min[i],
+      upperfence = stats$max[i],
+  
+      # show mean
+      mean = stats$mean[i],
+      boxmean = TRUE,
+  
+      # remove run name from hover
+      hovertemplate = paste(
+        "Min: %{lowerfence}<br>",
+        "Q1: %{q1}<br>",
+        "Median: %{median}<br>",
+        "Q3: %{q3}<br>",
+        "Max: %{upperfence}<br>",
+        "Mean: %{mean:.2f}<extra></extra>"
+      )
     )
+  }
+  
+  boxplot <- boxplot %>% layout(
+    xaxis = list(
+      title = "Run", 
+      type = "category", 
+      categoryorder = "array",
+      categoryarray = stats$run),
+    yaxis = list(title = "Read Length (kbp)", zeroline = FALSE),
+    plot_bgcolor = "white",
+    paper_bgcolor = "white"
+  )
+
 } else {
-  violin <- ggplot(reads, aes(x = run, y = read_length, fill = run)) +
-  geom_violin() +
+  boxplot <- ggplot(reads, aes(x = run, y = read_length_kbp, fill = run)) +
+  geom_boxplot() +
   scale_x_discrete(name = ("Run")) +
-  scale_y_continuous(name = ("Read Length"),
-                     labels = scales::label_comma()) +
+  scale_y_continuous(name = ("Read Length (kbp)")) +
   scale_fill_manual(guide = "none", values = rev(palette)) +
   theme_bw()
 }
 
-violin
+boxplot
 ```
 
 ### Read lengths
 
-```{r}
-# Split data by run
-split_reads <- split(reads, reads$run)
+```{r read-lengths}
 
 if (params$interactive) {
-  # Apply density function to each run and bind results
-densities <- do.call(rbind, lapply(split_reads, function(df) {
-  run_id <- unique(df$run)
-  x <- df$read_length_kbp
-  d <- density(x)
-  n <- nrow(df)
+  # Split data by run
+  split_reads <- split(reads, reads$run)
   
-  data.frame(
-    x = d$x,
-    y = d$y * n,  # scale density to count
-    run = run_id,
-    stringsAsFactors = FALSE
-  )
-}))
+  nbins = 100
+  
+  # Plot using plotly
+  read_lengths <- plot_ly(
+    type = "scattergl", 
+    mode = "lines")
+  
+  for (run_id in run_levels) {
+    h <- hist(reads[run == run_id, read_length_kbp], breaks = nbins, plot = FALSE)
+    df <- data.table(
+      x = h$mids,
+      y = h$counts,
+      run = run_id
+    )
+  
+    read_lengths <- read_lengths %>%
+      add_trace(
+        x = df$x,
+        y = df$y,
+        name = run_id,
+        color = I(palette[run_id]),
+        fill = "tozeroy",
+        fillcolor = paste0(palette[run_id], "33"),
+        customdata = rep(run_id, nrow(df)),
+        hovertemplate = paste(
+          "<b>Run:</b> %{customdata}<br>",
+          "<b>Read length (kbp):</b> %{x:.2f}<br>",
+          "<b>Count:</b> %{y:.0f}<extra></extra>"
+        )
+      )
+  }
 
-# Plot using plotly
-read_lengths <- plot_ly(
-  x = densities$x,
-  y = densities$y,
-  color = densities$run,
-  colors = palette,
-  type = 'scattergl',
-  mode = 'lines',
-  fill = 'tozeroy',
-  opacity = 0.5,
-  hovertemplate = paste(
-    "<b>Run:</b> %{customdata}<br>",
-    "<b>Read length (kbp):</b> %{x:.2f}<br>",
-    "<b>Count:</b> %{y:.0f}<extra></extra>"
-  ),
-  customdata = densities$run
-) %>%
-  layout(
-    xaxis = list(title = "Read length (kbp)", tickformat = ","),
-    yaxis = list(title = "Count", tickformat = ","),
-    showlegend = TRUE
-  )
+  read_lengths <- read_lengths %>%
+    layout(
+      xaxis = list(title = "Read length (kbp)", tickformat = ","),
+      yaxis = list(title = "Count", tickformat = ","),
+      showlegend = TRUE
+    ) %>% toWebGL()
 } else {
   read_lengths <- ggplot(reads, aes(x = read_length/1000, fill = run)) +
-  geom_density(aes(y = after_stat(count)), alpha = 0.5) +
-  scale_x_continuous(name = ("Read length (kbp)"),
-                     labels = scales::label_comma(),
-                     expand = expansion(mult = c(0, 0))) +
-  scale_y_continuous(name = "Count", labels = scales::label_comma(),
-                     expand = expansion(mult = c(0, 0.05))) +
-  scale_fill_manual(name = "Run", values = rev(palette)) +
-  theme_bw() 
+    geom_density(aes(y = after_stat(count)), alpha = 0.5) +
+    scale_x_continuous(name = ("Read length (kbp)"),
+                       labels = scales::label_comma(),
+                       expand = expansion(mult = c(0, 0))) +
+    scale_y_continuous(name = "Count", labels = scales::label_comma(),
+                       expand = expansion(mult = c(0, 0.05))) +
+    scale_fill_manual(name = "Run", values = rev(palette)) +
+    theme_bw() 
 }
 
 read_lengths
 ```
 
 ### Read lengths (log transformed)
-```{r}
+```{r read-lengths-log}
 if (params$interactive) {
-  densities <- do.call(rbind, lapply(split_reads, function(df) {
-    run_id <- unique(df$run)
-    x <- df$read_length
-    d <- density(x)
-    n <- nrow(df)
-    
-    data.frame(
-      x = d$x,
-      y = d$y * n,  # scale density to count
-      run = run_id,
-      stringsAsFactors = FALSE
-    )
-  }))
+  nbins = 100
+  # Compute log10 range
+  log_min <- floor(log10(min(reads$read_length)))
+  log_max <- ceiling(log10(max(reads$read_length)))
   
-  # Set tick values and text
-  exponent_min <- floor(min(log10(reads$read_length)))
-  exponent_max <- ceiling(max(log10(reads$read_length)))
+  # Choose 5 ticks evenly in log space
+  tick_vals_log <- seq(log_min, log_max, 1)
+  tickvals <- scales::comma(10^tick_vals_log)
   
-  tickvals <- 10^(exponent_min:exponent_max)
-  ticktext <- paste0("10<sup>", exponent_min:exponent_max, "</sup>")
+  # Optional: create HTML-style tick labels
+  ticktext <- paste0(tickvals)
   
   read_lengths_log <- plot_ly(
-    data = densities,
-    x = densities$x,
-    y = densities$y,
-    color = ~run,
-    colors = palette,
-    type = 'scattergl',
-    mode = 'lines',
-    fill = 'tozeroy',
-    opacity = 0.5,
-    hovertemplate = paste(
-      "<b>Run:</b> %{customdata}<br>",
-      "<b>Read length (kbp):</b> %{x:.2f}<br>",
-      "<b>Count:</b> %{y:.0f}<extra></extra>"
-    ),
-    customdata = densities$run
-  ) %>%
+    type = "scattergl", 
+    mode = "lines")
+  
+  for (run_id in run_levels) {
+    h <- hist(reads[run == run_id, read_length], breaks = nbins, plot = FALSE)
+    df <- data.table(
+      x = h$mids,
+      y = h$counts,
+      run = run_id
+    )
+  
+    read_lengths_log <- read_lengths_log %>%
+      add_trace(
+        x = df$x,
+        y = df$y,
+        name = run_id,
+        line = list(color = palette[run_id]),
+        fillcolor = paste0(palette[run_id], "33"),  # light fill
+        fill = "tozeroy",
+        customdata = rep(run_id, nrow(df)),
+        hovertemplate = paste(
+          "<b>Run:</b> %{customdata}<br>",
+          "<b>Read length (kbp):</b> %{x:.2f}<br>",
+          "<b>Count:</b> %{y:.0f}<extra></extra>"
+        )
+      )
+  }
+  
+  read_lengths_log <- read_lengths_log %>%
     layout(
       xaxis = list(title = "Read length", type = "log",
         tickvals = tickvals,
         ticktext = ticktext),
       yaxis = list(title = "Count", tickformat = ","),
       showlegend = TRUE
-    )
+    ) %>% toWebGL()
 } else {
   read_lengths_log <- ggplot(reads, aes(x = read_length, fill = run)) +
-  geom_density(aes(y = after_stat(count)), alpha = 0.5) +
-  scale_x_log10(name = ("Read length (bp)"),
-                breaks = scales::breaks_log(n = 5),
-                labels = scales::label_comma()) +
-  scale_y_continuous(name = "Count", 
-                     labels = scales::label_comma(),
-                     expand = expansion(mult = c(0, 0.05))) +
-  scale_fill_manual(name = "Run", values = rev(palette)) +
-  theme_bw() 
+    geom_density(aes(y = after_stat(count)), alpha = 0.5) +
+    scale_x_log10(name = ("Read length (bp)"),
+                  breaks = scales::breaks_log(),
+                  labels = scales::label_comma()) +
+    scale_y_continuous(name = "Count", 
+                       labels = scales::label_comma(),
+                       expand = expansion(mult = c(0, 0.05))) +
+    scale_fill_manual(name = "Run", values = rev(palette)) +
+    theme_bw() 
 }
 read_lengths_log
 ```
 
 ### Inverse cumulative distribution plot
-```{r}
-inv_cs$read_length_kb <- inv_cs$read_length/1000
-
+```{r icd}
 if (params$interactive) {
   
-  icd <- plot_ly(
-    data = inv_cs,
-    x = inv_cs$read_length_kb,
-    y = inv_cs$inv_cs_gb,
-    color = inv_cs$run,
-    colors = palette,
-    type = "scattergl",
-    mode = "markers",
-    marker = list(size = 6, opacity = 0.8),
-    customdata = inv_cs$run,
-    hovertemplate = paste(
-      "<b>Run:</b> %{customdata}<br>",
-      "<b>Read length (kbp):</b> %{x:,}<br>",
-      "<b>Cumulative yield (Gbp):</b> %{y:.2f}<extra></extra>"
-    )
-  ) %>%
+  icd <- plot_ly(type = "scattergl", mode = "markers")
+
+  for (r in run_levels) {
+    df <- inv_cs %>% filter(run == r)
+    
+    icd <- icd %>%
+      add_trace(
+        x = df$read_length_kb,
+        y = df$inv_cs_gb,
+        name = r,
+        marker = list(color = palette[r]),
+        hovertemplate = paste(
+          "<b>Run:</b>", r, "<br>",
+          "<b>Read length (kbp):</b> %{x:,}<br>",
+          "<b>Cumulative yield (Gbp):</b> %{y:.2f}<extra></extra>"
+        )
+      )
+  }
+  icd <- icd %>%
     layout(
       xaxis = list(
         title = "Read length (kbp)",
@@ -262,11 +295,10 @@ if (params$interactive) {
         title = "Cumulative yield (Gbp)",
         automargin = TRUE
       ),
-      legend = list(title = list(text = "Run")),
-      margin = list(t = 40, r = 30)
-    )
+      legend = list(title = list(text = "Run"))
+    ) %>% toWebGL()
 } else {
-  icd <- ggplot(inv_cs, aes(read_length/1000, inv_cs_gb, color = run)) +
+  icd <- ggplot(inv_cs, aes(read_length_kbp, inv_cs_gb, color = run)) +
   geom_point() +
   scale_x_continuous(name = "Read length (kbp)",
                      labels = scales::label_comma(),
@@ -279,111 +311,229 @@ if (params$interactive) {
 icd
 ```
 
+```{r color-gradient}
+make_gradient <- function(base, n = 100, light_factor = 0.075) {
+  base_rgb <- col2rgb(base) / 255
+  
+  # Interpolate toward white
+  light_rgb <- 1 - (1 - base_rgb) * light_factor
+  
+  # Convert back to hex
+  light_base <- rgb(light_rgb[1], light_rgb[2], light_rgb[3])
+  linear_colors <- grDevices::colorRampPalette(c(light_base, base))(n)
+  
+  linear_colors
+}
+
+
+# Function to manually bin data and create color gradient
+bin_data_2d <- function(data, nbinsx, nbinsy) {
+  x_breaks <- seq(min(data$read_length_kbp), max(data$read_length_kbp), length.out = nbinsx + 1)
+  y_breaks <- seq(min(data$read_quality), max(data$read_quality), length.out = nbinsy + 1)
+  
+  data %>%
+    mutate(
+      x_bin = cut(read_length_kbp, breaks = x_breaks, labels = FALSE, include.lowest = TRUE),
+      y_bin = cut(read_quality, breaks = y_breaks, labels = FALSE, include.lowest = TRUE)
+    ) %>%
+    group_by(run, x_bin, y_bin) %>%
+    summarise(
+      count = n(),
+      x_center = (x_breaks[x_bin[1]] + x_breaks[x_bin[1] + 1]) / 2,
+      y_center = (y_breaks[y_bin[1]] + y_breaks[y_bin[1] + 1]) / 2,
+      .groups = "drop"
+    ) %>%
+    filter(count > 0)  # Remove zero-count bins
+}
+```
+
+
 ### Read lengths vs average quality
-```{r, message=FALSE, warning=FALSE}
+```{r density-plot, message=FALSE, warning=FALSE}
+# Define bin parameters
+nbinsx <- 50
+nbinsy <- 50
+
+get_mid <- function(factor_col) {
+  # Convert factor → character
+  labs <- as.character(factor_col)
+  
+  # Remove parentheses / brackets
+  labs <- gsub("\\[|\\]|\\(|\\)", "", labs)
+  
+  # Split "a,b" by comma
+  parts <- strsplit(labs, ",")
+  
+  # Extract numeric boundaries
+  mids <- sapply(parts, function(p) {
+    as.numeric(p[1]) + (as.numeric(p[2]) - as.numeric(p[1])) / 2
+  })
+  
+  return(mids)
+}
+
+# Pre-binning for 2D density
+dt <- as.data.table(reads)
+
+# Define bin edges
+dt[, xbin := cut(read_length_kbp, breaks = nbinsx, include.lowest = TRUE)]
+dt[, ybin := cut(read_quality,    breaks = nbinsy, include.lowest = TRUE)]
+
+# Create a full grid of all runs × xbins × ybins
+runs <- unique(dt$run)
+xbins <- levels(dt$xbin)
+ybins <- levels(dt$ybin)
+full_grid <- CJ(run = runs, xbin = xbins, ybin = ybins)
+
+# Preaggregate counts for 2D density
+agg <- dt[, .N, by = .(run, xbin, ybin)]
+
+# Merge with full grid, fill missing counts with 0
+agg <- merge(full_grid, agg, by = c("run","xbin","ybin"), all.x = TRUE)
+agg[is.na(N), N := 0]
+agg[, xmid := get_mid(xbin)]
+agg[, ymid := get_mid(ybin)]
+agg[, hover_count := N]
+
+# Pre-bin for X marginal histogram
+x_hist_agg <- dt[, .N, by = .(run, xbin)]
+x_hist_agg[, xmid := get_mid(xbin)]
+
+# Pre-bin for Y marginal histogram
+y_hist_agg <- dt[, .N, by = .(run, ybin)]
+y_hist_agg[, ymid := get_mid(ybin)]
+
+# Calculate 2d density bin widths
+x_range <- range(reads$read_length_kbp)
+y_range <- range(reads$read_quality)
+bin_width_x <- diff(x_range) / nbinsx
+bin_width_y <- diff(y_range) / nbinsy
+
 if (params$interactive) {
-  reads %>% 
-    filter(row_number() %% 5 == 1)
   
-  # Scatterplot with 2D density contour lines overlaid
-  # Base plot with no data yet
-  scatter_with_density <- plot_ly()
+  density <- plot_ly()
   
-  # Step 1: Add scatter points
-  scatter_with_density <- scatter_with_density %>%
-    add_markers(
-      x = reads$read_length_kbp,
-      y = reads$read_quality,
-      type = "scattergl",
-      color = reads$run,
-      colors = palette,
-      marker = list(size = 1, opacity = 0.2),
-      width = 3,
-      customdata = reads$run,
-      text = ~paste(
-        "Run:", run,
-        "<br>Read length (kbp):", round(reads$read_length_kbp, 2),
-        "<br>Avg Quality:", round(reads$read_quality, 2)
-      ),
-      hoverinfo = "text",
-      layer = "below",
-      legendgroup = reads$run,
-      showlegend = TRUE,
-      simplify = FALSE
-    )
-  
-  # Step 2: Add density contour
-  if (sum(reads$read_quality) > 0 & sd(reads$read_quality) > 0) {
-    scatter_with_density <- scatter_with_density %>%
-      add_histogram2dcontour(
-        data = reads,
-        x = reads$read_length_kbp,
-        y = reads$read_quality,
-        contours = list(coloring = "lines"),
-        colorscale = "Viridis",
-        ncontours = 20,
-        line = list(width = 2, color = "black"),
-        opacity = 1,
-        showscale = FALSE,
-        hoverinfo = "skip",
-        layer = "above",
+  # Create 2D density plot
+  for (i in seq_along(run_levels)) {
+    r <- run_levels[i]
+    
+    # Create a continuous gradient from white (transparent) to the run's color
+    base_color <- palette[i]
+    
+    density <- density %>%
+      add_heatmap(
+        data = subset(agg, run == r),
+        x = ~xmid,
+        y = ~ymid,
+        z = ~N,
+        colorscale = list(
+          c(0, "rgba(255,255,255,0)"),  # transparent for zero
+          c(0.001, paste0(base_color, "33")),  # light version of color
+          c(0.5, paste0(base_color, "99")),    # medium version
+          c(1, base_color)                      # full color
+        ),
+        name = r,
+        legendgroup = r,
         showlegend = TRUE,
-        name = "Density (all runs)"
+        showscale = TRUE,
+        colorbar = list(title = r),
+        hovertemplate = paste0(
+          "<b>Run:</b> ", r, "<br>",
+          "<b>Read Length:</b> %{x:.2f} ± ", sprintf("%.2f", bin_width_x/2), " kbp<br>",
+          "<b>Quality:</b> %{y:.2f} ± ", sprintf("%.2f", bin_width_y/2), "<br>",
+          "<b>Count:</b> %{z}<extra></extra>"
+        ),
+        zauto = TRUE,
+        zmin = 0
       )
   }
   
-  # Step 3: Customize layout
-  scatter_with_density <- scatter_with_density %>%
+  # Customize density layout
+  density <- density %>%
     layout(
-      xaxis = list(title = "Read Length (kbp)", showgrid = FALSE, zeroline = FALSE),
-      yaxis = list(title = "Average Quality", showgrid = FALSE, zeroline = FALSE),
+      xaxis = list(title = "Read Length (kbp)", range = x_range),
+      yaxis = list(title = "Average Quality", range = y_range),
       showlegend = TRUE
     )
   
-  # X histogram
-  hist_top <- plot_ly(
-    x = reads$read_length_kbp,
-    color = reads$run,
-    colors = palette,
-    type = "histogram",
-    nbinsx = 40,
-    opacity = 0.75,
-    legendgroup = reads$run,
-    showlegend = FALSE,
-    layer = 'below',
-    customdata = ~run,
-    hovertemplate = paste(
-      "<b>Run:</b> %{customdata}<br>",
-      "<b>Read Length:</b> %{x:.2f} kbp<br>",
-      "<b>Count:</b> %{y}<extra></extra>"
-    )
-  ) %>% layout(barmode = "overlay")
+  # X histogram using pre-binned data
+  hist_top <- plot_ly()
   
-  # Y histogram
-  hist_right <- plot_ly(
-    y = reads$read_quality,
-    color = reads$run,
-    colors = palette,
-    type = "histogram",
-    nbinsy = 40,
-    opacity = 0.75,
-    legendgroup = reads$run,
-    showlegend = FALSE,
-    layer = 'above',
-    customdata = reads$run,
-    hovertemplate = paste(
-      "<b>Run:</b> %{customdata}<br>",
-      "<b>Read Quality:</b> %{y:.2f} kbp<br>",
-      "<b>Count:</b> %{x}<extra></extra>"
+  for (i in seq_along(run_levels)) {
+    r <- run_levels[i]
+    
+    hist_top <- hist_top %>%
+      add_bars(
+        data = subset(x_hist_agg, run == r),
+        x = ~xmid,
+        y = ~N,
+        width = bin_width_x,
+        marker = list(
+          color = palette[i],
+          line = list(color = palette[i], width = 1)
+        ),
+        opacity = 0.60,
+        legendgroup = r,
+        showlegend = FALSE,
+        name = r,
+        hovertemplate = paste(
+          "<b>Run:</b>", r, "<br>",
+          "<b>Read Length:</b> %{x:.2f} kbp<br>",
+          "<b>Count:</b> %{y}<extra></extra>"
+        )
+      )
+  }
+  
+  hist_top <- hist_top %>%
+    layout(
+      barmode = "overlay",
+      xaxis = list(showticklabels = TRUE, showgrid = TRUE, range = x_range),
+      yaxis = list(showticklabels = TRUE, title = "Count", showgrid = TRUE)
     )
-  ) %>% layout(barmode = "overlay")
+  
+  # Y histogram using pre-binned data
+  hist_right <- plot_ly()
+  
+  for (i in seq_along(run_levels)) {
+    r <- run_levels[i]
+    
+    hist_right <- hist_right %>%
+      add_bars(
+        data = subset(y_hist_agg, run == r),
+        x = ~N,
+        y = ~ymid,
+        width = bin_width_y,
+        orientation = 'h',
+        marker = list(
+          color = palette[i],
+          line = list(color = palette[i], width = 1)
+        ),
+        opacity = 0.60,
+        legendgroup = r,
+        showlegend = FALSE,
+        name = r,
+        hovertemplate = paste(
+          "<b>Run:</b>", r, "<br>",
+          "<b>Read Quality:</b> %{y:.2f}<br>",
+          "<b>Count:</b> %{x}<extra></extra>"
+        )
+      )
+  }
+  
+  hist_right <- hist_right %>%
+    layout(
+      barmode = "overlay",
+      xaxis = list(showticklabels = TRUE, title = "Count", showgrid = TRUE),
+      yaxis = list(showticklabels = TRUE, showgrid = TRUE, range = y_range)
+    )
   
   # Dummy empty plot for top-left corner
   empty <- plotly_empty()
   
+  # Combine into final plot
   final_plot <- subplot(
-    hist_top,       empty,
-    scatter_with_density,     hist_right,
+    hist_top, empty,
+    density, hist_right,
     nrows = 2,
     shareX = TRUE,
     shareY = TRUE,
@@ -393,55 +543,219 @@ if (params$interactive) {
     heights = c(0.2, 0.8)
   ) %>%
     layout(
-      xaxis = list(title = "Read length (kbp)"),
-      yaxis = list(title = ""),
-      xaxis2 = list(title = ""),
-      yaxis2 = list(title = "Average Read Quality")
-    )
+      xaxis = list(
+        title = "Read length (kbp)", 
+        showgrid = TRUE, 
+        zeroline = TRUE,
+        range = x_range
+      ),
+      yaxis = list(
+        showgrid = TRUE, 
+        zeroline = FALSE
+      ),
+      xaxis2 = list(
+        showgrid = TRUE, 
+        zeroline = FALSE
+      ),
+      yaxis2 = list(
+        title = "Average Read Quality", 
+        showgrid = TRUE, 
+        zeroline = TRUE,
+        range = y_range
+      ),
+      xaxis3 = list(
+        showgrid = TRUE, 
+        zeroline = FALSE
+      ),
+      yaxis3 = list(
+        showgrid = TRUE, 
+        zeroline = FALSE
+      )
+  )
 } else {
-  scatterplot <- reads %>%
-    ggplot(aes(x = read_length/1000, y = read_quality, fill = run, color = run)) +
-    geom_point(size = 0.75, 
-               alpha = 0.2) +
-    scale_x_continuous(name = ("Read length (kbp)"),
-                       labels = scales::label_comma()) +
-    scale_y_continuous(name = ("Average Read Quality")) +
-    scale_color_manual(guide = "none", values = rev(palette)) +
-    scale_fill_discrete(guide = "none") +
-    theme_bw(base_size = 11)
-  if (sum(reads$read_quality) > 0 & sd(reads$read_quality) > 0) {
-     scatterplot <- scatterplot + geom_density_2d(aes(x = read_length / 1000, y = read_quality, group = 1), color = 'black', linewidth = 0.5, inherit.aes = FALSE)
-  }
-  # Top marginal histogram
-  x_hist <- ggplot(reads, aes(x = read_length / 1000, fill = run)) +
-    geom_histogram(position = "identity", bins = 40) +
-    scale_fill_manual(values = rev(palette), guide = "none") +
-    theme_void() +
-    theme(
-      plot.margin = margin()
-    )
-  # Right marginal histogram
-  y_hist <- ggplot(reads, aes(x = read_quality, fill = run)) +
-    geom_histogram(position = "identity", bins = 40) +
-    coord_flip() +
-    scale_fill_manual(values = rev(palette), guide = "none") +
-    theme_void() +
-    theme(
-      plot.margin = margin()
-    )
-  # Align histograms with scatterplot
-  aligned_x_hist <- align_plots(x_hist, scatterplot, align = "v")[[1]]
-  aligned_y_hist <- align_plots(y_hist, scatterplot, align = "h")[[1]]
+  density <- ggplot()
+
+  # Add each run as a separate layer with its own gradient
+  for (i in seq_along(runs)) {
+    r <- runs[i]
   
-  final_plot <- plot_grid(
-    aligned_x_hist, NULL,
-    scatterplot, aligned_y_hist,
+    # Create custom gradient for this run
+    custom_colors <- make_gradient(palette[i])
+    
+    density <- density +
+      geom_bin2d(
+        data = subset(reads, run == r),
+        aes(
+          x = read_length_kbp, 
+          y = read_quality,
+          fill = ifelse(..count.. == 0, NA, ..count..)
+          ),
+        bins = c(nbinsx, nbinsy),
+        alpha = 0.75
+      ) +
+      scale_fill_gradientn(
+        colors = custom_colors,
+        guide = "none",
+        na.value = "transparent",
+        values = c(0, 0.3, 0.7, 1.0)  # Non-linear spacing: more range at high end
+      )
+    
+    # Add new_scale_fill() between layers (except after the last one)
+    if (i < length(runs)) {
+      density <- density + new_scale_fill()
+    }
+  }
+  
+  # Add axes, theme, and manual legend
+  density <- density +
+    scale_x_continuous(
+      name = "Read length (kbp)",
+      labels = scales::label_comma()
+    ) +
+    scale_y_continuous(name = "Average Read Quality") +
+    theme_bw(base_size = 11) +
+    theme(legend.position = "right")
+  
+  # Top marginal histogram
+  x_hist <- ggplot(reads, aes(x = read_length_kbp, color = run, fill = run)) +
+    geom_histogram(position = "identity", bins = nbinsx, linewidth = 0.5, alpha = 0.5) +
+    scale_y_continuous(
+      labels = scales::label_number(suffix = "k", scale = 1e-3),
+      breaks = scales::pretty_breaks(n = 3)
+      ) +
+    scale_color_manual(values = palette, guide = "none") +
+    scale_fill_manual(values = palette, guide = "none") +
+    theme_minimal(base_size = 11) +
+    theme(
+      axis.title = element_blank(),
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      plot.margin = margin(t = 5, r = 0, b = 5, l = 0)
+    )
+  
+  # Right marginal histogram
+  y_hist <- ggplot(reads, aes(x = read_quality, color = run, fill = run)) +
+    geom_histogram(position = "identity", bins = nbinsy, linewidth = 0.5, alpha = 0.5) +
+    scale_y_continuous(
+      labels = scales::label_number(suffix = "k", scale = 1e-3),
+      breaks = scales::pretty_breaks(n = 3)
+      ) +
+    coord_flip() +
+    scale_color_manual(values = palette, guide = "none") +
+    scale_fill_manual(values = palette, guide = "none") +
+    theme_minimal(base_size = 11) +
+    theme(
+      axis.title = element_blank(),
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      plot.margin = margin(t = 0, r = 10, b = 0, l = 0)
+    )
+  
+  # Align histograms with density
+  aligned_x_hist <- align_plots(x_hist, density, align = "v")[[1]]
+  aligned_y_hist <- align_plots(y_hist, density, align = "h")[[1]]
+
+  # Empty plot for corner
+  empty <- ggplot() + theme_void()
+  
+  # Calculate max count for each run to scale the gradient bars
+  max_counts <- agg[, .(max_count = max(N)), by = run]
+  
+  color_scale_legends <- lapply(seq_along(run_levels), function(i) {
+    r <- run_levels[i]
+    base_color <- palette[i]
+    custom_colors <- make_gradient(base_color)
+  
+    # Use a temporary ggplot just to extract a legend
+    p <- ggplot(
+      data.frame(z = c(0, max_counts[run == r, max_count])),
+      aes(x = 1, y = z, fill = z)
+    ) +
+      geom_raster() +
+      scale_fill_gradientn(
+        colors = custom_colors,
+        guide = guide_colorbar(
+          barwidth = unit(6, "pt"),
+          barheight = unit(60, "pt")  # initial (uncompressed) size
+        ),
+        name = r,,
+        labels = scales::label_comma()
+      ) +
+      theme_minimal() +
+      theme(
+        legend.position  = "right",
+        legend.title     = element_text(size = 9, face = "bold"),
+        legend.text      = element_text(size = 7),
+        legend.margin    = margin(0, 2, 0, 2)
+      )
+  
+    cowplot::get_legend(p)
+  })
+  
+  # Auto-compress legends to fit total vertical space
+  # Target height = height of your final plot minus some margin
+  target_height_pt <- 900  # adjust if needed
+  
+  # compute current combined height
+  current_height_pt <- sum(sapply(color_scale_legends, function(g) {
+    convertUnit(sum(g$heights), "pt", valueOnly = TRUE)
+  }))
+  
+  scale_factor <- min(1, target_height_pt / current_height_pt)
+  
+  # apply compression + padding
+  scaled_legends <- lapply(color_scale_legends, function(g) {
+    g$heights <- g$heights * scale_factor
+    gtable::gtable_add_padding(g, unit(c(2, 2, 6, 2), "pt"))  # reduce overlap
+  })
+  
+  # Stack into one compressed vertical column
+  if (length(run_levels) <= 2) {
+  
+    # Add empty vertical spacers above and below to push legends toward center
+    spacer <- rectGrob(gp = gpar(col = NA, fill = NA))
+  
+    legend_column <- arrangeGrob(
+      spacer,
+      arrangeGrob(
+        grobs = scaled_legends,
+        ncol = 1,
+        padding = unit(0, "pt")
+      ),
+      spacer,
+      ncol = 1,
+      heights = unit(c(1, length(scaled_legends), 1), "null")
+    )
+  
+  } else {
+  
+    # Default column layout for 3+ runs
+    legend_column <- arrangeGrob(
+      grobs = scaled_legends,
+      ncol = 1,
+      padding = unit(0, "pt")
+    )
+  
+  }
+  
+  # Combine with main plot
+  main_plot_grid <- plot_grid(
+    aligned_x_hist, empty,
+    density, aligned_y_hist,
     ncol = 2, nrow = 2,
     rel_heights = c(0.2, 1),
     rel_widths = c(1, 0.2)
   )
-}
+  
+  final_plot <- plot_grid(
+    main_plot_grid,
+    legend_column,
+    ncol = 2,
+    rel_widths = c(0.8, 0.2)
+  )
 
-final_plot
+}
+  final_plot
+
 ```
 
