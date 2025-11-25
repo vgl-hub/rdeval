@@ -45,6 +45,7 @@ int main(int argc, char **argv) {
         {"homopolymer-compress", required_argument, 0, 0},
         {"sample", required_argument, 0, 0},
         {"random-seed", required_argument, 0, 0},
+		{"parallel-files", required_argument, 0, 0},
         {"decompression-threads", required_argument, 0, 0},
         {"compression-threads", required_argument, 0, 0},
         {"sequence-report",no_argument, 0, 0},
@@ -53,11 +54,16 @@ int main(int argc, char **argv) {
         {"filter", required_argument, 0, 'f'},
         {"include-list", required_argument, 0, 'i'},
         {"threads", required_argument, 0, 'j'},
-        {"out-format", required_argument, 0, 'o'},
+		{"max-memory", required_argument, 0, 'm'},
+        {"out-file", required_argument, 0, 'o'},
+		{"out-prefix", required_argument, 0, 'p'},
         {"quality", required_argument, 0, 'q'},
         {"input-reads", required_argument, 0, 'r'},
         {"out-size", required_argument, 0, 's'},
         {"md5", no_argument, &userInput.md5_flag, 1},
+		
+		{"cifi-enzyme", required_argument, 0, 0},
+		{"cifi-out-combinations", no_argument, &userInput.cifiCombinations_flag, 1},
         
         {"tabular", no_argument, &tabular_flag, 1},
         {"verbose", no_argument, &verbose_flag, 1},
@@ -70,7 +76,7 @@ int main(int argc, char **argv) {
     while (arguments) { // loop through argv
         
         int option_index = 0;
-        c = getopt_long(argc, argv, "-:e:f:i:j:o:r:s:q:c:vh",
+        c = getopt_long(argc, argv, "-:e:f:m:i:j:o:p:r:s:q:c:vh",
                         long_options, &option_index);
         if (c == -1) // exit the loop if run out of options
             break;
@@ -103,10 +109,16 @@ int main(int argc, char **argv) {
                     userInput.outSize_flag = false;
                     userInput.quality_flag = false;
                 }
+				if(strcmp(long_options[option_index].name,"parallel-files") == 0)
+					userInput.parallel_files = atoi(optarg);
                 if(strcmp(long_options[option_index].name,"decompression-threads") == 0)
                     userInput.decompression_threads = atoi(optarg);
                 if(strcmp(long_options[option_index].name,"compression-threads") == 0)
                     userInput.compression_threads = atoi(optarg);
+				if(strcmp(long_options[option_index].name,"cifi-enzyme") == 0) {
+					userInput.restrictionEnzyme = optarg;
+					userInput.inputCifi = true;
+				}
                 break;
             default: // handle positional arguments
                 if (isInt(optarg)) { // if the positional argument is a number, it is likely the expected genome size
@@ -129,7 +141,7 @@ int main(int argc, char **argv) {
                 ifFileExists(optarg);
                 userInput.inBedExclude = optarg;
                 break;
-            case 'f' : //filtering input
+            case 'f' : // filtering input
                 userInput.filter = optarg;
                 rmChrFromStr(userInput.filter, "'\\");
                 break;
@@ -137,6 +149,9 @@ int main(int argc, char **argv) {
                 ifFileExists(optarg);
                 userInput.inBedInclude = optarg;
                 break;
+			case 'm': // max memory
+				userInput.maxMem = atoi(optarg);
+				break;
             case 's':
                 userInput.sizeOutType = *optarg;
                 userInput.outSize_flag = 1;
@@ -152,6 +167,9 @@ int main(int argc, char **argv) {
             case 'o':
                 userInput.outFiles.push_back(optarg);
                 break;
+			case 'p':
+				userInput.outPrefix = optarg;
+				break;
             case 'j': // max threads
                 userInput.maxThreads = atoi(optarg);
                 break;
@@ -166,17 +184,25 @@ int main(int argc, char **argv) {
                 printf("\t-e --exclude-list <file> generates output on a excluding list of headers.\n");
                 printf("\t-f --filter <exp> filter reads using <exp> in quotes, e.g. 'l>10' for longer than 10bp or 'l>10 & q>10' to further exclude reads by quality (default: none).\n");
                 printf("\t-i --include-list <file> generates output on a subset list of headers.\n");
-                printf("\t-o --out-format <file> output file (fa*[.gz], bam, cram, rd). Optionally write reads to file or generate rd summary file.\n");
+                printf("\t-o --out-file <file> output file (fa*[.gz], bam, cram, rd). Optionally write reads to file or generate rd summary file.\n");
+				printf("\t-p --out-prefix <prefix> a prefix for the names of the files when generating multiple outputs. Inputs names will be used for each file.\n");
                 printf("\t-q --quality q|a generates list of average quality for each read (q) or both length and quality (a).\n");
                 printf("\t-r --input-reads <file1> <file2> <file n> input file (fa*[.gz], bam, cram, rd).\n");
                 printf("\t-s --out-size u|s|h|c  generates size list (unsorted|sorted|histogram|inverse cumulative table).\n");
                 printf("\t--homopolymer-compress <int> compress all the homopolymers longer than n in the input.\n");
                 printf("\t--sample <float> fraction of reads to subsample.\n");
                 printf("\t--random-seed <int> an optional random seed to make subsampling reproducible.\n");
+				printf("\t--cifi-enzyme <string> the specific enzyme to use for SciFi read digestion.\n");
+				printf("\t--cifi-out-combinations output all per-read combinations of SciFi fragments (default: no).\n");
                 printf("\t--md5 print md5 of .rd files.\n");
+				printf("\t--parallel-files <int> numbers of files that can be opened and processed in parallel (producer threads, default:4).\n");
+				printf("\t--decompression-threads <int> numbers of decompression threads used by htslib for bam/cram (default:4).\n");
+				printf("\t--compression-threads <int> numbers of compression threads used by htslib for bam/cram (default:6).\n");
                 printf("\t--tabular tabular output.\n");
                 printf("\t--verbose verbose output.\n");
-                printf("\t-j --threads <int> numbers of threads (default:5).\n");
+				printf("\t-m --max-memory <int> max number of bases in ring buffer (default:1000000).\n");
+				printf("\t-j --threads <int> numbers of consumer threads (default:8).\n");
+
                 printf("\t-v --version software version.\n");
                 printf("\t--cmd print $0 to stdout.\n");
                 exit(0);
@@ -195,6 +221,7 @@ int main(int argc, char **argv) {
     Input in;
     in.load(userInput); // load user input
     lg.verbose("Loaded user input");
+	maxMem = (userInput.maxMem == 0 ? get_mem_total(3) * 0.9 : userInput.maxMem); // set memory limit
     in.read();
     threadPool.join(); // join threads
     exit(EXIT_SUCCESS);

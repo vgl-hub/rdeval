@@ -34,6 +34,24 @@ You can test some typical usage with the files in the `testFiles` folder, e.g.:
 rdeval testFiles/random1.fastq 10 // computes summary statistics, including coverage (expected genome size 10bp)
 ```
 
+## PacBio CiFi support
+
+**rdeval** now supports **PacBio CiFi** data.  
+Using `--cifi-enzyme`, rdeval performs *in-silico* digestion of reads with a specified restriction enzyme motif.  
+Using `--cifi-out-combinations`, rdeval outputs all fragment combinations derived from each digested read.
+
+**Basic usage:**
+
+```bash
+# Digest reads using enzyme motif
+rdeval --cifi-enzyme DpnII cifi_reads.fastq -o testFiles/cifi_reads.digested.fastq
+
+# Digest and output all PE combinations
+rdeval --cifi-enzyme DpnII --cifi-out-combinations testFiles/cifi_reads.fastq -p rdeval_
+```
+
+## Documentation
+
 Additional documentation for rdeval is available in [ReadTheDocs](https://rdeval-documentation.readthedocs.io/).
 
 ## How to cite
