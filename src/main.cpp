@@ -200,7 +200,7 @@ int main(int argc, char **argv) {
 				printf("\t--compression-threads <int> numbers of compression threads used by htslib for bam/cram (default:6).\n");
                 printf("\t--tabular tabular output.\n");
                 printf("\t--verbose verbose output.\n");
-				printf("\t-m --max-memory <int> max number of bases in ring buffer (default:1000000).\n");
+				printf("\t-m --max-memory <int> max number of bases in a single buffer of the ring buffer (default:1000000 bp or ~1MB). The total number of buffers is approximately consumer threads*2.\n");
 				printf("\t-j --threads <int> numbers of consumer threads (default:8).\n");
 
                 printf("\t-v --version software version.\n");
