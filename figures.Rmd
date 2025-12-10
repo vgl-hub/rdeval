@@ -33,7 +33,8 @@ icdf <- function(read_lengths) {
   read_lengths <- sort(read_lengths)
   n <- length(read_lengths)
   vals <- unique(read_lengths)
-  inv_cs <- sum - cumsum(as.numeric(tabulate(match(read_lengths, vals)) * vals))
+  counts <- as.numeric(tabulate(match(read_lengths, vals)))
+  inv_cs <- sum - cumsum(counts * vals)
   return(data.table(read_length = vals, read_length_kbp = vals/1000, inv_cs = inv_cs, inv_cs_gb = inv_cs/10^9))
 }
 
