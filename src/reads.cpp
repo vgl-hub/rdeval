@@ -178,6 +178,7 @@ void InReads::extractInReads() {
 			threadPool.queueJob([this, i, file]() {
 				std::string md5;
 				computeMd5(file, md5);
+				md5s[i].first = getFileName(file);
 				md5s[i].second = md5;
 				return true;
 			});
@@ -1289,164 +1290,290 @@ void InReads::writeToStream() {
 	}
 }
 
+static inline void write_u8(unsigned char*& p, uint8_t v) {
+	*p++ = v;
+}
+
+static inline void write_u16(unsigned char*& p, uint16_t v) {
+	std::memcpy(p, &v, sizeof(v));
+	p += sizeof(v);
+}
+
+static inline void write_u64(unsigned char*& p, uint64_t v) {
+	std::memcpy(p, &v, sizeof(v));
+	p += sizeof(v);
+}
+
+static inline void write_f32_bits(unsigned char*& p, float v) {
+	static_assert(sizeof(float) == 4, "float must be 32-bit");
+	uint32_t bits;
+	std::memcpy(&bits, &v, sizeof(bits));   // preserve exact bit pattern
+	std::memcpy(p, &bits, sizeof(bits));
+	p += sizeof(bits);
+}
+
 void InReads::printTableCompressed(std::string outFile) {
-	
-    // compute buffer size
-    std::vector<std::pair<uint8_t,float>> &readLens8 = readLens.getReadLens8();
-    std::vector<std::pair<uint16_t,float>> &readLens16 = readLens.getReadLens16();
-    std::vector<std::pair<uint64_t,float>> &readLens64 = readLens.getReadLens64();
-    uint64_t len8 = readLens8.size(), len16 = readLens16.size(), len64 = readLens64.size();
-    
-    uLong sourceLen = sizeof(uint64_t) * (5 + 3) + len8 * sizeof(readLens8[0]) + len16 * sizeof(readLens16[0]) + len64 * sizeof(readLens64[0]); // ACGTN + len8,len16,len64 + vectors
-    Bytef *source = new Bytef[sourceLen];
-    uLong destLen = compressBound(sourceLen);
-    Bytef *dest = new Bytef[destLen];
-	std::memset(source, 0, sourceLen);
 
-    unsigned char* ptr = source;
+	auto &readLens8  = readLens.getReadLens8();   // vector<pair<uint8_t,float>>
+	auto &readLens16 = readLens.getReadLens16();  // vector<pair<uint16_t,float>>
+	auto &readLens64 = readLens.getReadLens64();  // vector<pair<uint64_t,float>>
 
-    // write ACGTN counts
-    memcpy(ptr, &totA, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
-    memcpy(ptr, &totC, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
-    memcpy(ptr, &totG, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
-    memcpy(ptr, &totT, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
-    memcpy(ptr, &totN, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
-    
-    // write vector lengths
-    memcpy(ptr, &len8, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
-    memcpy(ptr, &len16, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
-    memcpy(ptr, &len64, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
- 
-    // write vectors
-    memcpy(ptr, &readLens8[0], len8 * sizeof(readLens8[0]));
-    ptr += len8 * sizeof(readLens8[0]);
-    memcpy(ptr, &readLens16[0], len16 * sizeof(readLens16[0]));
-    ptr += len16 * sizeof(readLens16[0]);
-    memcpy(ptr, &readLens64[0], len64 * sizeof(readLens64[0]));
-    ptr += len64 * sizeof(readLens64[0]);
+	const uint64_t len8  = readLens8.size();
+	const uint64_t len16 = readLens16.size();
+	const uint64_t len64 = readLens64.size();
 
-	compress2(dest, &destLen, source, sourceLen, Z_BEST_COMPRESSION);
-    delete[] source;
-    
-    std::ofstream ofs(outFile, std::fstream::trunc | std::ios::out | std::ios::binary);
-    
-    // write md5s
-    uint32_t md5sN = md5s.size();
-    uint16_t stringSize;
-    ofs.write(reinterpret_cast<const char*>(&md5sN), sizeof(uint32_t)); // <-- these could presumably be also gzipped (need to work on the R interface too)
-    for (auto md5 : md5s) {
-        stringSize = md5.first.size();
-        ofs.write(reinterpret_cast<const char*>(&stringSize), sizeof(uint16_t));
-        ofs.write(reinterpret_cast<const char*>(md5.first.c_str()), sizeof(char) * stringSize);
-        stringSize = md5.second.size();
-        ofs.write(reinterpret_cast<const char*>(&stringSize), sizeof(uint16_t));
-        ofs.write(reinterpret_cast<const char*>(md5.second.c_str()), sizeof(char) * stringSize);
-    }
-    ofs.write(reinterpret_cast<const char*>(&sourceLen), sizeof(uint64_t)); // output the decompressed file size
-    ofs.write(reinterpret_cast<const char*>(dest), destLen * sizeof(Bytef)); // output compressed data
-    ofs.close();
-    delete[] dest;
+	// On-disk uncompressed layout:
+	// 5x u64 (ACGTN) + 3x u64 (len8,len16,len64)
+	// + len8  * (u8  + u32(float bits))
+	// + len16 * (u16 + u32(float bits))
+	// + len64 * (u64 + u32(float bits))
+	const uLong sourceLen =
+		uLong(sizeof(uint64_t) * (5 + 3)) +
+		uLong(len8)  * (uLong(sizeof(uint8_t))  + uLong(sizeof(uint32_t))) +
+		uLong(len16) * (uLong(sizeof(uint16_t)) + uLong(sizeof(uint32_t))) +
+		uLong(len64) * (uLong(sizeof(uint64_t)) + uLong(sizeof(uint32_t)));
+
+	std::vector<Bytef> source(sourceLen);
+	unsigned char* ptr = reinterpret_cast<unsigned char*>(source.data());
+
+	// ACGTN counts
+	write_u64(ptr, totA);
+	write_u64(ptr, totC);
+	write_u64(ptr, totG);
+	write_u64(ptr, totT);
+	write_u64(ptr, totN);
+
+	// vector lengths
+	write_u64(ptr, len8);
+	write_u64(ptr, len16);
+	write_u64(ptr, len64);
+
+	// vectors (padding-free)
+	for (const auto& e : readLens8) {
+		write_u8(ptr, e.first);
+		write_f32_bits(ptr, e.second);
+	}
+	for (const auto& e : readLens16) {
+		write_u16(ptr, e.first);
+		write_f32_bits(ptr, e.second);
+	}
+	for (const auto& e : readLens64) {
+		write_u64(ptr, e.first);
+		write_f32_bits(ptr, e.second);
+	}
+
+	assert(uLong(ptr - reinterpret_cast<unsigned char*>(source.data())) == sourceLen);
+
+	// compress
+	uLongf destLen = compressBound(sourceLen);
+	std::vector<Bytef> dest(destLen);
+
+	const int zrc = compress2(dest.data(), &destLen, source.data(), sourceLen, Z_BEST_COMPRESSION);
+	if (zrc != Z_OK) {
+		throw std::runtime_error("compress2() failed with code " + std::to_string(zrc));
+	}
+
+	// write output
+	std::ofstream ofs(outFile, std::fstream::trunc | std::ios::out | std::ios::binary);
+	if (!ofs) throw std::runtime_error("Failed to open output file: " + outFile);
+
+	// md5s (unchanged)
+	const uint32_t md5sN = static_cast<uint32_t>(md5s.size());
+	ofs.write(reinterpret_cast<const char*>(&md5sN), sizeof(uint32_t));
+
+	uint16_t stringSize;
+	for (const auto& md5 : md5s) {
+		stringSize = static_cast<uint16_t>(md5.first.size());
+		ofs.write(reinterpret_cast<const char*>(&stringSize), sizeof(uint16_t));
+		ofs.write(md5.first.data(), stringSize);
+
+		stringSize = static_cast<uint16_t>(md5.second.size());
+		ofs.write(reinterpret_cast<const char*>(&stringSize), sizeof(uint16_t));
+		ofs.write(md5.second.data(), stringSize);
+	}
+
+	// store decompressed size then compressed blob
+	ofs.write(reinterpret_cast<const char*>(&sourceLen), sizeof(uint64_t));
+	ofs.write(reinterpret_cast<const char*>(dest.data()), destLen);
+
+	if (!ofs) throw std::runtime_error("Write failed (disk full? permission issue?)");
+}
+
+static inline uint8_t read_u8(const unsigned char*& p) {
+	return *p++;
+}
+
+static inline uint16_t read_u16(const unsigned char*& p) {
+	uint16_t v;
+	std::memcpy(&v, p, sizeof(v));
+	p += sizeof(v);
+	return v;
+}
+
+static inline uint64_t read_u64(const unsigned char*& p) {
+	uint64_t v;
+	std::memcpy(&v, p, sizeof(v));
+	p += sizeof(v);
+	return v;
+}
+
+static inline float read_f32_bits(const unsigned char*& p) {
+	static_assert(sizeof(float) == 4, "float must be 32-bit");
+	uint32_t bits;
+	std::memcpy(&bits, p, sizeof(bits));
+	p += sizeof(bits);
+	float v;
+	std::memcpy(&v, &bits, sizeof(v));
+	return v;
 }
 
 void InReads::readTableCompressed(std::string inFile) {
-	
+
 	if (userInput.filter != "none" && getFileExt(userInput.file('r', 0)) == "rd")
 		filterRecords();
-    
-    // read
-    std::ifstream ifs(inFile, std::ios::binary | std::ios::ate); // compute file size
-    std::streamsize fileSize = ifs.tellg();
-    ifs.seekg(0, std::ios::beg);
-    
-    uint32_t md5sN;
-    uint16_t stringSize;
-    ifs.read(reinterpret_cast<char*>(&md5sN), sizeof(uint32_t));
-    
-    for (uint32_t i = 0; i < md5sN; ++i) {
-        std::string filename, md5;
-        ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(uint16_t));
-        filename.resize(stringSize);
-        ifs.read(reinterpret_cast<char*>(&filename[0]), sizeof(char) * stringSize);
-        ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(uint16_t));
-        md5.resize(stringSize);
-        ifs.read(reinterpret_cast<char*>(&md5[0]), sizeof(char) * stringSize);
-        md5s.push_back(std::make_pair(filename,md5));
-    }
-    
-    uLongf decompressedSize;
-    ifs.read(reinterpret_cast<char*> (&decompressedSize), sizeof(uint64_t)); // read gz-uncompressed size
-    Bytef *data = new Bytef[decompressedSize];
-    
-    uLong compressedSize = fileSize - sizeof(uint64_t); // it seems this should subtract the header too, probably it should be fixed subtracting the md5s
-    Bytef *gzData = new Bytef[compressedSize];
-    ifs.read(reinterpret_cast<char*> (gzData), compressedSize * sizeof(Bytef)); // read gzipped data
-    uncompress(data, &decompressedSize, gzData, compressedSize);
-    delete[] gzData;
-    
-    // read summary statistics
-    unsigned char* ptr = data;
-    
-    uint64_t A, C, G, T, N;
-    memcpy(&A, ptr, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
-    memcpy(&C, ptr, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
-    memcpy(&G, ptr, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
-    memcpy(&T, ptr, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
-    memcpy(&N, ptr, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
-    totA += A;
-    totC += C;
-    totG += G;
-    totT += T;
-    totN += N;
 
-    uint64_t len8, len16, len64;
-    memcpy(&len8, ptr, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
-    memcpy(&len16, ptr, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
-    memcpy(&len64, ptr, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
+	// open and get file size
+	std::ifstream ifs(inFile, std::ios::binary | std::ios::ate);
+	if (!ifs) throw std::runtime_error("Failed to open input file: " + inFile);
+	const std::streamsize fileSize = ifs.tellg();
+	if (fileSize < 0) throw std::runtime_error("tellg() failed for: " + inFile);
+	ifs.seekg(0, std::ios::beg);
 
-    // tmp vectors
-    LenVector<float> readLensTmp;
+	// ---- read md5s header (and track how many bytes we consumed) ----
+	std::streamsize headerBytes = 0;
 
-    std::vector<std::pair<uint8_t,float>> &readLensTmp8 = readLensTmp.getReadLens8();
-    std::vector<std::pair<uint16_t,float>> &readLensTmp16 = readLensTmp.getReadLens16();
-    std::vector<std::pair<uint64_t,float>> &readLensTmp64 = readLensTmp.getReadLens64();
+	uint32_t md5sN = 0;
+	ifs.read(reinterpret_cast<char*>(&md5sN), sizeof(uint32_t));
+	if (!ifs) throw std::runtime_error("Failed to read md5sN from: " + inFile);
+	headerBytes += sizeof(uint32_t);
 
-    readLensTmp8.resize(len8);
-    readLensTmp16.resize(len16);
-    readLensTmp64.resize(len64);
-    // prefer this to memcpy as std::copy is safer
-    std::pair<uint8_t,float>* p8 = reinterpret_cast<std::pair<uint8_t,float>*>(ptr);
-    std::copy(p8, p8+len8, readLensTmp8.begin());
-    ptr += len8 * sizeof(readLensTmp8[0]);
-    std::pair<uint16_t,float>* p16 = reinterpret_cast<std::pair<uint16_t,float>*>(ptr);
-    std::copy(p16, p16+len16, readLensTmp16.begin());
-    ptr += len16 * sizeof(readLensTmp16[0]);
-    std::pair<uint64_t,float>* p64 = reinterpret_cast<std::pair<uint64_t,float>*>(ptr);
-    std::copy(p64, p64+len64, readLensTmp64.begin());
-    ptr += len64 * sizeof(readLensTmp64[0]);
-    
-    delete[] data;
-    
-    // add to vector
-    readLens.insert(readLensTmp);
+	uint16_t stringSize = 0;
+	for (uint32_t i = 0; i < md5sN; ++i) {
+		std::string filename, md5;
 
-    totReads += len8 + len16 + len64;
+		ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(uint16_t));
+		if (!ifs) throw std::runtime_error("Failed to read filename length from: " + inFile);
+		headerBytes += sizeof(uint16_t);
+
+		filename.resize(stringSize);
+		if (stringSize) {
+			ifs.read(&filename[0], static_cast<std::streamsize>(stringSize));
+		}
+		headerBytes += stringSize;
+
+		ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(uint16_t));
+		if (!ifs) throw std::runtime_error("Failed to read md5 length from: " + inFile);
+		headerBytes += sizeof(uint16_t);
+
+		md5.resize(stringSize);
+		if (stringSize) {
+			ifs.read(&md5[0], static_cast<std::streamsize>(stringSize));
+		}
+		headerBytes += stringSize;
+
+		md5s.push_back(std::make_pair(std::move(filename), std::move(md5)));
+	}
+
+	// ---- read decompressed size ----
+	uint64_t decompressedSize_u64 = 0;
+	ifs.read(reinterpret_cast<char*>(&decompressedSize_u64), sizeof(uint64_t));
+	if (!ifs) throw std::runtime_error("Failed to read decompressedSize from: " + inFile);
+	headerBytes += sizeof(uint64_t);
+
+	if (decompressedSize_u64 == 0)
+		throw std::runtime_error("Invalid decompressed size (0) in: " + inFile);
+
+	if (headerBytes > fileSize)
+		throw std::runtime_error("Corrupt file (header larger than file) in: " + inFile);
+
+	const uLongf decompressedSize = static_cast<uLongf>(decompressedSize_u64);
+
+	// ---- read compressed payload ----
+	const std::streamsize compressedSize_ss = fileSize - headerBytes;
+	if (compressedSize_ss <= 0)
+		throw std::runtime_error("Invalid compressed payload size in: " + inFile);
+
+	const uLong compressedSize = static_cast<uLong>(compressedSize_ss);
+
+	std::vector<Bytef> gzData(compressedSize);
+	ifs.read(reinterpret_cast<char*>(gzData.data()), compressedSize);
+	if (!ifs) throw std::runtime_error("Failed to read compressed payload from: " + inFile);
+
+	std::vector<Bytef> data(decompressedSize);
+	uLongf outSize = decompressedSize;
+
+	const int zrc = uncompress(data.data(), &outSize, gzData.data(), compressedSize);
+	if (zrc != Z_OK)
+		throw std::runtime_error("uncompress() failed with code " + std::to_string(zrc) + " for: " + inFile);
+	if (outSize != decompressedSize)
+		throw std::runtime_error("uncompress() size mismatch for: " + inFile);
+
+	// ---- parse decompressed buffer (matches new writer layout) ----
+	const unsigned char* ptr = reinterpret_cast<const unsigned char*>(data.data());
+	const unsigned char* end = ptr + outSize;
+
+	auto need = [&](size_t n) {
+		if (ptr + n > end) throw std::runtime_error("Corrupt decompressed payload (truncated) in: " + inFile);
+	};
+
+	// ACGTN
+	need(sizeof(uint64_t) * 5);
+	const uint64_t A = read_u64(ptr);
+	const uint64_t C = read_u64(ptr);
+	const uint64_t G = read_u64(ptr);
+	const uint64_t T = read_u64(ptr);
+	const uint64_t N = read_u64(ptr);
+
+	totA += A; totC += C; totG += G; totT += T; totN += N;
+
+	// lens
+	need(sizeof(uint64_t) * 3);
+	const uint64_t len8  = read_u64(ptr);
+	const uint64_t len16 = read_u64(ptr);
+	const uint64_t len64 = read_u64(ptr);
+
+	// tmp vectors
+	LenVector<float> readLensTmp;
+	auto &readLensTmp8  = readLensTmp.getReadLens8();
+	auto &readLensTmp16 = readLensTmp.getReadLens16();
+	auto &readLensTmp64 = readLensTmp.getReadLens64();
+
+	readLensTmp8.reserve(static_cast<size_t>(len8));
+	readLensTmp16.reserve(static_cast<size_t>(len16));
+	readLensTmp64.reserve(static_cast<size_t>(len64));
+
+	// entries: (u8 + u32bits)
+	for (uint64_t i = 0; i < len8; ++i) {
+		need(sizeof(uint8_t) + sizeof(uint32_t));
+		const uint8_t l = read_u8(ptr);
+		const float   w = read_f32_bits(ptr);
+		readLensTmp8.emplace_back(l, w);
+	}
+
+	// entries: (u16 + u32bits)
+	for (uint64_t i = 0; i < len16; ++i) {
+		need(sizeof(uint16_t) + sizeof(uint32_t));
+		const uint16_t l = read_u16(ptr);
+		const float    w = read_f32_bits(ptr);
+		readLensTmp16.emplace_back(l, w);
+	}
+
+	// entries: (u64 + u32bits)
+	for (uint64_t i = 0; i < len64; ++i) {
+		need(sizeof(uint64_t) + sizeof(uint32_t));
+		const uint64_t l = read_u64(ptr);
+		const float    w = read_f32_bits(ptr);
+		readLensTmp64.emplace_back(l, w);
+	}
+
+	// Optional: if you expect exact consumption, you can enforce it:
+	// if (ptr != end) throw std::runtime_error("Extra bytes in decompressed payload in: " + inFile);
+
+	// add to vector
+	readLens.insert(readLensTmp);
+	totReads += len8 + len16 + len64;
 }
+
 
 void InReads::printMd5() {
     for (auto md5 : md5s)
