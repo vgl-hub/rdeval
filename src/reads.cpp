@@ -1169,9 +1169,12 @@ void InReads::openOutputForFile(size_t outId) {
 
 void InReads::writeToStream() {
 	const size_t numFiles = userInput.inFiles.size();
+	
+	const size_t numStreams = userInput.cifiCombinations_flag ? numFiles * 2 : numFiles;
+
 	size_t outCount = 1;
 	if (splitOutputByFile)
-		outCount = userInput.cifiCombinations_flag ? numFiles * 2 : numFiles;
+		outCount = numStreams;
 	
 	if (outCount == 0)
 		return;
@@ -1188,8 +1191,8 @@ void InReads::writeToStream() {
 	if (hdrs.size() < outCount) hdrs.assign(outCount, nullptr);
 
 	// Per-input-file reorder state
-	std::vector<uint64_t> nextBatch(outCount, 0);
-	std::vector<std::map<uint64_t, std::unique_ptr<BamBatch>>> pending(outCount);
+	std::vector<uint64_t> nextBatch(numStreams, 0);
+	std::vector<std::map<uint64_t, std::unique_ptr<BamBatch>>> pending(numStreams);
 
 	for (;;) {
 		std::unique_ptr<BamBatch> batch = filled_q_out.pop();
@@ -1200,7 +1203,7 @@ void InReads::writeToStream() {
 		const uint32_t fileId = batch->fileN;
 		const uint64_t id     = batch->batchN;
 
-		if (fileId >= outCount) {
+		if (fileId >= numStreams) {
 			// Defensive: bad file index, recycle (shouldn't happen)
 			for (bam1_t* rec : batch->reads)
 				bam_destroy1(rec);
@@ -1248,7 +1251,7 @@ void InReads::writeToStream() {
 	}
 
 	// Final flush of any leftover pending batches (should be rare)
-	for (size_t fileId = 0; fileId < outCount; ++fileId) {
+	for (size_t fileId = 0; fileId < numStreams; ++fileId) {
 		auto& filePending = pending[fileId];
 		for (auto& kv : filePending) {
 			std::unique_ptr<BamBatch>& bptr = kv.second;
