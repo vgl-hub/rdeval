@@ -222,7 +222,7 @@ public:
 	inline bool applyFilter(uint64_t size, float avgQuality);
 
 	// Processing
-	float computeAvgQuality(std::string& sequenceQuality);
+	float computeAvgQuality(const std::string& sequenceQuality);
 	void  filterRecords();
 	void  extractInReads();
 	bool  traverseInReads(Sequences2& readBatch);

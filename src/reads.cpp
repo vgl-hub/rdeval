@@ -143,226 +143,276 @@ void InReads::load() {
 }
 
 void InReads::extractInReads() {
-	
+
 	std::string newLine, seqHeader, seqComment, line, bedHeader;
+	std::string seqBuf, qualBuf, plusBuf, qnameBuf;   // reusable buffers
 	std::size_t numFiles = userInput.inFiles.size();
-	uint32_t batchCounter = 0; // batch number, read position in the batch
 	uint64_t processedLength = 0;
-	bool sample = userInput.ratio < 1 ? true : false; // read subsampling
-	
+	bool sample = userInput.ratio < 1;
+
 	const static phmap::flat_hash_map<std::string,int> string_to_case{
-		{"fasta",1},
-		{"fa",1},
-		{"fasta.gz",1},
-		{"fa.gz",1},
-		{"fastq",1},
-		{"fq",1},
-		{"fastq.gz",1},
-		{"fq.gz",1},
-		{"bam",2},
-		{"cram",2},
+		{"fasta",1}, {"fa",1}, {"fasta.gz",1}, {"fa.gz",1},
+		{"fastq",1}, {"fq",1}, {"fastq.gz",1}, {"fq.gz",1},
+		{"bam",2}, {"cram",2},
 		{"rd",3}
 	};
-    
+
 	while (true) {
-		
+
 		uint32_t i = fileCounterStarted.fetch_add(1, std::memory_order_relaxed);
 		if (i >= numFiles)
 			break;
-		
+
 		std::unique_ptr<Sequences2> readBatch = free_pool_in.pop();
 		uint32_t batchN = 0;
-        std::string file = userInput.file('r', i);
-        std::string ext = getFileExt(file);
-        if (ext != "rd") {
+
+		std::string file = userInput.file('r', i);
+		std::string ext  = getFileExt(file);
+
+		if (ext != "rd") {
 			threadPool.queueJob([this, i, file]() {
 				std::string md5;
 				computeMd5(file, md5);
-				md5s[i].first = getFileName(file);
+				md5s[i].first  = getFileName(file);
 				md5s[i].second = md5;
 				return true;
 			});
-        }
-        switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
-                
-            case 1: { // fa*[.gz]
+		}
+
+		switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
+
+			case 1: { // fa*[.gz] or fq*[.gz]
 				StreamObj streamObj;
 				std::shared_ptr<std::istream> stream = streamObj.openStream(userInput, 'r', i);
-				
-                if (stream) {
-                    
-                    switch (stream->peek()) {
-                            
-                        case '>': {
-                            
-                            stream->get();
-                            
-                            while (getline(*stream, newLine)) {
-                                
-                                size_t spacePos = newLine.find(" ");
-                                seqHeader = newLine.substr(0, spacePos);
-                                if (spacePos != std::string::npos)
-                                    seqComment = newLine.substr(spacePos + 1);
-                                else
-                                    seqComment.clear();
-								std::unique_ptr<std::string> inSequence = std::make_unique<std::string>();
-								if (!getline(*stream, *inSequence, '>')) {
-									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
-									exit(EXIT_FAILURE);
-								}
-								if (sample && newRand() > userInput.ratio)
-										continue;
-								processedLength += inSequence->size();
-								readBatch->add(seqPos++, batchCounter++, std::move(seqHeader), std::move(seqComment), std::move(inSequence));
-								
-                                if (processedLength > batchSize) {
-                                    readBatch->batchN = batchN++;
-									readBatch->fileN = i;
-                                    lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-									filled_q_in.push(std::move(readBatch));
-                                    readBatch = free_pool_in.pop();
-                                    processedLength = 0;
-									batchCounter = 0;
-                                }
-                                //lg.verbose("Individual fasta sequence read: " + seqHeader);
-                            }
-                            break;
-                        }
-                        case '@': {
-                            
-                            while (getline(*stream, newLine)) { // file input
-                                
-                                newLine.erase(0, 1);
-                                size_t spacePos = newLine.find(" ");
-                                seqHeader = newLine.substr(0, spacePos);
-                                if (spacePos != std::string::npos)
-                                    seqComment = newLine.substr(spacePos + 1);
-                                else
-                                    seqComment.clear();
-                                
-								std::unique_ptr<std::string> inSequence = std::make_unique<std::string>();
-								if (!getline(*stream, *inSequence)) {
-									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
-									exit(EXIT_FAILURE);
-								}
-								if (!getline(*stream, newLine)) {
-									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
-									exit(EXIT_FAILURE);
-								}
-								std::unique_ptr<std::string> inSequenceQuality = std::make_unique<std::string>();
-								if (!getline(*stream, *inSequenceQuality)) {
-									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
-									exit(EXIT_FAILURE);
-								}
-								if (sample && newRand() > userInput.ratio)
-										continue;
-								processedLength += inSequence->size();
-								readBatch->add(seqPos++, batchCounter++, std::move(seqHeader), std::move(seqComment), std::move(inSequence), std::move(inSequenceQuality));
-								
-                                if (processedLength > batchSize) {
-                                    readBatch->batchN = batchN++;
-									readBatch->fileN = i;
-                                    lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-									filled_q_in.push(std::move(readBatch));
-                                    readBatch = free_pool_in.pop();
-                                    processedLength = 0;
-									batchCounter = 0;
-                                }
-                                //lg.verbose("Individual fastq sequence read: " + seqHeader);
-                            }
-                            break;
-                        }
-                    }
-                    readBatch->batchN = batchN++; // process residual reads
-					readBatch->fileN = i;
-                    lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-					filled_q_in.push(std::move(readBatch));
-					processedLength = 0;
-					batchCounter = 0;
-                }
-                break;
-            }
-            case 2: { // bam, cram
-                
-                samFile *fp_in = hts_open(file.c_str(),"r"); //open bam file
-                bam_hdr_t *bamHdr = sam_hdr_read(fp_in); //read header
-                bam1_t *bamdata = bam_init1(); //initialize an alignment
-                
-				htsThreadPool tpool_read = {NULL, 0};
-                tpool_read.pool = hts_tpool_init(userInput.decompression_threads);
-                if (tpool_read.pool)
-                    hts_set_opt(fp_in, HTS_OPT_THREAD_POOL, &tpool_read);
-                else
-                    lg.verbose("Failed to generate decompression threadpool with " + std::to_string(userInput.decompression_threads) + " threads. Continuing single-threaded");
-                
-                while(sam_read1(fp_in,bamHdr,bamdata) > 0) {
-					
-                    uint32_t len = bamdata->core.l_qseq; // length of the read.
-                    uint8_t *seq = bam_get_seq(bamdata); // seq string
-					std::unique_ptr<std::string> inSequenceQuality;
 
-					std::unique_ptr<std::string> inSequence = std::make_unique<std::string>();
-                    inSequence->resize(len);
-                    for(uint32_t i=0; i<len; ++i)
-                        inSequence->at(i) = seq_nt16_str[bam_seqi(seq,i)]; //gets nucleotide id and converts them into IUPAC id.
+				if (stream) {
+					switch (stream->peek()) {
 
-					uint8_t* qual = bam_get_qual(bamdata);
-					if (qual && (len > 0) && qual[0] != 0xFF) {
-						inSequenceQuality = std::make_unique<std::string>(len, '\0');
-						for (uint32_t i = 0; i < len; ++i)
-							(*inSequenceQuality)[i] = static_cast<char>(qual[i] + 33);
-					} else {
-						inSequenceQuality = std::make_unique<std::string>(len, '!'); // No per-base qualities; synthesize minimal qualities
+						case '>': { // FASTA
+							stream->get(); // consume '>'
+
+							while (getline(*stream, newLine)) {
+
+								const size_t spacePos = newLine.find(' ');
+								if (spacePos == std::string::npos) {
+									seqHeader  = newLine;
+									seqComment.clear();
+								} else {
+									seqHeader.assign(newLine, 0, spacePos);
+									seqComment.assign(newLine, spacePos + 1, std::string::npos);
+								}
+
+								// Read sequence until next '>'
+								seqBuf.clear();
+								if (!getline(*stream, seqBuf, '>')) {
+									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
+									exit(EXIT_FAILURE);
+								}
+
+								// Subsample BEFORE doing anything else
+								if (sample && newRand() > userInput.ratio)
+									continue;
+
+								processedLength += seqBuf.size();
+
+								// Store into a reused slot (Sequence2 stores strings by value)
+								{
+									Sequence2& rec = readBatch->next_slot();
+									rec.set(std::move(seqHeader),
+											std::move(seqComment),
+											std::move(seqBuf),
+											std::string{}, // no qualities for fasta
+											seqPos++);
+								}
+
+								if (processedLength > batchSize) {
+									readBatch->batchN = batchN++;
+									readBatch->fileN  = i;
+									lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
+									filled_q_in.push(std::move(readBatch));
+
+									readBatch = free_pool_in.pop();
+									processedLength = 0;
+								}
+							}
+							break;
+						}
+
+						case '@': { // FASTQ
+							while (getline(*stream, newLine)) {
+
+								// header line starts with '@'
+								if (!newLine.empty() && newLine[0] == '@')
+									newLine.erase(0, 1);
+
+								const size_t spacePos = newLine.find(' ');
+								if (spacePos == std::string::npos) {
+									seqHeader  = newLine;
+									seqComment.clear();
+								} else {
+									seqHeader.assign(newLine, 0, spacePos);
+									seqComment.assign(newLine, spacePos + 1, std::string::npos);
+								}
+
+								seqBuf.clear();
+								plusBuf.clear();
+								qualBuf.clear();
+
+								if (!getline(*stream, seqBuf)) {
+									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
+									exit(EXIT_FAILURE);
+								}
+								if (!getline(*stream, plusBuf)) {
+									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
+									exit(EXIT_FAILURE);
+								}
+								if (!getline(*stream, qualBuf)) {
+									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
+									exit(EXIT_FAILURE);
+								}
+
+								// Subsample early
+								if (sample && newRand() > userInput.ratio)
+									continue;
+
+								processedLength += seqBuf.size();
+
+								{
+									Sequence2& rec = readBatch->next_slot();
+									rec.set(std::move(seqHeader),
+											std::move(seqComment),
+											std::move(seqBuf),
+											std::move(qualBuf),
+											seqPos++);
+								}
+
+								if (processedLength > batchSize) {
+									readBatch->batchN = batchN++;
+									readBatch->fileN  = i;
+									lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
+									filled_q_in.push(std::move(readBatch));
+
+									readBatch = free_pool_in.pop();
+									processedLength = 0;
+								}
+							}
+							break;
+						}
 					}
 
+					// process residual reads (even if empty; keep your existing behavior)
+					readBatch->batchN = batchN++;
+					readBatch->fileN  = i;
+					lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
+					filled_q_in.push(std::move(readBatch));
+
+					processedLength = 0;
+				}
+				break;
+			}
+
+			case 2: { // bam, cram
+				samFile*  fp_in  = hts_open(file.c_str(), "r");
+				bam_hdr_t* bamHdr = sam_hdr_read(fp_in);
+				bam1_t*    bamdata = bam_init1();
+
+				htsThreadPool tpool_read = {NULL, 0};
+				tpool_read.pool = hts_tpool_init(userInput.decompression_threads);
+				if (tpool_read.pool)
+					hts_set_opt(fp_in, HTS_OPT_THREAD_POOL, &tpool_read);
+				else
+					lg.verbose("Failed to generate decompression threadpool with " +
+							   std::to_string(userInput.decompression_threads) +
+							   " threads. Continuing single-threaded");
+
+				while (sam_read1(fp_in, bamHdr, bamdata) > 0) {
+
+					// Subsample BEFORE decoding
 					if (sample && newRand() > userInput.ratio)
-							continue;
-					processedLength += inSequence->size();
+						continue;
 
-					std::string qname(bam_get_qname(bamdata));
-					readBatch->add(seqPos++, batchCounter++, std::move(qname), std::string(), std::move(inSequence), std::move(inSequenceQuality));
+					const uint32_t len = bamdata->core.l_qseq;
 
-                    if (processedLength > batchSize) {
-                        readBatch->batchN = batchN++;
-						readBatch->fileN = i;
-                        lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
+					// qname (reuse capacity)
+					qnameBuf.assign(bam_get_qname(bamdata));
+
+					// decode sequence (reuse capacity)
+					seqBuf.resize(len);
+					char* out = len ? &seqBuf[0] : nullptr;
+					uint8_t* bseq = bam_get_seq(bamdata);
+					for (uint32_t k = 0; k < len; ++k)
+						out[k] = seq_nt16_str[bam_seqi(bseq, k)];
+
+					// decode/synthesize qualities (reuse capacity)
+					qualBuf.resize(len);
+					char* qout = len ? &qualBuf[0] : nullptr;
+					uint8_t* bq = bam_get_qual(bamdata);
+					if (bq && len > 0 && bq[0] != 0xFF) {
+						for (uint32_t k = 0; k < len; ++k)
+							qout[k] = static_cast<char>(bq[k] + 33);
+					} else {
+						std::memset(qout, '!', len);
+					}
+
+					processedLength += len;
+
+					{
+						Sequence2& rec = readBatch->next_slot();
+						rec.set(std::move(qnameBuf),
+								std::string{},          // no comment for bam
+								std::move(seqBuf),
+								std::move(qualBuf),
+								seqPos++);
+					}
+
+					if (processedLength > batchSize) {
+						readBatch->batchN = batchN++;
+						readBatch->fileN  = i;
+						lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
 						filled_q_in.push(std::move(readBatch));
-                        readBatch = free_pool_in.pop();
-                        processedLength = 0;
-						batchCounter = 0;
-                    }
-                    lg.verbose("Individual fastq sequence read: " + seqHeader);
-                }
-                readBatch->batchN = batchN++; // process residual reads
-				readBatch->fileN = i;
-                lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
+
+						readBatch = free_pool_in.pop();
+						processedLength = 0;
+					}
+				}
+
+				// residual
+				readBatch->batchN = batchN++;
+				readBatch->fileN  = i;
+				lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
 				filled_q_in.push(std::move(readBatch));
+
 				processedLength = 0;
-				batchCounter = 0;
-                bam_destroy1(bamdata);
-                sam_close(fp_in);
-                if (tpool_read.pool)
-                    hts_tpool_destroy(tpool_read.pool);
-                break;
-            }
-            case 3: { // rd
-                    readTableCompressed(userInput.inFiles[i]);
-                break;
-            }
-            default: { // fasta[.gz]
-                fprintf(stderr, "cannot recognize input (%s). Must be: fasta, fastq, bam, cram.\n", file.c_str());
-                exit(EXIT_FAILURE);
-            }
-        }
-		if (fileCounterCompleted.fetch_add(1, std::memory_order_relaxed) + 1 == numFiles) {
-			for (size_t i = 0; i < consumersN; ++i) filled_q_in.push(std::unique_ptr<Sequences2>(nullptr)); // sentinels
+
+				bam_destroy1(bamdata);
+				sam_close(fp_in);
+				if (tpool_read.pool)
+					hts_tpool_destroy(tpool_read.pool);
+
+				break;
+			}
+
+			case 3: { // rd
+				readTableCompressed(userInput.inFiles[i]);
+				break;
+			}
+
+			default: {
+				fprintf(stderr, "cannot recognize input (%s). Must be: fasta, fastq, bam, cram.\n", file.c_str());
+				exit(EXIT_FAILURE);
+			}
 		}
-    }
+
+		if (fileCounterCompleted.fetch_add(1, std::memory_order_relaxed) + 1 == numFiles) {
+			for (size_t k = 0; k < consumersN; ++k)
+				filled_q_in.push(std::unique_ptr<Sequences2>(nullptr)); // sentinels
+		}
+	}
 }
 
-float InReads::computeAvgQuality(std::string &sequenceQuality) {
+float InReads::computeAvgQuality(const std::string &sequenceQuality) {
     double sumQuality = 0;
-    for (char &quality : sequenceQuality)
+    for (const char &quality : sequenceQuality)
         sumQuality += pow(10, -(double(quality) - 33)/10);
     return (float) -10 * std::log10(sumQuality/sequenceQuality.size());
 }
@@ -455,13 +505,12 @@ void InReads::filterRecords() {
 }
 
 inline bool InReads::filterRead(Sequence2* sequence) {
-    
-    uint64_t size = sequence->sequence->size();
-    float avgQuality = 0;
-    if (sequence->sequenceQuality != NULL)
-        avgQuality = computeAvgQuality(*sequence->sequenceQuality);
-    
-    return applyFilter(size, avgQuality);
+	
+	uint64_t size = sequence->sequence.size();
+	float avgQuality = 0.0f;
+	if (!sequence->sequenceQuality.empty())
+		avgQuality = computeAvgQuality(sequence->sequenceQuality);
+	return applyFilter(size, avgQuality);
 }
 
 inline bool InReads::applyFilter(uint64_t size, float avgQuality) {
@@ -491,21 +540,21 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 {
 	Log threadLog;
 	threadLog.setId(readBatchIn.batchN);
-	
+
 	std::unique_ptr<BamBatch> readBatchOut;
 	std::unique_ptr<BamBatch> R1_batch;
 	std::unique_ptr<BamBatch> R2_batch;
-	
-	if (!streamOutput) { // we allocate once as we are not outputting anything
+
+	if (!streamOutput) { // allocate once if not outputting
 		if (userInput.inputCifi && userInput.cifiCombinations_flag) {
 			R1_batch = std::make_unique<BamBatch>();
 			R2_batch = std::make_unique<BamBatch>();
-		}else{
+		} else {
 			readBatchOut = std::make_unique<BamBatch>();
 		}
 	}
 
-	if (userInput.inputCifi && userInput.cifiCombinations_flag) { // Two output batches per input batch
+	if (userInput.inputCifi && userInput.cifiCombinations_flag) {
 		const uint32_t fileIdx = readBatchIn.fileN;
 		const uint32_t baseOut = fileIdx * 2;
 
@@ -522,18 +571,20 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 
 		R2_batch->batchN = readBatchIn.batchN;
 		R2_batch->fileN  = baseOut + 1;
-	} else { // existing single-output case
+
+	} else {
 		if (streamOutput)
 			readBatchOut = free_pool_out.pop();
-			
+
 		readBatchOut->reads.clear();
 		readBatchOut->fileN  = readBatchIn.fileN;
 		readBatchOut->batchN = readBatchIn.batchN;
 	}
+
 	EnzymeInfo enz;
-	if(userInput.inputCifi)
+	if (userInput.inputCifi)
 		enz = get_enzyme(userInput.restrictionEnzyme);
-	
+
 	std::vector<InRead> inReadsSummaryBatch;
 	uint32_t readN = 0;
 	LenVector<float> readLensBatch;
@@ -544,99 +595,92 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 	const bool hasExclude = !excludeList.empty();
 	const bool hasFilter  = (userInput.filter != "none");
 
-	for (const auto& sequencePtr : readBatchIn.sequences) {
-		Sequence2* sequence = sequencePtr.get();
+	// Iterate only the used slots (pool-friendly)
+	for (uint32_t idx = 0; idx < readBatchIn.used; ++idx) {
+		Sequence2& sequence = *readBatchIn.slots[idx];
 
-		if (hasInclude &&
-			includeList.find(sequence->header) == includeList.end())
+		if (hasInclude && includeList.find(sequence.header) == includeList.end())
 			continue;
 
-		if (hasExclude &&
-			excludeList.find(sequence->header) != excludeList.end())
+		if (hasExclude && excludeList.find(sequence.header) != excludeList.end())
 			continue;
 
-		if (hasFilter && filterRead(sequence))
+		if (hasFilter && filterRead(&sequence))
 			continue;
 
-		InRead read = traverseInRead(&threadLog,
-									 sequence,
-									 readBatchIn.batchN + readN++);
+		// NOTE: traverseInRead signature remains Sequence2*
+		InRead read = traverseInRead(&threadLog, &sequence, readBatchIn.batchN + readN++);
 
 		const uint64_t len = read.A + read.C + read.G + read.T + read.N;
 		readLensBatch.push_back(std::make_pair(len, read.avgQuality));
 
-		batchA += read.A;
-		batchT += read.T;
-		batchC += read.C;
-		batchG += read.G;
+		batchA  += read.A;
+		batchT  += read.T;
+		batchC  += read.C;
+		batchG  += read.G;
 		batchN_ += read.N;
 
 		// STREAMING OUTPUT: convert to BAM record and append to batch
 		if (streamOutput && !userInput.inputCifi) {
-			// Ensure quality exists
+
 			if (!read.inSequenceQuality) {
 				read.inSequenceQuality =
 					std::make_unique<std::string>(read.inSequence->size(), '!');
 			}
 
 			bam1_t* q = make_unmapped_bam(
-				read.seqHeader,              // name
-				*read.inSequence,            // seq
-				*read.inSequenceQuality,     // qual (ASCII+33)
-				0                            // extra_flags (none, just BAM_FUNMAP)
+				read.seqHeader,          // name
+				*read.inSequence,        // seq
+				*read.inSequenceQuality, // qual
+				0
 			);
 
 			readBatchOut->reads.push_back(q);
-			
-		}else if (userInput.inputCifi) {
-			
-			if (userInput.cifiCombinations_flag) {
-				// SCIFI + COMBINATIONS: two *separate* BamBatch outputs
 
+		} else if (userInput.inputCifi) {
+
+			if (userInput.cifiCombinations_flag) {
 				if (!read.inSequenceQuality) {
 					read.inSequenceQuality =
 						std::make_unique<std::string>(read.inSequence->size(), '!');
 				}
 				build_pe_bambatches(read, enz, *R1_batch, *R2_batch);
-			}else{
-				// SCIFI, NO COMBINATIONS: just chop into fragments in this batch
+
+			} else {
 				if (!read.inSequenceQuality) {
 					read.inSequenceQuality =
-					std::make_unique<std::string>(read.inSequence->size(), '!');
+						std::make_unique<std::string>(read.inSequence->size(), '!');
 				}
-				
+
 				BamBatch tmp = chop_read_to_bambatch(
-													 read,
-													 enz,
-													 readBatchOut->batchN,
-													 readBatchOut->fileN
-													 );
-				
-				// append chopped fragments into our current batch
+					read,
+					enz,
+					readBatchOut->batchN,
+					readBatchOut->fileN
+				);
+
 				readBatchOut->reads.insert(readBatchOut->reads.end(),
 										   tmp.reads.begin(), tmp.reads.end());
 			}
 		}
+
 		if (userInput.content_flag)
 			inReadsSummaryBatch.push_back(std::move(read));
-
-		sequence->sequence.reset();
-		sequence->sequenceQuality.reset();
-	}	
+		// DO NOT clear Sequence2 strings here; keep capacity in pool.
+		// recycle_keep_capacity() does that when the batch is returned to free_pool_in.
+	}
 
 	if (userInput.inputCifi && userInput.cifiCombinations_flag) {
 		cifiReadN.fetch_add(R1_batch->reads.size() + R2_batch->reads.size());
-		
+
 		if (streamOutput) {
 			filled_q_out.push(std::move(R1_batch));
 			filled_q_out.push(std::move(R2_batch));
-		}else{
+		} else {
 			R1_batch->reads.clear();
 			R2_batch->reads.clear();
 		}
-		// If they’re empty, they just get destroyed and their BamBatch
-		// instances are removed from the pool; the writer will add more
-		// via free_pool_out.push after writing other batches.
+
 	} else {
 		cifiReadN.fetch_add(readBatchOut->reads.size());
 		if (streamOutput)
@@ -645,7 +689,7 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 			readBatchOut->reads.clear();
 	}
 
-	{ 	// Update global stats and summaries
+	{   // Update global stats and summaries
 		std::unique_lock<std::mutex> lck(writerMutex);
 
 		if (userInput.content_flag && !inReadsSummaryBatch.empty()) {
@@ -653,7 +697,7 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 				readSummaryBatches.files.resize(readBatchIn.fileN + 1);
 
 			auto& rbVec = readSummaryBatches.files[readBatchIn.fileN].readBatches;
-			auto  summaryBatch = std::make_unique<InReadBatch>();
+			auto summaryBatch = std::make_unique<InReadBatch>();
 			summaryBatch->reads  = std::move(inReadsSummaryBatch);
 			summaryBatch->batchN = readBatchIn.batchN;
 			summaryBatch->fileN  = readBatchIn.fileN;
@@ -661,28 +705,34 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 		}
 
 		readLens.insert(readLensBatch);
-		totA    += batchA;
-		totT    += batchT;
-		totC    += batchC;
-		totG    += batchG;
-		totN    += batchN_;
+		totA     += batchA;
+		totT     += batchT;
+		totC     += batchC;
+		totG     += batchG;
+		totN     += batchN_;
 		totReads += readN;
 
 		threadLog.print();
 	}
+
 	writerMutexCondition.notify_one();
 	return true;
 }
 
-InRead InReads::traverseInRead(Log* threadLog, Sequence2* sequence, uint32_t seqPos) {
+
+InRead InReads::traverseInRead(Log* threadLog, Sequence2* sequence, uint32_t seqPos)
+{
 	std::vector<std::pair<uint64_t, uint64_t>> bedCoords;
+
 	if (userInput.hc_cutoff != -1) {
-		homopolymerCompress(sequence->sequence.get(), bedCoords, userInput.hc_cutoff);
-		sequence->sequenceQuality.reset();
+		// homopolymerCompress expects a std::string*
+		homopolymerCompress(&sequence->sequence, bedCoords, userInput.hc_cutoff);
+		// Keep capacity in pool, just clear
+		sequence->sequenceQuality.clear();
 	}
 
 	uint64_t A=0, C=0, G=0, T=0, N=0, lowerCount=0;
-	for (char base : *sequence->sequence) {
+	for (char base : sequence->sequence) {
 		if (std::islower(static_cast<unsigned char>(base))) ++lowerCount;
 		switch (base) {
 			case 'A': case 'a': ++A; break;
@@ -693,15 +743,23 @@ InRead InReads::traverseInRead(Log* threadLog, Sequence2* sequence, uint32_t seq
 		}
 	}
 
-	float avgQuality = sequence->sequenceQuality
-					 ? computeAvgQuality(*sequence->sequenceQuality)
-					 : 0.0f;
+	float avgQuality = (!sequence->sequenceQuality.empty())
+		? computeAvgQuality(sequence->sequenceQuality)  // make this take const std::string&
+		: 0.0f;
+
+	// COPY payload into InRead-owned buffers so output can keep it,
+	// while Sequence2 retains its capacity in the pool.
+	auto seqCopy = std::make_unique<std::string>(sequence->sequence);
+
+	std::unique_ptr<std::string> qualCopy;
+	if (!sequence->sequenceQuality.empty())
+		qualCopy = std::make_unique<std::string>(sequence->sequenceQuality);
 
 	InRead inRead(
 		threadLog, 0, 0,
 		sequence->header, sequence->comment,
-		std::move(sequence->sequence),
-		std::move(sequence->sequenceQuality),
+		std::move(seqCopy),
+		std::move(qualCopy),
 		seqPos, A, C, G, T, N, lowerCount,
 		avgQuality
 	);
