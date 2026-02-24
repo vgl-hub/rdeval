@@ -29,6 +29,52 @@
 #include "cifi.h"
 #include "reads.h"
 
+static inline void bam_recycle_keep_capacity(bam1_t* b) {
+	// Keep b->data allocated, just mark record empty.
+	b->l_data = 0;
+	b->core = bam1_core_t();   // zero-initialize core
+	// Do NOT free b->data; m_data stays as-is.
+}
+
+static inline void fill_unmapped_bam(
+	bam1_t* b,
+	const std::string& name,
+	const std::string& seq,
+	const std::string& qual_str,
+	uint16_t extra_flags = 0
+) {
+#ifdef bam_set1
+	const int32_t l_qname = static_cast<int32_t>(name.size() + 1);
+	const int32_t l_seq   = static_cast<int32_t>(seq.size());
+
+	const int ret = bam_set1(
+		b,
+		l_qname, name.c_str(),
+		static_cast<uint16_t>(BAM_FUNMAP | extra_flags),
+		-1, -1, 0,
+		0, nullptr,
+		-1, -1, 0,
+		l_seq,
+		seq.c_str(),
+		qual_str.c_str(),
+		0
+	);
+	if (ret < 0) { fprintf(stderr, "bam_set1 failed\n"); std::abort(); }
+#else
+	// Fallback: allocate a temporary record using existing helper,
+	// then swap contents into b (still avoids repeated malloc/free of b itself).
+	bam1_t* tmp = make_unmapped_bam(name, seq, qual_str, extra_flags);
+
+	// Swap core and buffers
+	std::swap(b->core,   tmp->core);
+	std::swap(b->l_data, tmp->l_data);
+	std::swap(b->m_data, tmp->m_data);
+	std::swap(b->data,   tmp->data);
+
+	bam_destroy1(tmp);
+#endif
+}
+
 InReads::InReads(UserInputRdeval& ui)
 	: userInput(ui),
 	  splitOutputByFile(ui.outPrefix != "" ? true : false),
@@ -109,7 +155,10 @@ void InReads::load() {
 	if (streamOutput) {
 		for (size_t i = 0; i < (outBuffersN + outBuffersN * userInput.inputCifi); ++i) {
 			auto batch = std::make_unique<BamBatch>();
-			batch->reads.reserve(1024);
+			batch->reads.resize(1024);
+			for (size_t j = 0; j < batch->reads.size(); ++j)
+				batch->reads[j] = bam_init1();
+			batch->used = 0;
 			free_pool_out.push(std::move(batch));
 		}
 	}
@@ -563,8 +612,8 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 			R2_batch = free_pool_out.pop();
 		}
 
-		R1_batch->reads.clear();
-		R2_batch->reads.clear();
+		R1_batch->used = 0;
+		R2_batch->used = 0;
 
 		R1_batch->batchN = readBatchIn.batchN;
 		R1_batch->fileN  = baseOut;
@@ -576,7 +625,7 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 		if (streamOutput)
 			readBatchOut = free_pool_out.pop();
 
-		readBatchOut->reads.clear();
+		readBatchOut->used = 0;
 		readBatchOut->fileN  = readBatchIn.fileN;
 		readBatchOut->batchN = readBatchIn.batchN;
 	}
@@ -628,14 +677,9 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 					std::make_unique<std::string>(read.inSequence->size(), '!');
 			}
 
-			bam1_t* q = make_unmapped_bam(
-				read.seqHeader,          // name
-				*read.inSequence,        // seq
-				*read.inSequenceQuality, // qual
-				0
-			);
-
-			readBatchOut->reads.push_back(q);
+			bam1_t* q = readBatchOut->reads[readBatchOut->used++];
+			bam_recycle_keep_capacity(q);
+			fill_unmapped_bam(q, read.seqHeader, *read.inSequence, *read.inSequenceQuality, 0);
 
 		} else if (userInput.inputCifi) {
 
@@ -677,8 +721,8 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 			filled_q_out.push(std::move(R1_batch));
 			filled_q_out.push(std::move(R2_batch));
 		} else {
-			R1_batch->reads.clear();
-			R2_batch->reads.clear();
+			R1_batch->used = 0;
+			R2_batch->used = 0;
 		}
 
 	} else {
@@ -686,7 +730,7 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 		if (streamOutput)
 			filled_q_out.push(std::move(readBatchOut));
 		else
-			readBatchOut->reads.clear();
+			readBatchOut->used = 0;
 	}
 
 	{   // Update global stats and summaries
@@ -1265,7 +1309,7 @@ void InReads::writeToStream() {
 			// Defensive: bad file index, recycle (shouldn't happen)
 			for (bam1_t* rec : batch->reads)
 				bam_destroy1(rec);
-			batch->reads.clear();
+			batch->used = 0;
 			free_pool_out.push(std::move(batch));
 			continue;
 		}
@@ -1291,16 +1335,15 @@ void InReads::writeToStream() {
 					   " reads (batch " + std::to_string(bptr->batchN) +
 					   ") to outId " + std::to_string(outId) +
 					   " (fileId " + std::to_string(fileId) + ")");
-
-			for (bam1_t* rec : bptr->reads) {
+			
+			for (uint32_t k = 0; k < bptr->used; ++k) {
+				bam1_t* rec = bptr->reads[k];
 				if (sam_write1(ofp, ohdr, rec) < 0) {
 					fprintf(stderr, "Error writing BAM record (outId %zu)\n", outId);
 					std::abort();
 				}
-				bam_destroy1(rec);
 			}
-
-			bptr->reads.clear();
+			bptr->used = 0;
 			free_pool_out.push(std::move(bptr));
 
 			++next;
@@ -1320,15 +1363,14 @@ void InReads::writeToStream() {
 			htsFile*   ofp  = fps[outId];
 			bam_hdr_t* ohdr = hdrs[outId];
 
-			for (bam1_t* rec : bptr->reads) {
+			for (uint32_t k = 0; k < bptr->used; ++k) {
+				bam1_t* rec = bptr->reads[k];
 				if (sam_write1(ofp, ohdr, rec) < 0) {
 					fprintf(stderr, "Error writing BAM record during final flush (outId %zu)\n", outId);
 					std::abort();
 				}
-				bam_destroy1(rec);
 			}
-
-			bptr->reads.clear();
+			bptr->used = 0;
 			free_pool_out.push(std::move(bptr));
 		}
 		filePending.clear();

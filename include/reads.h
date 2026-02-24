@@ -109,7 +109,6 @@ struct InRead {
 	}
 };
 
-
 // -------------------------------------------------------------
 // ReadBatch and container structures
 // -------------------------------------------------------------
@@ -117,8 +116,11 @@ struct InRead {
 template<typename T>
 struct ReadBatch {
 	std::vector<T> reads;
+	uint32_t used  = 0;     // how many valid entries this time
 	uint32_t batchN = 0;    // within-file batch index
 	uint32_t fileN  = 0;    // file ID
+	
+	void reset_keep_capacity() { used = 0; } // DO NOT clear()
 };
 
 template<typename T>
