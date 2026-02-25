@@ -1135,10 +1135,9 @@ void InReads::openOutputForFile(size_t outId) {
 		lg.verbose("openOutputForFile: invalid outId " + std::to_string(outId));
 		return;
 	}
-
 	if (fps[outId] != nullptr) // already open
 		return;
-	
+
 	const static phmap::flat_hash_map<std::string,int> string_to_case{
 		{"fasta",   1},
 		{"fa",      1},
@@ -1151,33 +1150,32 @@ void InReads::openOutputForFile(size_t outId) {
 		{"bam",     3},
 		{"cram",    4}
 	};
-	// Decide output file name
-	std::string outName;
-	if (splitOutputByFile) { // One/two outputs per input file; typically prefix + per-file suffix
-		if (userInput.cifiCombinations_flag) {
 
+	// Decide output file name (UNCHANGED)
+	std::string outName;
+	if (splitOutputByFile) {
+		if (userInput.cifiCombinations_flag) {
 			if (outId >= outCount) {
 				lg.verbose("openOutputForFile: outId " + std::to_string(outId) +
 						   " has no corresponding outFiles entry in cifiCombinations mode");
 				std::abort();
 			}
-			// Determine input file index
 			size_t fileIdx = outId / 2;
-			if (fileIdx >= numFiles) { // Validate
+			if (fileIdx >= numFiles) {
 				lg.verbose("openOutputForFile: computed fileIdx=" + std::to_string(fileIdx) +
 						   " invalid (outId=" + std::to_string(outId) +
 						   ", total files=" + std::to_string(userInput.inFiles.size()) + ")");
 				std::abort();
 			}
-			std::string baseName = getFileName(userInput.inFiles[fileIdx]);	// Base name of the input file
+			std::string baseName = getFileName(userInput.inFiles[fileIdx]);
 			std::string ext = getFileExt(userInput.inFiles[fileIdx]);
 			std::string baseNameNoExt = stripKnownExt(baseName, ext);
-			std::string suffix = ((outId % 2) == 0) ? "_1" : "_2"; // Assign _1 or _2 depending on parity
+			std::string suffix = ((outId % 2) == 0) ? "_1" : "_2";
 			outName = userInput.outPrefix + baseNameNoExt + suffix + "." + ext;
 			lg.verbose("SciFi combinations mode: outId=" + std::to_string(outId) +
 					   " fileIdx=" + std::to_string(fileIdx) +
 					   " → " + outName);
-		}else{
+		} else {
 			if (outId >= userInput.inFiles.size()) {
 				lg.verbose("openOutputForFile: outId " + std::to_string(outId) +
 						   " has no corresponding outFiles entry");
@@ -1185,37 +1183,64 @@ void InReads::openOutputForFile(size_t outId) {
 			}
 			outName = userInput.outPrefix + getFileName(userInput.inFiles[outId]);
 		}
-	} else { // Single-output mode => everything maps to slot 0
+	} else {
 		if (userInput.outFiles.empty()) {
 			lg.verbose("openOutputForFile: no output file specified");
 			std::abort();
 		}
 		outName = userInput.outFiles[0];
 	}
-	// Choose mode based on extension
-	std::string ext = getFileExt(outName);
 
+	// Choose mode based on extension (UNCHANGED)
+	std::string ext = getFileExt(outName);
 	int fmt_case = string_to_case.count(ext) ? string_to_case.at(ext) : 0;
+
 	htsFile* ofp = nullptr;
-	
+
 	switch (fmt_case) {
 		case 1:   // fasta[.gz]
 		case 2: { // fastq[.gz]
-			char mode[4] = "w";
-			if (sam_open_mode(mode + 1, outName.c_str(), NULL) < 0) {
-				printf("Invalid file name\n");
-				exit(EXIT_FAILURE);
-			}
-			if (!(ofp = sam_open(outName.c_str(), mode))) {
-				printf("Could not open %s\n", outName.c_str());
-				exit(EXIT_FAILURE);
+
+			// If user requested BGZF compression level, force BGZF
+			if (userInput.bgzip_level >= 0) {
+
+				if (userInput.bgzip_level > 9) {
+					fprintf(stderr, "Invalid bgzip level %d (must be 0–9)\n",
+							userInput.bgzip_level);
+					exit(EXIT_FAILURE);
+				}
+
+				// "wz" = write BGZF
+				// append compression level digit if provided
+				std::string mode = "wz";
+				mode += char('0' + userInput.bgzip_level);
+
+				ofp = hts_open(outName.c_str(), mode.c_str());
+				if (!ofp) {
+					fprintf(stderr, "Could not open %s with BGZF mode %s\n",
+							outName.c_str(), mode.c_str());
+					exit(EXIT_FAILURE);
+				}
+
+			} else {
+				char mode[4] = "w";
+				if (sam_open_mode(mode + 1, outName.c_str(), NULL) < 0) {
+					printf("Invalid file name\n");
+					exit(EXIT_FAILURE);
+				}
+				if (!(ofp = sam_open(outName.c_str(), mode))) {
+					printf("Could not open %s\n", outName.c_str());
+					exit(EXIT_FAILURE);
+				}
 			}
 			break;
 		}
+
 		case 3: {  // bam
-			ofp = sam_open(outName.c_str(),"wb");
+			ofp = sam_open(outName.c_str(), "wb");
 			break;
 		}
+
 		case 4: {  // cram
 			htsFormat fmt4 = {sequence_data, cram, {3, 1}, gzip, 6, NULL};
 			hts_parse_format(&fmt4, "cram,no_ref=1");
@@ -1234,14 +1259,14 @@ void InReads::openOutputForFile(size_t outId) {
 		std::abort();
 	}
 
-	// Duplicate and write BAM/CRAM header
+	// Duplicate and write header (UNCHANGED)
 	bam_hdr_t* ohdr = bam_hdr_dup(hdrTemplate);
 	if (!ohdr) {
 		lg.verbose("Failed to duplicate BAM header");
 		std::abort();
 	}
 
-	// Attach thread pool if available
+	// Attach thread pool if available (UNCHANGED; works for BGZF too)
 	if (tpool_write.pool) {
 		hts_set_opt(ofp, HTS_OPT_THREAD_POOL, &tpool_write);
 	}
@@ -1254,8 +1279,7 @@ void InReads::openOutputForFile(size_t outId) {
 	fps[outId]  = ofp;
 	hdrs[outId] = ohdr;
 
-	lg.verbose("Opened output file '" + outName +
-			   "' for outId " + std::to_string(outId));
+	lg.verbose("Opened output file '" + outName + "' for outId " + std::to_string(outId));
 }
 
 void InReads::writeToStream() {

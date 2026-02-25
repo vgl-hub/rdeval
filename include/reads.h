@@ -48,6 +48,8 @@ struct UserInputRdeval : UserInput {
 	// CiFi
 	bool inputCifi = false;
 	std::string restrictionEnzyme = "";
+	
+	int bgzip_level = -1;
 };
 
 
