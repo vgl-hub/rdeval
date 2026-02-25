@@ -29,52 +29,6 @@
 #include "cifi.h"
 #include "reads.h"
 
-static inline void bam_recycle_keep_capacity(bam1_t* b) {
-	// Keep b->data allocated, just mark record empty.
-	b->l_data = 0;
-	b->core = bam1_core_t();   // zero-initialize core
-	// Do NOT free b->data; m_data stays as-is.
-}
-
-static inline void fill_unmapped_bam(
-	bam1_t* b,
-	const std::string& name,
-	const std::string& seq,
-	const std::string& qual_str,
-	uint16_t extra_flags = 0
-) {
-#ifdef bam_set1
-	const int32_t l_qname = static_cast<int32_t>(name.size() + 1);
-	const int32_t l_seq   = static_cast<int32_t>(seq.size());
-
-	const int ret = bam_set1(
-		b,
-		l_qname, name.c_str(),
-		static_cast<uint16_t>(BAM_FUNMAP | extra_flags),
-		-1, -1, 0,
-		0, nullptr,
-		-1, -1, 0,
-		l_seq,
-		seq.c_str(),
-		qual_str.c_str(),
-		0
-	);
-	if (ret < 0) { fprintf(stderr, "bam_set1 failed\n"); std::abort(); }
-#else
-	// Fallback: allocate a temporary record using existing helper,
-	// then swap contents into b (still avoids repeated malloc/free of b itself).
-	bam1_t* tmp = make_unmapped_bam(name, seq, qual_str, extra_flags);
-
-	// Swap core and buffers
-	std::swap(b->core,   tmp->core);
-	std::swap(b->l_data, tmp->l_data);
-	std::swap(b->m_data, tmp->m_data);
-	std::swap(b->data,   tmp->data);
-
-	bam_destroy1(tmp);
-#endif
-}
-
 InReads::InReads(UserInputRdeval& ui)
 	: userInput(ui),
 	  splitOutputByFile(ui.outPrefix != "" ? true : false),
@@ -585,8 +539,7 @@ inline bool InReads::applyFilter(uint64_t size, float avgQuality) {
     return true;
 }
 
-bool InReads::traverseInReads(Sequences2& readBatchIn)
-{
+bool InReads::traverseInReads(Sequences2& readBatchIn) {
 	Log threadLog;
 	threadLog.setId(readBatchIn.batchN);
 
@@ -594,7 +547,9 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 	std::unique_ptr<BamBatch> R1_batch;
 	std::unique_ptr<BamBatch> R2_batch;
 
-	if (!streamOutput) { // allocate once if not outputting
+	// Only need output batches if we're streaming or if CiFi builds internal batches.
+	// Keep your original behavior for !streamOutput (alloc once) since you said it was fine.
+	if (!streamOutput) {
 		if (userInput.inputCifi && userInput.cifiCombinations_flag) {
 			R1_batch = std::make_unique<BamBatch>();
 			R2_batch = std::make_unique<BamBatch>();
@@ -603,6 +558,7 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 		}
 	}
 
+	// Acquire from pool if streaming
 	if (userInput.inputCifi && userInput.cifiCombinations_flag) {
 		const uint32_t fileIdx = readBatchIn.fileN;
 		const uint32_t baseOut = fileIdx * 2;
@@ -620,13 +576,12 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 
 		R2_batch->batchN = readBatchIn.batchN;
 		R2_batch->fileN  = baseOut + 1;
-
 	} else {
 		if (streamOutput)
 			readBatchOut = free_pool_out.pop();
 
-		readBatchOut->used = 0;
-		readBatchOut->fileN  = readBatchIn.fileN;
+		readBatchOut->used  = 0;
+		readBatchOut->fileN = readBatchIn.fileN;
 		readBatchOut->batchN = readBatchIn.batchN;
 	}
 
@@ -643,21 +598,20 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 	const bool hasInclude = !includeList.empty();
 	const bool hasExclude = !excludeList.empty();
 	const bool hasFilter  = (userInput.filter != "none");
+	
+	thread_local std::string tmpQual;
 
-	// Iterate only the used slots (pool-friendly)
 	for (uint32_t idx = 0; idx < readBatchIn.used; ++idx) {
 		Sequence2& sequence = *readBatchIn.slots[idx];
 
 		if (hasInclude && includeList.find(sequence.header) == includeList.end())
 			continue;
-
 		if (hasExclude && excludeList.find(sequence.header) != excludeList.end())
 			continue;
-
 		if (hasFilter && filterRead(&sequence))
 			continue;
 
-		// NOTE: traverseInRead signature remains Sequence2*
+		// Compute stats (and optionally payload) via traverseInRead()
 		InRead read = traverseInRead(&threadLog, &sequence, readBatchIn.batchN + readN++);
 
 		const uint64_t len = read.A + read.C + read.G + read.T + read.N;
@@ -669,53 +623,61 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 		batchG  += read.G;
 		batchN_ += read.N;
 
-		// STREAMING OUTPUT: convert to BAM record and append to batch
+		// ---- STREAMING OUTPUT (non-CiFi): fill BAM directly from Sequence2 ----
 		if (streamOutput && !userInput.inputCifi) {
-
-			if (!read.inSequenceQuality) {
-				read.inSequenceQuality =
-					std::make_unique<std::string>(read.inSequence->size(), '!');
+			// Ensure there is a slot in the preallocated bam array
+			if (readBatchOut->used >= readBatchOut->reads.size()) {
+				// Grow once in a while; still pool-friendly.
+				const size_t old = readBatchOut->reads.size();
+				const size_t neu = old ? old * 2 : 1024;
+				readBatchOut->reads.resize(neu);
+				for (size_t j = old; j < neu; ++j)
+					readBatchOut->reads[j] = bam_init1();
 			}
 
 			bam1_t* q = readBatchOut->reads[readBatchOut->used++];
 			bam_recycle_keep_capacity(q);
-			fill_unmapped_bam(q, read.seqHeader, *read.inSequence, *read.inSequenceQuality, 0);
 
-		} else if (userInput.inputCifi) {
+			if (!sequence.sequenceQuality.empty()) {
+				fill_unmapped_bam(q, sequence.header, sequence.sequence, sequence.sequenceQuality, 0);
+			} else {
+				tmpQual.assign(sequence.sequence.size(), '!');
+				fill_unmapped_bam(q, sequence.header, sequence.sequence, tmpQual, 0);
+			}
+		}
+		// ---- CiFi paths (need payload in read) ----
+		else if (userInput.inputCifi) {
+
+			// Make sure payload exists for CiFi processing
+			if (!read.inSequence) {
+				// If traverseInRead was called with needPayload=false by mistake,
+				// this makes the behavior safe.
+				read.inSequence = std::make_unique<std::string>(sequence.sequence);
+			}
+			if (!read.inSequenceQuality) {
+				if (!sequence.sequenceQuality.empty())
+					read.inSequenceQuality = std::make_unique<std::string>(sequence.sequenceQuality);
+				else
+					read.inSequenceQuality = std::make_unique<std::string>(read.inSequence->size(), '!');
+			}
 
 			if (userInput.cifiCombinations_flag) {
-				if (!read.inSequenceQuality) {
-					read.inSequenceQuality =
-						std::make_unique<std::string>(read.inSequence->size(), '!');
-				}
 				build_pe_bambatches(read, enz, *R1_batch, *R2_batch);
-
 			} else {
-				if (!read.inSequenceQuality) {
-					read.inSequenceQuality =
-						std::make_unique<std::string>(read.inSequence->size(), '!');
-				}
-
-				BamBatch tmp = chop_read_to_bambatch(
-					read,
-					enz,
-					readBatchOut->batchN,
-					readBatchOut->fileN
-				);
-
-				readBatchOut->reads.insert(readBatchOut->reads.end(),
-										   tmp.reads.begin(), tmp.reads.end());
+				const uint32_t before = readBatchOut->used;
+				chop_read_into_bambatch(read, enz, *readBatchOut);
+				const uint32_t added  = readBatchOut->used - before;
+				cifiReadN.fetch_add(added, std::memory_order_relaxed);
 			}
 		}
 
 		if (userInput.content_flag)
 			inReadsSummaryBatch.push_back(std::move(read));
-		// DO NOT clear Sequence2 strings here; keep capacity in pool.
-		// recycle_keep_capacity() does that when the batch is returned to free_pool_in.
 	}
 
+	// Push output batches
 	if (userInput.inputCifi && userInput.cifiCombinations_flag) {
-		cifiReadN.fetch_add(R1_batch->reads.size() + R2_batch->reads.size());
+		cifiReadN.fetch_add(R1_batch->used + R2_batch->used);
 
 		if (streamOutput) {
 			filled_q_out.push(std::move(R1_batch));
@@ -724,16 +686,14 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 			R1_batch->used = 0;
 			R2_batch->used = 0;
 		}
-
 	} else {
-		cifiReadN.fetch_add(readBatchOut->reads.size());
 		if (streamOutput)
 			filled_q_out.push(std::move(readBatchOut));
 		else
 			readBatchOut->used = 0;
 	}
 
-	{   // Update global stats and summaries
+	{   // Global stats / summaries
 		std::unique_lock<std::mutex> lck(writerMutex);
 
 		if (userInput.content_flag && !inReadsSummaryBatch.empty()) {
@@ -741,7 +701,7 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 				readSummaryBatches.files.resize(readBatchIn.fileN + 1);
 
 			auto& rbVec = readSummaryBatches.files[readBatchIn.fileN].readBatches;
-			auto summaryBatch = std::make_unique<InReadBatch>();
+			auto  summaryBatch = std::make_unique<InReadBatch>();
 			summaryBatch->reads  = std::move(inReadsSummaryBatch);
 			summaryBatch->batchN = readBatchIn.batchN;
 			summaryBatch->fileN  = readBatchIn.fileN;
@@ -758,20 +718,16 @@ bool InReads::traverseInReads(Sequences2& readBatchIn)
 
 		threadLog.print();
 	}
-
 	writerMutexCondition.notify_one();
 	return true;
 }
 
-
-InRead InReads::traverseInRead(Log* threadLog, Sequence2* sequence, uint32_t seqPos)
-{
+InRead InReads::traverseInRead(Log* threadLog, Sequence2* sequence, uint32_t seqPos) {
 	std::vector<std::pair<uint64_t, uint64_t>> bedCoords;
 
 	if (userInput.hc_cutoff != -1) {
-		// homopolymerCompress expects a std::string*
 		homopolymerCompress(&sequence->sequence, bedCoords, userInput.hc_cutoff);
-		// Keep capacity in pool, just clear
+		// keep capacity, just clear content
 		sequence->sequenceQuality.clear();
 	}
 
@@ -787,27 +743,40 @@ InRead InReads::traverseInRead(Log* threadLog, Sequence2* sequence, uint32_t seq
 		}
 	}
 
-	float avgQuality = (!sequence->sequenceQuality.empty())
-		? computeAvgQuality(sequence->sequenceQuality)  // make this take const std::string&
-		: 0.0f;
+	const float avgQuality =
+		(!sequence->sequenceQuality.empty())
+			? computeAvgQuality(sequence->sequenceQuality)
+			: 0.0f;
 
-	// COPY payload into InRead-owned buffers so output can keep it,
-	// while Sequence2 retains its capacity in the pool.
-	auto seqCopy = std::make_unique<std::string>(sequence->sequence);
+	// Decide if this read needs payload in InRead.
+	// - Needed for CiFi processing
+	// - For content summaries, you currently drop payload when !streamOutput, so payload not needed there.
+	// If you later decide content summaries should keep sequence, flip this.
+	const bool needPayload = userInput.inputCifi;
 
-	std::unique_ptr<std::string> qualCopy;
-	if (!sequence->sequenceQuality.empty())
-		qualCopy = std::make_unique<std::string>(sequence->sequenceQuality);
+	std::unique_ptr<std::string> seqPtr;
+	std::unique_ptr<std::string> qualPtr;
+
+	if (needPayload) {
+		// yes, this allocates — but ONLY for CiFi (or whatever you later enable)
+		seqPtr = std::make_unique<std::string>(sequence->sequence);
+
+		if (!sequence->sequenceQuality.empty())
+			qualPtr = std::make_unique<std::string>(sequence->sequenceQuality);
+		// else leave nullptr; caller can synthesize if needed
+	}
 
 	InRead inRead(
 		threadLog, 0, 0,
 		sequence->header, sequence->comment,
-		std::move(seqCopy),
-		std::move(qualCopy),
-		seqPos, A, C, G, T, N, lowerCount,
+		std::move(seqPtr),
+		std::move(qualPtr),
+		seqPos,
+		A, C, G, T, N, lowerCount,
 		avgQuality
 	);
 
+	// Preserve your old behavior: if content summaries + no streaming, drop payload
 	if (userInput.content_flag && !streamOutput)
 		inRead.dropPayload();
 
@@ -1331,7 +1300,7 @@ void InReads::writeToStream() {
 			htsFile*   ofp  = fps[outId];
 			bam_hdr_t* ohdr = hdrs[outId];
 
-			lg.verbose("Writing " + std::to_string(bptr->reads.size()) +
+			lg.verbose("Writing " + std::to_string(bptr->used) +
 					   " reads (batch " + std::to_string(bptr->batchN) +
 					   ") to outId " + std::to_string(outId) +
 					   " (fileId " + std::to_string(fileId) + ")");

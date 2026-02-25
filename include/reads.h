@@ -64,8 +64,6 @@ struct InRead {
 	uint64_t A=0, C=0, G=0, T=0, N=0, lowerCount=0;
 	uint32_t uId=0, iId=0, seqPos=0;
 
-	std::vector<Tag> tags;
-	std::vector<std::deque<DBGpath>> variants;
 	float avgQuality = 0.0f;
 
 	InRead() = default;
@@ -83,8 +81,7 @@ struct InRead {
 		   uint32_t readPos,
 		   uint64_t A, uint64_t C, uint64_t G, uint64_t T,
 		   uint64_t N, uint64_t lowerCount,
-		   float avgQuality,
-		   const std::vector<Tag>* tags = nullptr)
+		   float avgQuality)
 		: seqHeader(std::move(header)),
 		  seqComment(std::move(comment)),
 		  inSequence(std::move(sequence)),
@@ -93,7 +90,6 @@ struct InRead {
 		  uId(uId), iId(iId), seqPos(readPos), avgQuality(avgQuality)
 	{
 		(void)threadLog;
-		if (tags) this->tags = *tags;
 #ifdef DEBUG
 		if (threadLog) {
 			threadLog->add("Processing read: " + seqHeader +
