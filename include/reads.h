@@ -129,7 +129,15 @@ struct FileBatches {
 	std::vector<ReadBatches<T>> files;
 };
 
-using BamBatch    = ReadBatch<bam1_t*>;
+struct BamBatch : ReadBatch<bam1_t*> {
+	~BamBatch() {
+		for (bam1_t* b : this->reads) {
+			if (b) bam_destroy1(b);
+		}
+		this->reads.clear();
+		this->used = 0;
+	}
+};
 using InReadBatch = ReadBatch<InRead>;
 
 // -------------------------------------------------------------
