@@ -39,7 +39,7 @@ InReads::InReads(UserInputRdeval& ui)
 	  ),
 	  inBuffersN((consumersN + producersN) * 2),
 	  outBuffersN(consumersN * 4 + 1),
-	  free_pool_in(inBuffersN),
+	  free_pool_in(inBuffersN,1),
 	  filled_q_in(inBuffersN),
 	  free_pool_out(outBuffersN + outBuffersN * userInput.inputCifi), // two buffers per consumer, double that if cifi (PE output)
 	  filled_q_out(outBuffersN + outBuffersN * userInput.inputCifi)
@@ -99,11 +99,6 @@ void InReads::load() {
 	readSummaryBatches.files.resize(userInput.inFiles.size()); // resize to accommodate batches from multiple files
 	fileBatches.files.resize(userInput.inFiles.size()); // resize to accommodate batches from multiple files
 	
-	// Preallocate exactly N buffers
-	for (size_t i = 0; i < inBuffersN; ++i) {
-		std::unique_ptr<Sequences2> b(new Sequences2);
-		free_pool_in.push(std::move(b));
-	}
 	if (streamOutput) {
 		for (size_t i = 0; i < (outBuffersN + outBuffersN * userInput.inputCifi); ++i) {
 			auto batch = std::make_unique<BamBatch>();
@@ -444,71 +439,71 @@ float InReads::computeAvgQuality(const std::string& sequenceQuality) {
 }
 
 void InReads::initDictionaries() {
-    
-    std::ifstream includeFile(userInput.inBedInclude);
-    std::string key;
+	
+	std::ifstream includeFile(userInput.inBedInclude);
+	std::string key;
 
-    while (includeFile >> key)
-        includeList.insert(key);
+	while (includeFile >> key)
+		includeList.insert(key);
 
-    includeFile.close();
-    
-    std::ifstream excludeFile(userInput.inBedExclude);
+	includeFile.close();
+	
+	std::ifstream excludeFile(userInput.inBedExclude);
 
-    while (excludeFile >> key)
-        excludeList.insert(key);
+	while (excludeFile >> key)
+		excludeList.insert(key);
 
-    excludeFile.close();
+	excludeFile.close();
 }
 
 void InReads::initFilters() {
-    
-    bool cannotParse = false;
-    
-    std::istringstream stream(userInput.filter); // get l,q and logical operator in between
-    std::string token1;
-    std::string token2;
-    std::string token3;
-    stream >> token1 >> token2 >> token3;
+	
+	bool cannotParse = false;
+	
+	std::istringstream stream(userInput.filter); // get l,q and logical operator in between
+	std::string token1;
+	std::string token2;
+	std::string token3;
+	stream >> token1 >> token2 >> token3;
 
-    if ((userInput.filter.find('l') == std::string::npos && userInput.filter.find('q') == std::string::npos) || // no filter found
-        (token1.size() < 3) || // first filter too short
-        (token2.size() != 0 && token3.size() == 0) || // second filter missing
-        (token2.size() == 0 && token3.size() != 0) || // missing operator
-        (token2.size() > 1) // malformatted operator
-    )
-        cannotParse = true;
-    
-    if (cannotParse){
-        fprintf(stderr, "Could not parse filter. Terminating.\n");
-        exit(EXIT_FAILURE);
-    }
-    
-    std::string lFilter, qFilter;
-    if (token2.size())
-        logicalOperator = token2[0];
-    
-    if (token1[0] == 'l') {
-        lFilter = token1;
-        lSign = lFilter[1];
-        l = stoi(lFilter.substr(2));
-    } else if (token1[0] == 'q') {
-        qFilter = token1;
-        qSign = qFilter[1];
-        q = stoi(qFilter.substr(2));
-    }
-    
-    if (token3.size() != 0) {
-        if (token3[0] == 'l') {
-            lFilter = token3;
-            lSign = lFilter[1];
-            l = stoi(lFilter.substr(2));
-        }else if (token3[0] == 'q') {
-            qFilter = token3;
-            qSign = qFilter[1];
-            q = stoi(qFilter.substr(2));
-        }
-    }
+	if ((userInput.filter.find('l') == std::string::npos && userInput.filter.find('q') == std::string::npos) || // no filter found
+		(token1.size() < 3) || // first filter too short
+		(token2.size() != 0 && token3.size() == 0) || // second filter missing
+		(token2.size() == 0 && token3.size() != 0) || // missing operator
+		(token2.size() > 1) // malformatted operator
+	)
+		cannotParse = true;
+	
+	if (cannotParse){
+		fprintf(stderr, "Could not parse filter. Terminating.\n");
+		exit(EXIT_FAILURE);
+	}
+	
+	std::string lFilter, qFilter;
+	if (token2.size())
+		logicalOperator = token2[0];
+	
+	if (token1[0] == 'l') {
+		lFilter = token1;
+		lSign = lFilter[1];
+		l = stoi(lFilter.substr(2));
+	} else if (token1[0] == 'q') {
+		qFilter = token1;
+		qSign = qFilter[1];
+		q = stoi(qFilter.substr(2));
+	}
+	
+	if (token3.size() != 0) {
+		if (token3[0] == 'l') {
+			lFilter = token3;
+			lSign = lFilter[1];
+			l = stoi(lFilter.substr(2));
+		}else if (token3[0] == 'q') {
+			qFilter = token3;
+			qSign = qFilter[1];
+			q = stoi(qFilter.substr(2));
+		}
+	}
 }
 
 void InReads::filterRecords() {
@@ -540,26 +535,26 @@ inline bool InReads::filterRead(Sequence2* sequence) {
 }
 
 inline bool InReads::applyFilter(uint64_t size, float avgQuality) {
-    
-    bool lFilter = ((lSign == '0') ||
-                    ((lSign == '>') && (size > l)) ||
-                    ((lSign == '<') && (size < l)) ||
-                    ((lSign == '=') && (size == l))
-                    );
-    
-    bool qFilter = ((qSign == '0') ||
-                    ((qSign == '>') && (avgQuality > q)) ||
-                    ((qSign == '<') && (avgQuality < q)) ||
-                    ((qSign == '=') && (avgQuality == q))
-                    );
-    
-    if ((logicalOperator == '0' && (lSign != '0' && lFilter)) ||
-        (logicalOperator == '0' && (qSign != '0' && qFilter)) ||
-        (logicalOperator == '|' && (lFilter || qFilter)) ||
-        (logicalOperator == '&' && (lFilter && qFilter))
-       )
-        return false;
-    return true;
+	
+	bool lFilter = ((lSign == '0') ||
+					((lSign == '>') && (size > l)) ||
+					((lSign == '<') && (size < l)) ||
+					((lSign == '=') && (size == l))
+					);
+	
+	bool qFilter = ((qSign == '0') ||
+					((qSign == '>') && (avgQuality > q)) ||
+					((qSign == '<') && (avgQuality < q)) ||
+					((qSign == '=') && (avgQuality == q))
+					);
+	
+	if ((logicalOperator == '0' && (lSign != '0' && lFilter)) ||
+		(logicalOperator == '0' && (qSign != '0' && qFilter)) ||
+		(logicalOperator == '|' && (lFilter || qFilter)) ||
+		(logicalOperator == '&' && (lFilter && qFilter))
+	   )
+		return false;
+	return true;
 }
 
 bool InReads::traverseInReads(Sequences2& readBatchIn) {
@@ -814,164 +809,164 @@ uint64_t InReads::getTotReadLen() {
 		for (uint64_t i = 0; i < readCount; ++i)
 			sum += readLens[i].first;
 	}
-    return sum;
+	return sum;
 }
 
 double InReads::computeGCcontent() {
 
-    uint64_t totReadLen = totA + totC + totG + totT;
-    double GCcontent = (double) (totG+totC)/totReadLen * 100;
-    
-    return GCcontent;
+	uint64_t totReadLen = totA + totC + totG + totT;
+	double GCcontent = (double) (totG+totC)/totReadLen * 100;
+	
+	return GCcontent;
 }
 
 double InReads::computeAvgReadLen() {
-    return (double) getTotReadLen()/totReads;
+	return (double) getTotReadLen()/totReads;
 }
 
 uint64_t InReads::getReadN50() {
-    return readNstars[4];
+	return readNstars[4];
 }
 
 void InReads::evalNstars() { // clean up once len-vector iterator is available, still expensive
 
-    uint64_t sum = 0, totLen = getTotReadLen();
-    uint8_t N = 1;
-    for(unsigned int i = 0; i < readLens.size(); ++i) { // for each length
-        sum += readLens[i].first; // increase sum
-        while (sum >= ((double) totLen / 10 * N) && N<= 10) { // conditionally add length.at or pos to each N/L* bin
-            
-            readNstars[N-1] = readLens[i].first;
-            readLstars[N-1] = i + 1;
-            N += 1;
-        }
-    }
+	uint64_t sum = 0, totLen = getTotReadLen();
+	uint8_t N = 1;
+	for(unsigned int i = 0; i < readLens.size(); ++i) { // for each length
+		sum += readLens[i].first; // increase sum
+		while (sum >= ((double) totLen / 10 * N) && N<= 10) { // conditionally add length.at or pos to each N/L* bin
+			
+			readNstars[N-1] = readLens[i].first;
+			readLstars[N-1] = i + 1;
+			N += 1;
+		}
+	}
 }
 
 uint64_t InReads::getSmallestRead() {
-    return readLens.back();
+	return readLens.back();
 }
 
 uint64_t InReads::getLargestRead() {
-    return readLens.front();
+	return readLens.front();
 }
 
 double InReads::getAvgQuality(){
 
-    double sumQualities = 0, avgQualitiesSize=readLens.size();
+	double sumQualities = 0, avgQualitiesSize=readLens.size();
 
-    for (uint64_t i = 0; i < avgQualitiesSize; ++i)
-        sumQualities += readLens[i].first * pow(10, -readLens[i].second/10);  // sum the qualities normalized by their read length
+	for (uint64_t i = 0; i < avgQualitiesSize; ++i)
+		sumQualities += readLens[i].first * pow(10, -readLens[i].second/10);  // sum the qualities normalized by their read length
 
-    return -10 * std::log10(sumQualities/getTotReadLen());
+	return -10 * std::log10(sumQualities/getTotReadLen());
 }
 
 void InReads::report() {
 
-    if (totReads > 0) {
+	if (totReads > 0) {
 		
 		if (userInput.filter != "none" && getFileExt(userInput.file('r', 0)) == "rd")
 			filterRecords();
-        
-        readLens.sort();
-        
-        std::cout << std::fixed; // disables scientific notation
-        std::cout << std::setprecision(2); // 2 decimal points
-        
-        if (!tabular_flag)
-            std::cout<<output("+++Read summary+++")<<"\n";
-        std::cout<<output("# reads")<<+totReads<<std::endl;
-        std::cout<<output("Total read length")<<getTotReadLen()<<std::endl;
-        std::cout<<output("Average read length") << gfa_round(computeAvgReadLen())<<std::endl;
-        evalNstars(); // read N* statistics
-        std::cout<<output("Read N50")<<getReadN50()<<std::endl;
-        std::cout<<output("Smallest read length")<<getSmallestRead()<<std::endl;
-        std::cout<<output("Largest read length")<<getLargestRead()<<std::endl;
-        std::cout<<output("Coverage")<<gfa_round((double)getTotReadLen()/userInput.gSize)<<std::endl;
-        std::cout<<output("GC content %")<<gfa_round(computeGCcontent())<<std::endl;
-        std::cout<<output("Base composition (A:C:T:G)")<<totA<<":"<<totC<<":"<<totT<<":"<<totG<<std::endl;
-        std::cout<<output("Average per base quality")<<std::abs(getAvgQuality())<<std::endl;
+		
+		readLens.sort();
+		
+		std::cout << std::fixed; // disables scientific notation
+		std::cout << std::setprecision(2); // 2 decimal points
+		
+		if (!tabular_flag)
+			std::cout<<output("+++Read summary+++")<<"\n";
+		std::cout<<output("# reads")<<+totReads<<std::endl;
+		std::cout<<output("Total read length")<<getTotReadLen()<<std::endl;
+		std::cout<<output("Average read length") << gfa_round(computeAvgReadLen())<<std::endl;
+		evalNstars(); // read N* statistics
+		std::cout<<output("Read N50")<<getReadN50()<<std::endl;
+		std::cout<<output("Smallest read length")<<getSmallestRead()<<std::endl;
+		std::cout<<output("Largest read length")<<getLargestRead()<<std::endl;
+		std::cout<<output("Coverage")<<gfa_round((double)getTotReadLen()/userInput.gSize)<<std::endl;
+		std::cout<<output("GC content %")<<gfa_round(computeGCcontent())<<std::endl;
+		std::cout<<output("Base composition (A:C:T:G)")<<totA<<":"<<totC<<":"<<totT<<":"<<totG<<std::endl;
+		std::cout<<output("Average per base quality")<<std::abs(getAvgQuality())<<std::endl;
 		
 		if (userInput.inputCifi) {
 			if (!tabular_flag)
 				std::cout<<output("+++CiFi summary+++")<<"\n";
 			std::cout<<output("# read fragments")<<+cifiReadN<<std::endl;
 		}
-    }
+	}
 }
 
 void InReads::printReadLengths() {
-    
-    std::cout << std::fixed; // disables scientific notation
-    std::cout << std::setprecision(2); // 2 decimal points
-    
-    uint64_t readCount = readLens.size();
-    bool noFilter = userInput.filter == "none" ? true : false;
-    if(userInput.sizeOutType == 's')
-        readLens.sort();
-    
-    if (userInput.sizeOutType == 'u' || userInput.sizeOutType == 's') {
-        
-        for (uint64_t i = 0; i < readCount; ++i) {
-            if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
-                std::cout << readLens[i].first << "\n";
-        }
-        
-    }else if(userInput.sizeOutType == 'h') {
-        
-        phmap::parallel_flat_hash_map<uint64_t, uint64_t> hist;
-        
-        for (uint64_t i = 0; i < readCount; ++i) {
-            if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
-                ++hist[readLens[i].first];
-        }
-        std::vector<std::pair<uint64_t, uint64_t>> table(hist.begin(), hist.end()); // converts the hashmap to a table
-        std::sort(table.begin(), table.end());
-        
-        for (auto pair : table)
-            std::cout<<pair.first<<"\t"<<pair.second<<"\n";
-        
-    }else if(userInput.sizeOutType == 'c') {
+	
+	std::cout << std::fixed; // disables scientific notation
+	std::cout << std::setprecision(2); // 2 decimal points
+	
+	uint64_t readCount = readLens.size();
+	bool noFilter = userInput.filter == "none" ? true : false;
+	if(userInput.sizeOutType == 's')
+		readLens.sort();
+	
+	if (userInput.sizeOutType == 'u' || userInput.sizeOutType == 's') {
+		
+		for (uint64_t i = 0; i < readCount; ++i) {
+			if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
+				std::cout << readLens[i].first << "\n";
+		}
+		
+	}else if(userInput.sizeOutType == 'h') {
+		
+		phmap::parallel_flat_hash_map<uint64_t, uint64_t> hist;
+		
+		for (uint64_t i = 0; i < readCount; ++i) {
+			if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
+				++hist[readLens[i].first];
+		}
+		std::vector<std::pair<uint64_t, uint64_t>> table(hist.begin(), hist.end()); // converts the hashmap to a table
+		std::sort(table.begin(), table.end());
+		
+		for (auto pair : table)
+			std::cout<<pair.first<<"\t"<<pair.second<<"\n";
+		
+	}else if(userInput.sizeOutType == 'c') {
 
-        phmap::parallel_flat_hash_map<uint64_t, uint64_t> hist;
-        
-        for (uint64_t i = 0; i < readCount; ++i) {
-            if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
-                ++hist[readLens[i].first];
-        }
-        std::vector<std::pair<uint64_t, uint64_t>> table(hist.begin(), hist.end());
-        std::sort(table.begin(), table.end());
-        uint64_t totReadLen = getTotReadLen(), sum = 0;
-        
-        for (auto pair : table) {
-            std::cout<<+pair.first<<"\t"<<+pair.second<<"\t"<<+pair.first*pair.second<<"\t"<<+(totReadLen - sum)<<"\n";
-            sum += pair.first*pair.second;
-        }
-    }
+		phmap::parallel_flat_hash_map<uint64_t, uint64_t> hist;
+		
+		for (uint64_t i = 0; i < readCount; ++i) {
+			if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
+				++hist[readLens[i].first];
+		}
+		std::vector<std::pair<uint64_t, uint64_t>> table(hist.begin(), hist.end());
+		std::sort(table.begin(), table.end());
+		uint64_t totReadLen = getTotReadLen(), sum = 0;
+		
+		for (auto pair : table) {
+			std::cout<<+pair.first<<"\t"<<+pair.second<<"\t"<<+pair.first*pair.second<<"\t"<<+(totReadLen - sum)<<"\n";
+			sum += pair.first*pair.second;
+		}
+	}
 }
 
 void InReads::printQualities() {
-    
-    std::cout << std::fixed; // disables scientific notation
-    std::cout << std::setprecision(2); // 2 decimal points
-    
-    uint64_t readCount = readLens.size();
-    
-    bool noFilter = userInput.filter == "none" ? true : false;
-    char qualityOut = userInput.qualityOut;
+	
+	std::cout << std::fixed; // disables scientific notation
+	std::cout << std::setprecision(2); // 2 decimal points
+	
+	uint64_t readCount = readLens.size();
+	
+	bool noFilter = userInput.filter == "none" ? true : false;
+	char qualityOut = userInput.qualityOut;
 
-    if (qualityOut == 'q'){
-        for (uint64_t i = 0; i < readCount; ++i) {
-            if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
-                std::cout << readLens[i].second << "\n";
-        }
-    }
-    else if (qualityOut == 'a') { // a prints read lengths and qualities
-        for (uint64_t i = 0; i < readCount; ++i) {
-            if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
-                std::cout << readLens[i].first << "," << readLens[i].second << "\n";
-        }
-    }
+	if (qualityOut == 'q'){
+		for (uint64_t i = 0; i < readCount; ++i) {
+			if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
+				std::cout << readLens[i].second << "\n";
+		}
+	}
+	else if (qualityOut == 'a') { // a prints read lengths and qualities
+		for (uint64_t i = 0; i < readCount; ++i) {
+			if (noFilter || !applyFilter(readLens[i].first, readLens[i].second))
+				std::cout << readLens[i].first << "," << readLens[i].second << "\n";
+		}
+	}
 }
 
 void InReads::printContent() {
@@ -1020,61 +1015,61 @@ void InReads::printContent() {
 }
 
 void dump_read(bam1_t* b) {
-    printf("->core.tid:(%d)\n", b->core.tid);
-    printf("->core.pos:(%ld)\n", static_cast<unsigned long>(b->core.pos));
-    printf("->core.bin:(%d)\n", b->core.bin);
-    printf("->core.qual:(%d)\n", b->core.qual);
-    printf("->core.l_qname:(%d)\n", b->core.l_qname);
-    printf("->core.flag:(%d)\n", b->core.flag);
-    printf("->core.n_cigar:(%d)\n", b->core.n_cigar);
-    printf("->core.l_qseq:(%d)\n", b->core.l_qseq);
-    printf("->core.mtid:(%d)\n", b->core.mtid);
-    printf("->core.mpos:(%ld)\n", static_cast<unsigned long>(b->core.mpos));
-    printf("->core.isize:(%ld)\n", static_cast<unsigned long>(b->core.isize));
-    if (b->data) {
-        printf("->data:");
-        int i;
-        for (i = 0; i < b->l_data; ++i) {
-            printf("%x ", b->data[i]);
-        }
-        printf("\n");
-    }
-    if (b->core.l_qname) {
-        printf("qname: %s\n",bam_get_qname(b));
-    }
-    if (b->core.l_qseq) {
-        printf("qseq:");
-        int i;
-        for (i = 0; i < b->core.l_qseq; ++i) {
-            printf("%c", seq_nt16_str[bam_seqi(bam_get_seq(b),i)]);
-        }
-        printf("\n");
-        printf("qual:");
-        uint8_t *s = bam_get_qual(b);
-        for (i = 0; i < b->core.l_qseq; ++i) {
-            printf("%c",s[i] + 33);
-        }
-        printf("\n");
+	printf("->core.tid:(%d)\n", b->core.tid);
+	printf("->core.pos:(%ld)\n", static_cast<unsigned long>(b->core.pos));
+	printf("->core.bin:(%d)\n", b->core.bin);
+	printf("->core.qual:(%d)\n", b->core.qual);
+	printf("->core.l_qname:(%d)\n", b->core.l_qname);
+	printf("->core.flag:(%d)\n", b->core.flag);
+	printf("->core.n_cigar:(%d)\n", b->core.n_cigar);
+	printf("->core.l_qseq:(%d)\n", b->core.l_qseq);
+	printf("->core.mtid:(%d)\n", b->core.mtid);
+	printf("->core.mpos:(%ld)\n", static_cast<unsigned long>(b->core.mpos));
+	printf("->core.isize:(%ld)\n", static_cast<unsigned long>(b->core.isize));
+	if (b->data) {
+		printf("->data:");
+		int i;
+		for (i = 0; i < b->l_data; ++i) {
+			printf("%x ", b->data[i]);
+		}
+		printf("\n");
+	}
+	if (b->core.l_qname) {
+		printf("qname: %s\n",bam_get_qname(b));
+	}
+	if (b->core.l_qseq) {
+		printf("qseq:");
+		int i;
+		for (i = 0; i < b->core.l_qseq; ++i) {
+			printf("%c", seq_nt16_str[bam_seqi(bam_get_seq(b),i)]);
+		}
+		printf("\n");
+		printf("qual:");
+		uint8_t *s = bam_get_qual(b);
+		for (i = 0; i < b->core.l_qseq; ++i) {
+			printf("%c",s[i] + 33);
+		}
+		printf("\n");
 
-    }
+	}
 
-    if (bam_get_l_aux(b)) {
-        uint32_t i = 0;
-        uint8_t* aux = bam_get_aux(b);
+	if (bam_get_l_aux(b)) {
+		uint32_t i = 0;
+		uint8_t* aux = bam_get_aux(b);
 
-        while (i < bam_get_l_aux(b)) {
-            printf("%.2s:%c:",aux+i,*(aux+i+2));
-            i += 2;
-            switch (*(aux+i)) {
-                case 'Z':
-                    while (*(aux+1+i) != '\0') { putc(*(aux+1+i), stdout); ++i; }
-                    break;
-            }
-            putc('\n',stdout);
-            ++i;++i;
-        }
-    }
-    printf("\n");
+		while (i < bam_get_l_aux(b)) {
+			printf("%.2s:%c:",aux+i,*(aux+i+2));
+			i += 2;
+			switch (*(aux+i)) {
+				case 'Z':
+					while (*(aux+1+i) != '\0') { putc(*(aux+1+i), stdout); ++i; }
+					break;
+			}
+			putc('\n',stdout);
+			++i;++i;
+		}
+	}
+	printf("\n");
 }
 
 void InReads::initStream() {
@@ -1668,6 +1663,6 @@ void InReads::readTableCompressed(std::string inFile) {
 
 
 void InReads::printMd5() {
-    for (auto md5 : md5s)
-        std::cout<<md5.first<<": "<<md5.second<<std::endl;
+	for (auto md5 : md5s)
+		std::cout<<md5.first<<": "<<md5.second<<std::endl;
 }

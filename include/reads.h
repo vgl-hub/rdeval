@@ -202,7 +202,7 @@ private:
 	size_t outBuffersN = 0;
 
 	// Input queues
-	BlockingQueue<std::unique_ptr<Sequences2>> free_pool_in;
+	ElasticBlockingPool<Sequences2> free_pool_in;
 	BlockingQueue<std::unique_ptr<Sequences2>> filled_q_in;
 
 	// Output queues (BAM batches)
