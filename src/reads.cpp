@@ -1196,44 +1196,77 @@ void InReads::openOutputForFile(size_t outId) {
 	int fmt_case = string_to_case.count(ext) ? string_to_case.at(ext) : 0;
 
 	htsFile* ofp = nullptr;
+	
+	auto strip_bgzf_from_mode = [](char* mode) {
+		// Remove 'z' and an optional following digit [0-9]
+		// Example: "wfz6" -> "wf", "wFz" -> "wF"
+		const size_t n = std::strlen(mode);
+		size_t w = 0;
+		for (size_t r = 0; r < n; ++r) {
+			if (mode[r] == 'z') {
+				// skip 'z'
+				// if next is a digit, skip it too
+				if (r + 1 < n && mode[r + 1] >= '0' && mode[r + 1] <= '9') {
+					++r;
+				}
+				continue;
+			}
+			mode[w++] = mode[r];
+		}
+		mode[w] = '\0';
+	};
 
 	switch (fmt_case) {
+
 		case 1:   // fasta[.gz]
 		case 2: { // fastq[.gz]
-			char mode[8] = "w";
 
-			// This sets the FORMAT (FASTA/FASTQ) in mode[1], e.g. "wF" or "wf"
+			char mode[16] = "w";
+
+			// Let htslib decide format (FASTA vs FASTQ), and it may also add compression flags based on suffix
+			// e.g. for ".gz" it often injects 'z' (BGZF) into mode.
 			if (sam_open_mode(mode + 1, outName.c_str(), NULL) < 0) {
 				printf("Invalid file name\n");
 				exit(EXIT_FAILURE);
 			}
 
-			// If --bgzip[=level] was requested, APPEND 'z' + optional digit
 			if (userInput.bgzip_level >= 0) {
+				// BGZF requested: keep/ensure 'z' and optionally set level digit
 				int lvl = userInput.bgzip_level;
 
-				// "optional level": if flag given without level, you said "use minimum"
-				// pick 1 as "minimum compression" (fastest that still compresses)
-				if (lvl == 0) {
-					// If you want "minimum" to mean 0 instead, delete this block.
-					lvl = 1;
-				}
+				// “optional level”: if flag present but no explicit level, you said "use minimum"
+				// implement that as level 1 (change to 0 if you truly want no compression)
+				if (lvl == 0) lvl = 1;
 
 				if (lvl < 0 || lvl > 9) {
 					fprintf(stderr, "Invalid bgzip level %d (must be 0–9)\n", lvl);
 					exit(EXIT_FAILURE);
 				}
 
-				size_t mlen = std::strlen(mode);  // e.g. 2 ("wf")
-				mode[mlen++] = 'z';
-				mode[mlen++] = char('0' + lvl);
-				mode[mlen]   = '\0';              // now "wfz1" or "wFz1"
+				// Ensure mode has 'z' and a level digit.
+				// First strip any existing z/level then append fresh.
+				strip_bgzf_from_mode(mode);
+
+				const size_t mlen = std::strlen(mode);
+				mode[mlen + 0] = 'z';
+				mode[mlen + 1] = char('0' + lvl);
+				mode[mlen + 2] = '\0';
+
+			} else {
+				// BGZF NOT requested: force plain gzip if ".gz"
+				// Remove any bgzf injected by sam_open_mode, then add 'g'
+				strip_bgzf_from_mode(mode);
+
+				const size_t mlen = std::strlen(mode);
+				mode[mlen + 0] = 'g';
+				mode[mlen + 1] = '\0';
 			}
 
 			if (!(ofp = sam_open(outName.c_str(), mode))) {
 				printf("Could not open %s\n", outName.c_str());
 				exit(EXIT_FAILURE);
 			}
+
 			break;
 		}
 
