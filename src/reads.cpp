@@ -5,7 +5,9 @@
 #include <algorithm>
 #include <cmath>
 
+#include <htslib/hts.h>
 #include <htslib/sam.h>
+#include <htslib/kstring.h>
 #include <htslib/thread_pool.h>
 
 #include "log.h"
@@ -19,10 +21,6 @@
 #include "stream-obj.h"
 #include <iomanip>
 
-#include "zlib.h"
-#include "zstream/zstream_common.hpp"
-#include "zstream/ozstream.hpp"
-#include "zstream/ozstream_impl.hpp"
 #include "output.h"
 #include "len-vector.h"
 
@@ -147,30 +145,230 @@ void InReads::load() {
 
 void InReads::extractInReads() {
 
-	std::string newLine, seqHeader, seqComment, line, bedHeader;
-	std::string seqBuf, qualBuf, plusBuf, qnameBuf;   // reusable buffers
-	std::size_t numFiles = userInput.inFiles.size();
-	uint64_t processedLength = 0;
-	bool sample = userInput.ratio < 1;
+	const std::size_t numFiles = userInput.inFiles.size();
+	const bool sample = userInput.ratio < 1;
 
-	const static phmap::flat_hash_map<std::string,int> string_to_case{
-		{"fasta",1}, {"fa",1}, {"fasta.gz",1}, {"fa.gz",1},
-		{"fastq",1}, {"fq",1}, {"fastq.gz",1}, {"fq.gz",1},
-		{"bam",2}, {"cram",2},
-		{"rd",3}
+	// Reusable buffers (per worker thread invocation of extractInReads)
+	std::string name, comment, seqBuf, qualBuf, qnameBuf;
+
+	auto split_header = [](const char* s, std::string& header, std::string& comm) {
+		const char* sp = std::strchr(s, ' ');
+		if (!sp) { header.assign(s); comm.clear(); }
+		else { header.assign(s, sp - s); comm.assign(sp + 1); }
+	};
+
+	auto push_batch = [&](std::unique_ptr<Sequences2>& readBatch, uint32_t& batchN, uint32_t fileN) {
+		readBatch->batchN = batchN++;
+		readBatch->fileN  = fileN;
+		lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
+		filled_q_in.push(std::move(readBatch));
+		readBatch = free_pool_in.pop();
+	};
+
+	auto enable_threads = [&](htsFile* fp) {
+		if (fp && userInput.decompression_threads > 1) {
+			// works for BGZF; harmless if unsupported for this handle
+			(void)hts_set_threads(fp, userInput.decompression_threads);
+		}
+	};
+
+	auto read_fa_fq = [&](const std::string& file,
+						  std::unique_ptr<Sequences2>& readBatch,
+						  uint32_t& batchN,
+						  uint32_t fileN) {
+
+		htsFile* fp = hts_open(file.c_str(), "r");
+		if (!fp) {
+			fprintf(stderr, "Failed to open input (%s)\n", file.c_str());
+			exit(EXIT_FAILURE);
+		}
+		enable_threads(fp);
+
+		kstring_t ks = {0, 0, nullptr};
+
+		// Decide FASTA vs FASTQ from first non-empty line
+		int ret = hts_getline(fp, '\n', &ks);
+		while (ret >= 0 && ks.l == 0) ret = hts_getline(fp, '\n', &ks);
+
+		if (ret < 0) { // empty file: keep your “residual even if empty” behavior outside
+			if (ks.s) free(ks.s);
+			hts_close(fp);
+			return;
+		}
+
+		uint64_t processedLength = 0;
+
+		auto flush_if_needed = [&](size_t add) {
+			processedLength += add;
+			if (processedLength > batchSize) {
+				push_batch(readBatch, batchN, fileN);
+				processedLength = 0;
+			}
+		};
+
+		if (ks.s[0] == '>') {
+			// FASTA: header line starts with '>', sequence may be wrapped.
+			std::string pendingHeader(ks.s + 1);
+
+			while (true) {
+				split_header(pendingHeader.c_str(), name, comment);
+
+				seqBuf.clear();
+				while (true) {
+					ret = hts_getline(fp, '\n', &ks);
+					if (ret < 0) { pendingHeader.clear(); break; }         // EOF ends record
+					if (ks.l > 0 && ks.s[0] == '>') {                      // next record
+						pendingHeader.assign(ks.s + 1);
+						break;
+					}
+					seqBuf.append(ks.s, ks.l);                             // append wrapped lines
+				}
+
+				if (!(sample && newRand() > userInput.ratio)) {
+					Sequence2& rec = readBatch->next_slot();
+					rec.set(std::move(name),
+							std::move(comment),
+							std::move(seqBuf),
+							std::string{}, // no qualities
+							seqPos++);
+					flush_if_needed(rec.sequence.size());
+				}
+
+				if (pendingHeader.empty()) break;
+			}
+
+		} else if (ks.s[0] == '@') {
+			// FASTQ: 4-line records (as in your original; assumes seq/qual are single-line)
+			while (true) {
+				if (ks.l == 0 || ks.s[0] != '@') {
+					fprintf(stderr, "FASTQ malformed (expected '@') in %s\n", file.c_str());
+					exit(EXIT_FAILURE);
+				}
+
+				split_header(ks.s + 1, name, comment);
+
+				if (hts_getline(fp, '\n', &ks) < 0) { // seq
+					fprintf(stderr, "Record appears truncated (%s). Exiting.\n", name.c_str());
+					exit(EXIT_FAILURE);
+				}
+				seqBuf.assign(ks.s, ks.l);
+
+				if (hts_getline(fp, '\n', &ks) < 0) { // plus
+					fprintf(stderr, "Record appears truncated (%s). Exiting.\n", name.c_str());
+					exit(EXIT_FAILURE);
+				}
+
+				if (hts_getline(fp, '\n', &ks) < 0) { // qual
+					fprintf(stderr, "Record appears truncated (%s). Exiting.\n", name.c_str());
+					exit(EXIT_FAILURE);
+				}
+				qualBuf.assign(ks.s, ks.l);
+
+				if (!(sample && newRand() > userInput.ratio)) {
+					Sequence2& rec = readBatch->next_slot();
+					rec.set(std::move(name),
+							std::move(comment),
+							std::move(seqBuf),
+							std::move(qualBuf),
+							seqPos++);
+					flush_if_needed(rec.sequence.size());
+				}
+
+				ret = hts_getline(fp, '\n', &ks); // next header
+				while (ret >= 0 && ks.l == 0) ret = hts_getline(fp, '\n', &ks);
+				if (ret < 0) break;
+			}
+
+		} else {
+			fprintf(stderr, "Cannot recognize text input (%s). Expected '>' (FASTA) or '@' (FASTQ).\n", file.c_str());
+			exit(EXIT_FAILURE);
+		}
+
+		if (ks.s) free(ks.s);
+		hts_close(fp);
+	};
+
+	auto read_bam_cram = [&](const std::string& file,
+							 std::unique_ptr<Sequences2>& readBatch,
+							 uint32_t& batchN,
+							 uint32_t fileN) {
+
+		samFile* fp = hts_open(file.c_str(), "r");
+		if (!fp) {
+			fprintf(stderr, "Failed to open BAM/CRAM (%s)\n", file.c_str());
+			exit(EXIT_FAILURE);
+		}
+		enable_threads(fp);
+
+		bam_hdr_t* hdr = sam_hdr_read(fp);
+		if (!hdr) {
+			fprintf(stderr, "Failed to read BAM/CRAM header (%s)\n", file.c_str());
+			exit(EXIT_FAILURE);
+		}
+
+		bam1_t* b = bam_init1();
+		if (!b) {
+			fprintf(stderr, "Failed to allocate bam1_t\n");
+			exit(EXIT_FAILURE);
+		}
+
+		uint64_t processedLength = 0;
+
+		while (sam_read1(fp, hdr, b) > 0) {
+
+			if (sample && newRand() > userInput.ratio)
+				continue;
+
+			const uint32_t len = b->core.l_qseq;
+
+			qnameBuf.assign(bam_get_qname(b));
+
+			seqBuf.resize(len);
+			char* out = len ? &seqBuf[0] : nullptr;
+			uint8_t* bseq = bam_get_seq(b);
+			for (uint32_t k = 0; k < len; ++k)
+				out[k] = seq_nt16_str[bam_seqi(bseq, k)];
+
+			qualBuf.resize(len);
+			char* qout = len ? &qualBuf[0] : nullptr;
+			uint8_t* bq = bam_get_qual(b);
+			if (bq && len > 0 && bq[0] != 0xFF) {
+				for (uint32_t k = 0; k < len; ++k)
+					qout[k] = static_cast<char>(bq[k] + 33);
+			} else if (len) {
+				std::memset(qout, '!', len);
+			}
+
+			processedLength += len;
+
+			Sequence2& rec = readBatch->next_slot();
+			rec.set(std::move(qnameBuf),
+					std::string{},  // comment not stored in BAM path
+					std::move(seqBuf),
+					std::move(qualBuf),
+					seqPos++);
+
+			if (processedLength > batchSize) {
+				push_batch(readBatch, batchN, fileN);
+				processedLength = 0;
+			}
+		}
+
+		bam_destroy1(b);
+		bam_hdr_destroy(hdr);
+		hts_close(fp);
 	};
 
 	while (true) {
 
 		uint32_t i = fileCounterStarted.fetch_add(1, std::memory_order_relaxed);
-		if (i >= numFiles)
-			break;
+		if (i >= numFiles) break;
 
 		std::unique_ptr<Sequences2> readBatch = free_pool_in.pop();
 		uint32_t batchN = 0;
 
-		std::string file = userInput.file('r', i);
-		std::string ext  = getFileExt(file);
+		const std::string file = userInput.file('r', i);
+		const std::string ext  = getFileExt(file);
 
 		if (ext != "rd") {
 			threadPool.queueJob([this, i, file]() {
@@ -182,233 +380,24 @@ void InReads::extractInReads() {
 			});
 		}
 
-		switch (string_to_case.count(ext) ? string_to_case.at(ext) : 0) {
-
-			case 1: { // fa*[.gz] or fq*[.gz]
-				StreamObj streamObj;
-				std::shared_ptr<std::istream> stream = streamObj.openStream(userInput, 'r', i);
-
-				if (stream) {
-					switch (stream->peek()) {
-
-						case '>': { // FASTA
-							stream->get(); // consume '>'
-
-							while (getline(*stream, newLine)) {
-
-								const size_t spacePos = newLine.find(' ');
-								if (spacePos == std::string::npos) {
-									seqHeader  = newLine;
-									seqComment.clear();
-								} else {
-									seqHeader.assign(newLine, 0, spacePos);
-									seqComment.assign(newLine, spacePos + 1, std::string::npos);
-								}
-
-								// Read sequence until next '>'
-								seqBuf.clear();
-								if (!getline(*stream, seqBuf, '>')) {
-									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
-									exit(EXIT_FAILURE);
-								}
-
-								// Subsample BEFORE doing anything else
-								if (sample && newRand() > userInput.ratio)
-									continue;
-
-								processedLength += seqBuf.size();
-
-								// Store into a reused slot (Sequence2 stores strings by value)
-								{
-									Sequence2& rec = readBatch->next_slot();
-									rec.set(std::move(seqHeader),
-											std::move(seqComment),
-											std::move(seqBuf),
-											std::string{}, // no qualities for fasta
-											seqPos++);
-								}
-
-								if (processedLength > batchSize) {
-									readBatch->batchN = batchN++;
-									readBatch->fileN  = i;
-									lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-									filled_q_in.push(std::move(readBatch));
-
-									readBatch = free_pool_in.pop();
-									processedLength = 0;
-								}
-							}
-							break;
-						}
-
-						case '@': { // FASTQ
-							while (getline(*stream, newLine)) {
-
-								// header line starts with '@'
-								if (!newLine.empty() && newLine[0] == '@')
-									newLine.erase(0, 1);
-
-								const size_t spacePos = newLine.find(' ');
-								if (spacePos == std::string::npos) {
-									seqHeader  = newLine;
-									seqComment.clear();
-								} else {
-									seqHeader.assign(newLine, 0, spacePos);
-									seqComment.assign(newLine, spacePos + 1, std::string::npos);
-								}
-
-								seqBuf.clear();
-								plusBuf.clear();
-								qualBuf.clear();
-
-								if (!getline(*stream, seqBuf)) {
-									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
-									exit(EXIT_FAILURE);
-								}
-								if (!getline(*stream, plusBuf)) {
-									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
-									exit(EXIT_FAILURE);
-								}
-								if (!getline(*stream, qualBuf)) {
-									fprintf(stderr, "Record appears truncated (%s). Exiting.\n", seqHeader.c_str());
-									exit(EXIT_FAILURE);
-								}
-
-								// Subsample early
-								if (sample && newRand() > userInput.ratio)
-									continue;
-
-								processedLength += seqBuf.size();
-
-								{
-									Sequence2& rec = readBatch->next_slot();
-									rec.set(std::move(seqHeader),
-											std::move(seqComment),
-											std::move(seqBuf),
-											std::move(qualBuf),
-											seqPos++);
-								}
-
-								if (processedLength > batchSize) {
-									readBatch->batchN = batchN++;
-									readBatch->fileN  = i;
-									lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-									filled_q_in.push(std::move(readBatch));
-
-									readBatch = free_pool_in.pop();
-									processedLength = 0;
-								}
-							}
-							break;
-						}
-					}
-
-					// process residual reads (even if empty; keep your existing behavior)
-					readBatch->batchN = batchN++;
-					readBatch->fileN  = i;
-					lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-					filled_q_in.push(std::move(readBatch));
-
-					processedLength = 0;
-				}
-				break;
-			}
-
-			case 2: { // bam, cram
-				samFile*  fp_in  = hts_open(file.c_str(), "r");
-				bam_hdr_t* bamHdr = sam_hdr_read(fp_in);
-				bam1_t*    bamdata = bam_init1();
-
-				htsThreadPool tpool_read = {NULL, 0};
-				tpool_read.pool = hts_tpool_init(userInput.decompression_threads);
-				if (tpool_read.pool)
-					hts_set_opt(fp_in, HTS_OPT_THREAD_POOL, &tpool_read);
-				else
-					lg.verbose("Failed to generate decompression threadpool with " +
-							   std::to_string(userInput.decompression_threads) +
-							   " threads. Continuing single-threaded");
-
-				while (sam_read1(fp_in, bamHdr, bamdata) > 0) {
-
-					// Subsample BEFORE decoding
-					if (sample && newRand() > userInput.ratio)
-						continue;
-
-					const uint32_t len = bamdata->core.l_qseq;
-
-					// qname (reuse capacity)
-					qnameBuf.assign(bam_get_qname(bamdata));
-
-					// decode sequence (reuse capacity)
-					seqBuf.resize(len);
-					char* out = len ? &seqBuf[0] : nullptr;
-					uint8_t* bseq = bam_get_seq(bamdata);
-					for (uint32_t k = 0; k < len; ++k)
-						out[k] = seq_nt16_str[bam_seqi(bseq, k)];
-
-					// decode/synthesize qualities (reuse capacity)
-					qualBuf.resize(len);
-					char* qout = len ? &qualBuf[0] : nullptr;
-					uint8_t* bq = bam_get_qual(bamdata);
-					if (bq && len > 0 && bq[0] != 0xFF) {
-						for (uint32_t k = 0; k < len; ++k)
-							qout[k] = static_cast<char>(bq[k] + 33);
-					} else {
-						std::memset(qout, '!', len);
-					}
-
-					processedLength += len;
-
-					{
-						Sequence2& rec = readBatch->next_slot();
-						rec.set(std::move(qnameBuf),
-								std::string{},          // no comment for bam
-								std::move(seqBuf),
-								std::move(qualBuf),
-								seqPos++);
-					}
-
-					if (processedLength > batchSize) {
-						readBatch->batchN = batchN++;
-						readBatch->fileN  = i;
-						lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-						filled_q_in.push(std::move(readBatch));
-
-						readBatch = free_pool_in.pop();
-						processedLength = 0;
-					}
-				}
-
-				// residual
-				readBatch->batchN = batchN++;
-				readBatch->fileN  = i;
-				lg.verbose("Processing batch N: " + std::to_string(readBatch->batchN));
-				filled_q_in.push(std::move(readBatch));
-
-				processedLength = 0;
-
-				bam_destroy1(bamdata);
-				sam_close(fp_in);
-				if (tpool_read.pool)
-					hts_tpool_destroy(tpool_read.pool);
-
-				break;
-			}
-
-			case 3: { // rd
-				readTableCompressed(userInput.inFiles[i]);
-				break;
-			}
-
-			default: {
-				fprintf(stderr, "cannot recognize input (%s). Must be: fasta, fastq, bam, cram.\n", file.c_str());
-				exit(EXIT_FAILURE);
-			}
+		if (ext == "rd") {
+			readTableCompressed(userInput.inFiles[i]);
+		} else if (ext == "bam" || ext == "cram") {
+			read_bam_cram(file, readBatch, batchN, i);
+			push_batch(readBatch, batchN, i); // residual (even if empty)
+		} else if (ext == "fasta" || ext == "fa" || ext == "fasta.gz" || ext == "fa.gz" ||
+				   ext == "fastq" || ext == "fq" || ext == "fastq.gz" || ext == "fq.gz") {
+			read_fa_fq(file, readBatch, batchN, i);
+			push_batch(readBatch, batchN, i); // residual (even if empty)
+		} else {
+			fprintf(stderr, "cannot recognize input (%s). Must be: fasta/fastq (optionally .gz), bam, cram, rd.\n",
+					file.c_str());
+			exit(EXIT_FAILURE);
 		}
 
 		if (fileCounterCompleted.fetch_add(1, std::memory_order_relaxed) + 1 == numFiles) {
 			for (size_t k = 0; k < consumersN; ++k)
-				filled_q_in.push(std::unique_ptr<Sequences2>(nullptr)); // sentinels
+				filled_q_in.push(std::unique_ptr<Sequences2>(nullptr));
 		}
 	}
 }
