@@ -402,11 +402,35 @@ void InReads::extractInReads() {
 	}
 }
 
-float InReads::computeAvgQuality(const std::string &sequenceQuality) {
-    double sumQuality = 0;
-    for (const char &quality : sequenceQuality)
-        sumQuality += pow(10, -(double(quality) - 33)/10);
-    return (float) -10 * std::log10(sumQuality/sequenceQuality.size());
+static inline const float* phredProbLUT() {
+	// char is ASCII, but quality is (char-33) in [0..93] typically
+	static float lut[94];
+	static bool inited = false;
+	if (!inited) {
+		for (int q = 0; q < 94; ++q) {
+			// 10^(-q/10)
+			lut[q] = std::pow(10.0f, -float(q)/10.0f);
+		}
+		inited = true;
+	}
+	return lut;
+}
+
+static inline float avg_q_from_phred33_prob(const std::string& qstr) {
+	const float* lut = phredProbLUT();
+	double sum = 0.0;
+	for (unsigned char c : qstr) {
+		const int q = int(c) - 33;
+		if (q >= 0 && q < 94) sum += lut[q];
+		else sum += lut[0]; // defensive
+	}
+	const double mean = sum / double(qstr.size());
+	return (float)(-10.0 * std::log10(mean));
+}
+
+float computeAvgQuality(const std::string& sequenceQuality) {
+	if (sequenceQuality.empty()) return 0.0f;
+	return avg_q_from_phred33_prob(sequenceQuality);
 }
 
 void InReads::initDictionaries() {
@@ -1264,9 +1288,6 @@ void InReads::writeToStream() {
 		const uint64_t id     = batch->batchN;
 
 		if (fileId >= numStreams) {
-			// Defensive: bad file index, recycle (shouldn't happen)
-			for (bam1_t* rec : batch->reads)
-				bam_destroy1(rec);
 			batch->used = 0;
 			free_pool_out.push(std::move(batch));
 			continue;
