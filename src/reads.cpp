@@ -58,7 +58,7 @@ InReads::InReads(UserInputRdeval& ui)
 		}
 	}
 	
-	if (splitOutputByFile)
+	if (splitOutputByFile || userInput.bgzip_level >= 0)
 		streamOutput = true;
 
 	const size_t numFiles = userInput.inFiles.size();
