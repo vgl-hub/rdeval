@@ -213,23 +213,28 @@ void InReads::extractInReads() {
 			while (true) {
 				split_header(pendingHeader.c_str(), name, comment);
 
+				// Decide once per record whether we keep it
+				const bool keep = (!sample) || (newRand() <= userInput.ratio);
+
 				seqBuf.clear();
 				while (true) {
 					ret = hts_getline(fp, '\n', &ks);
-					if (ret < 0) { pendingHeader.clear(); break; }         // EOF ends record
-					if (ks.l > 0 && ks.s[0] == '>') {                      // next record
+					if (ret < 0) { pendingHeader.clear(); break; }          // EOF ends record
+					if (ks.l > 0 && ks.s[0] == '>') {                       // next record
 						pendingHeader.assign(ks.s + 1);
 						break;
 					}
-					seqBuf.append(ks.s, ks.l);                             // append wrapped lines
+
+					// Only build sequence if we keep this record
+					if (keep) seqBuf.append(ks.s, ks.l);
 				}
 
-				if (!(sample && newRand() > userInput.ratio)) {
+				if (keep) {
 					Sequence2& rec = readBatch->next_slot();
 					rec.set(std::move(name),
 							std::move(comment),
 							std::move(seqBuf),
-							std::string{}, // no qualities
+							std::string{}, // no qualities in FASTA
 							seqPos++);
 					flush_if_needed(rec.sequence.size());
 				}
@@ -238,7 +243,7 @@ void InReads::extractInReads() {
 			}
 
 		} else if (ks.s[0] == '@') {
-			// FASTQ: 4-line records (as in your original; assumes seq/qual are single-line)
+			// FASTQ: 4-line records (assumes seq/qual are single-line)
 			while (true) {
 				if (ks.l == 0 || ks.s[0] != '@') {
 					fprintf(stderr, "FASTQ malformed (expected '@') in %s\n", file.c_str());
@@ -247,24 +252,30 @@ void InReads::extractInReads() {
 
 				split_header(ks.s + 1, name, comment);
 
-				if (hts_getline(fp, '\n', &ks) < 0) { // seq
+				// Decide once per record whether we keep it
+				const bool keep = (!sample) || (newRand() <= userInput.ratio);
+
+				// seq line
+				if (hts_getline(fp, '\n', &ks) < 0) {
 					fprintf(stderr, "Record appears truncated (%s). Exiting.\n", name.c_str());
 					exit(EXIT_FAILURE);
 				}
-				seqBuf.assign(ks.s, ks.l);
+				if (keep) seqBuf.assign(ks.s, ks.l);
 
-				if (hts_getline(fp, '\n', &ks) < 0) { // plus
+				// plus line
+				if (hts_getline(fp, '\n', &ks) < 0) {
 					fprintf(stderr, "Record appears truncated (%s). Exiting.\n", name.c_str());
 					exit(EXIT_FAILURE);
 				}
 
-				if (hts_getline(fp, '\n', &ks) < 0) { // qual
+				// qual line
+				if (hts_getline(fp, '\n', &ks) < 0) {
 					fprintf(stderr, "Record appears truncated (%s). Exiting.\n", name.c_str());
 					exit(EXIT_FAILURE);
 				}
-				qualBuf.assign(ks.s, ks.l);
+				if (keep) qualBuf.assign(ks.s, ks.l);
 
-				if (!(sample && newRand() > userInput.ratio)) {
+				if (keep) {
 					Sequence2& rec = readBatch->next_slot();
 					rec.set(std::move(name),
 							std::move(comment),
@@ -274,11 +285,11 @@ void InReads::extractInReads() {
 					flush_if_needed(rec.sequence.size());
 				}
 
-				ret = hts_getline(fp, '\n', &ks); // next header
+				// next header
+				ret = hts_getline(fp, '\n', &ks);
 				while (ret >= 0 && ks.l == 0) ret = hts_getline(fp, '\n', &ks);
 				if (ret < 0) break;
 			}
-
 		} else {
 			fprintf(stderr, "Cannot recognize text input (%s). Expected '>' (FASTA) or '@' (FASTQ).\n", file.c_str());
 			exit(EXIT_FAILURE);
@@ -402,35 +413,34 @@ void InReads::extractInReads() {
 	}
 }
 
-static inline const float* phredProbLUT() {
-	// char is ASCII, but quality is (char-33) in [0..93] typically
-	static float lut[94];
+static inline const double* phredProbLUTd() {
+	static double lut[94];
 	static bool inited = false;
 	if (!inited) {
 		for (int q = 0; q < 94; ++q) {
-			// 10^(-q/10)
-			lut[q] = std::pow(10.0f, -float(q)/10.0f);
+			lut[q] = std::pow(10.0, -double(q) / 10.0);
 		}
 		inited = true;
 	}
 	return lut;
 }
 
-static inline float avg_q_from_phred33_prob(const std::string& qstr) {
-	const float* lut = phredProbLUT();
+static inline double avg_q_from_phred33_prob_d(const std::string& qstr) {
+	if (qstr.empty()) return 0.0;
+	const double* lut = phredProbLUTd();
 	double sum = 0.0;
 	for (unsigned char c : qstr) {
-		const int q = int(c) - 33;
-		if (q >= 0 && q < 94) sum += lut[q];
-		else sum += lut[0]; // defensive
+		int q = int(c) - 33;
+		if (q < 0) q = 0;
+		if (q > 93) q = 93;
+		sum += lut[q];
 	}
 	const double mean = sum / double(qstr.size());
-	return (float)(-10.0 * std::log10(mean));
+	return -10.0 * std::log10(mean);
 }
 
-float computeAvgQuality(const std::string& sequenceQuality) {
-	if (sequenceQuality.empty()) return 0.0f;
-	return avg_q_from_phred33_prob(sequenceQuality);
+float InReads::computeAvgQuality(const std::string& sequenceQuality) {
+	return (float)avg_q_from_phred33_prob_d(sequenceQuality);
 }
 
 void InReads::initDictionaries() {
