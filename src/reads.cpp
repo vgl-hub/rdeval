@@ -136,6 +136,8 @@ void InReads::load() {
 	for (auto& th : consumers) th.join();
 	filled_q_out.push(std::unique_ptr<BamBatch>()); // sentinel
 	closeStream();
+	lg.verbose("free_pool_in created=" + std::to_string(free_pool_in.created()) +
+		   " max=" + std::to_string(free_pool_in.max()));
 }
 
 void InReads::extractInReads() {
