@@ -1200,38 +1200,39 @@ void InReads::openOutputForFile(size_t outId) {
 	switch (fmt_case) {
 		case 1:   // fasta[.gz]
 		case 2: { // fastq[.gz]
+			char mode[8] = "w";
 
-			// If user requested BGZF compression level, force BGZF
+			// This sets the FORMAT (FASTA/FASTQ) in mode[1], e.g. "wF" or "wf"
+			if (sam_open_mode(mode + 1, outName.c_str(), NULL) < 0) {
+				printf("Invalid file name\n");
+				exit(EXIT_FAILURE);
+			}
+
+			// If --bgzip[=level] was requested, APPEND 'z' + optional digit
 			if (userInput.bgzip_level >= 0) {
+				int lvl = userInput.bgzip_level;
 
-				if (userInput.bgzip_level > 9) {
-					fprintf(stderr, "Invalid bgzip level %d (must be 0–9)\n",
-							userInput.bgzip_level);
+				// "optional level": if flag given without level, you said "use minimum"
+				// pick 1 as "minimum compression" (fastest that still compresses)
+				if (lvl == 0) {
+					// If you want "minimum" to mean 0 instead, delete this block.
+					lvl = 1;
+				}
+
+				if (lvl < 0 || lvl > 9) {
+					fprintf(stderr, "Invalid bgzip level %d (must be 0–9)\n", lvl);
 					exit(EXIT_FAILURE);
 				}
 
-				// "wz" = write BGZF
-				// append compression level digit if provided
-				std::string mode = "wz";
-				mode += char('0' + userInput.bgzip_level);
+				size_t mlen = std::strlen(mode);  // e.g. 2 ("wf")
+				mode[mlen++] = 'z';
+				mode[mlen++] = char('0' + lvl);
+				mode[mlen]   = '\0';              // now "wfz1" or "wFz1"
+			}
 
-				ofp = hts_open(outName.c_str(), mode.c_str());
-				if (!ofp) {
-					fprintf(stderr, "Could not open %s with BGZF mode %s\n",
-							outName.c_str(), mode.c_str());
-					exit(EXIT_FAILURE);
-				}
-
-			} else {
-				char mode[4] = "w";
-				if (sam_open_mode(mode + 1, outName.c_str(), NULL) < 0) {
-					printf("Invalid file name\n");
-					exit(EXIT_FAILURE);
-				}
-				if (!(ofp = sam_open(outName.c_str(), mode))) {
-					printf("Could not open %s\n", outName.c_str());
-					exit(EXIT_FAILURE);
-				}
+			if (!(ofp = sam_open(outName.c_str(), mode))) {
+				printf("Could not open %s\n", outName.c_str());
+				exit(EXIT_FAILURE);
 			}
 			break;
 		}
