@@ -75,11 +75,13 @@ generateRdFile <- function(input_file) {
   # append to rdFile object
   lengths <- c(lengths, readBin(as.raw(t(cbind(len64_matrix[,1:8]))), integer(), n = len64, size = 8, endian = "little")) # note that reads >2^32 will be trimmed
   qualities <- c(qualities, readBin(as.raw(t(cbind(len64_matrix[,9:12]))), numeric(), n = len64, size = 4, endian = "little"))
+
   lengths <- c(lengths, readBin(as.raw(t(cbind(len16_matrix[,1:2]))), integer(), n = len16, size = 2, endian = "little", signed = FALSE))
-  qualities <- c(qualities, readBin(as.raw(t(cbind(len16_matrix[,5:8]))), numeric(), n = len16, size = 4, endian = "little"))
+  qualities <- c(qualities, readBin(as.raw(t(cbind(len16_matrix[,3:6]))), numeric(), n = len16, size = 4, endian = "little"))
+
   lengths <- c(lengths, readBin(len8_matrix[,1], integer(), n = len8, size = 1, endian = "little", signed = FALSE))
-  qualities <- c(qualities, readBin(as.raw(t(cbind(len8_matrix[,5:8]))), numeric(), n = len8, size = 4, endian = "little"))
-  
+  qualities <- c(qualities, readBin(as.raw(t(cbind(len8_matrix[,2:5]))), numeric(), n = len8, size = 4, endian = "little"))
+    
   # new rdFile instance
   rdFile <- rdFileClass$new(input_file = input_file,
                             md5s = md5s,
