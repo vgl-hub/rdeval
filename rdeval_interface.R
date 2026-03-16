@@ -66,9 +66,9 @@ generateRdFile <- function(input_file) {
   }
   
   # read length and quality for types
-  len8_matrix  <- matrix(data[65:(64+(8*len8))], ncol = 8, byrow = TRUE)
-  len16_matrix <- matrix(data[(65+(8*len8)):(64+(8*len8)+(8*len16))], ncol = 8, byrow = TRUE)
-  len64_matrix <- matrix(data[(65+(8*len8)+(8*len16)):(64+(8*len8)+(8*len16)+(16*len64))], ncol = 16, byrow = TRUE)
+  len8_matrix  <- matrix(data[65:(64+(5*len8))], ncol = 5, byrow = TRUE)
+  len16_matrix <- matrix(data[(65+(5*len8)):(64+(5*len8)+(6*len16))], ncol = 6, byrow = TRUE)
+  len64_matrix <- matrix(data[(65+(5*len8)+(6*len16)):(64+(5*len8)+(6*len16)+(12*len64))], ncol = 12, byrow = TRUE)
   
   lengths <- vector()
   qualities <- vector()
