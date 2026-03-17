@@ -48,6 +48,8 @@ struct UserInputRdeval : UserInput {
 	// CiFi
 	bool inputCifi = false;
 	std::string restrictionEnzyme = "";
+	
+	int bgzip_level = -1;
 };
 
 
@@ -64,8 +66,6 @@ struct InRead {
 	uint64_t A=0, C=0, G=0, T=0, N=0, lowerCount=0;
 	uint32_t uId=0, iId=0, seqPos=0;
 
-	std::vector<Tag> tags;
-	std::vector<std::deque<DBGpath>> variants;
 	float avgQuality = 0.0f;
 
 	InRead() = default;
@@ -83,8 +83,7 @@ struct InRead {
 		   uint32_t readPos,
 		   uint64_t A, uint64_t C, uint64_t G, uint64_t T,
 		   uint64_t N, uint64_t lowerCount,
-		   float avgQuality,
-		   const std::vector<Tag>* tags = nullptr)
+		   float avgQuality)
 		: seqHeader(std::move(header)),
 		  seqComment(std::move(comment)),
 		  inSequence(std::move(sequence)),
@@ -93,7 +92,6 @@ struct InRead {
 		  uId(uId), iId(iId), seqPos(readPos), avgQuality(avgQuality)
 	{
 		(void)threadLog;
-		if (tags) this->tags = *tags;
 #ifdef DEBUG
 		if (threadLog) {
 			threadLog->add("Processing read: " + seqHeader +
@@ -109,7 +107,6 @@ struct InRead {
 	}
 };
 
-
 // -------------------------------------------------------------
 // ReadBatch and container structures
 // -------------------------------------------------------------
@@ -117,8 +114,11 @@ struct InRead {
 template<typename T>
 struct ReadBatch {
 	std::vector<T> reads;
+	uint32_t used  = 0;     // how many valid entries this time
 	uint32_t batchN = 0;    // within-file batch index
 	uint32_t fileN  = 0;    // file ID
+	
+	void reset_keep_capacity() { used = 0; } // DO NOT clear()
 };
 
 template<typename T>
@@ -131,7 +131,15 @@ struct FileBatches {
 	std::vector<ReadBatches<T>> files;
 };
 
-using BamBatch    = ReadBatch<bam1_t*>;
+struct BamBatch : ReadBatch<bam1_t*> {
+	~BamBatch() {
+		for (bam1_t* b : this->reads) {
+			if (b) bam_destroy1(b);
+		}
+		this->reads.clear();
+		this->used = 0;
+	}
+};
 using InReadBatch = ReadBatch<InRead>;
 
 // -------------------------------------------------------------
@@ -196,7 +204,7 @@ private:
 	size_t outBuffersN = 0;
 
 	// Input queues
-	BlockingQueue<std::unique_ptr<Sequences2>> free_pool_in;
+	ElasticBlockingPool<Sequences2> free_pool_in;
 	BlockingQueue<std::unique_ptr<Sequences2>> filled_q_in;
 
 	// Output queues (BAM batches)
@@ -222,7 +230,7 @@ public:
 	inline bool applyFilter(uint64_t size, float avgQuality);
 
 	// Processing
-	float computeAvgQuality(std::string& sequenceQuality);
+	float computeAvgQuality(const std::string& sequenceQuality);
 	void  filterRecords();
 	void  extractInReads();
 	bool  traverseInReads(Sequences2& readBatch);

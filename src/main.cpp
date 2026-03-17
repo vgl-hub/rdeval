@@ -15,7 +15,7 @@
 #include "stream-obj.h"
 #include "input.h"
 
-std::string version = "0.0.8";
+std::string version = "0.0.9";
 
 //global
 std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now(); // immediately start the clock when the program is run
@@ -48,6 +48,7 @@ int main(int argc, char **argv) {
 		{"parallel-files", required_argument, 0, 0},
         {"decompression-threads", required_argument, 0, 0},
         {"compression-threads", required_argument, 0, 0},
+		{"bgzip-level", optional_argument, 0, 0},
         {"sequence-report",no_argument, 0, 0},
         
         {"exclude-list", required_argument, 0, 'e'},
@@ -118,6 +119,19 @@ int main(int argc, char **argv) {
 				if(strcmp(long_options[option_index].name,"cifi-enzyme") == 0) {
 					userInput.restrictionEnzyme = optarg;
 					userInput.inputCifi = true;
+				}
+				if (strcmp(long_options[option_index].name, "bgzip-level") == 0) {
+					if (optarg) {
+						userInput.bgzip_level = atoi(optarg);
+
+						if (userInput.bgzip_level < 0 || userInput.bgzip_level > 9) {
+							fprintf(stderr, "--bgzip-level must be 0–9\n");
+							return EXIT_FAILURE;
+						}
+					} else {
+						// Option provided without argument → use minimum compression
+						userInput.bgzip_level = 0;
+					}
 				}
                 break;
             default: // handle positional arguments
@@ -198,6 +212,7 @@ int main(int argc, char **argv) {
 				printf("\t--parallel-files <int> numbers of files that can be opened and processed in parallel (producer threads, default:4).\n");
 				printf("\t--decompression-threads <int> numbers of decompression threads used by htslib for bam/cram (default:4).\n");
 				printf("\t--compression-threads <int> numbers of compression threads used by htslib for bam/cram (default:6).\n");
+				printf("\t--bgzip-level[=0-9] force BGZF (bgzip) compression for FASTA/FASTQ outputs (default: 0, minimum).\n");
                 printf("\t--tabular tabular output.\n");
                 printf("\t--verbose verbose output.\n");
 				printf("\t-m --max-memory <int> max number of bases in a single buffer of the ring buffer (default:1000000 bp or ~1MB). The total number of buffers is approximately consumer threads*2.\n");

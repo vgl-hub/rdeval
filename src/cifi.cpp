@@ -17,6 +17,7 @@
 #include "stream-obj.h"
 
 #include "cifi.h"
+#include "bam-utils.h"
 
 // Find enzyme info from name
 EnzymeInfo get_enzyme(const std::string& name) {
@@ -106,79 +107,57 @@ void digest_read(const InRead& read, const EnzymeInfo& enz, std::vector<std::str
 	}
 }
 
-BamBatch chop_read_to_bambatch(const InRead& read, const EnzymeInfo& enz, uint32_t batchN, uint32_t fileN) {
+void chop_read_into_bambatch(const InRead& read, const EnzymeInfo& enz, BamBatch& batch) {
 	if (!read.inSequenceQuality) {
-		throw std::runtime_error("InRead::inSequenceQuality is null in chop_read_to_bambatch");
+		throw std::runtime_error("InRead::inSequenceQuality is null in chop_read_into_bambatch");
 	}
 
 	std::vector<std::string> frag_seqs;
 	std::vector<std::string> frag_quals;
-	std::vector<int> frag_lengths; // optional, you can drop if not needed
+	digest_read(read, enz, frag_seqs, frag_quals, nullptr);
 
-	digest_read(read, enz, frag_seqs, frag_quals, &frag_lengths);
-
-	BamBatch batch;
-	batch.batchN = batchN;
-	batch.fileN  = fileN;
-
-	batch.reads.reserve(frag_seqs.size());
+	// Ensure enough capacity in one go
+	bambatch_ensure_capacity(batch, frag_seqs.size());
 
 	for (std::size_t i = 0; i < frag_seqs.size(); ++i) {
 		std::string frag_id = read.seqHeader + "_frag" + std::to_string(i);
-
-		bam1_t* b = make_unmapped_bam(
-			frag_id,
-			frag_seqs[i],
-			frag_quals[i],
-			0 // no extra flags
-		);
-
-		batch.reads.push_back(b);
-
-		// If you want fragment lengths here, record frag_lengths[i] somewhere else.
+		bambatch_append_unmapped(batch, frag_id, frag_seqs[i], frag_quals[i], 0);
 	}
-	return batch;
 }
 
-void build_pe_bambatches(const InRead& read, const EnzymeInfo& enz, BamBatch& R1_batch, BamBatch& R2_batch) {
+void build_pe_bambatches(const InRead& read, const EnzymeInfo& enz,BamBatch& R1_batch, BamBatch& R2_batch) {
 	if (!read.inSequenceQuality) {
 		throw std::runtime_error("InRead::inSequenceQuality is null in build_pe_bambatches");
 	}
 
 	std::vector<std::string> frag_seqs;
 	std::vector<std::string> frag_quals;
-
 	digest_read(read, enz, frag_seqs, frag_quals, nullptr);
 
 	const std::size_t n = frag_seqs.size();
 	if (n == 0) return;
 
-	const int trim = 5; // as in original fic2pe
-	const std::size_t max_pairs = n * (n - 1) / 2;
+	const int trim = 5;
 
-	R1_batch.reads.reserve(R1_batch.reads.size() + max_pairs);
-	R2_batch.reads.reserve(R2_batch.reads.size() + max_pairs);
+	// Optional: pre-reserve capacity in one go
+	const std::size_t max_pairs = n * (n - 1) / 2;
+	bambatch_ensure_capacity(R1_batch, max_pairs);
+	bambatch_ensure_capacity(R2_batch, max_pairs);
 
 	for (std::size_t i1 = 0; i1 < n; ++i1) {
 		for (std::size_t i2 = i1 + 1; i2 < n; ++i2) {
-			const std::string& seq1 = frag_seqs[i1];
-			const std::string& seq2 = frag_seqs[i2];
 
+			const std::string& seq1 = frag_seqs[i1];
 			const std::string& q1   = frag_quals[i1];
+
+			const std::string& seq2 = frag_seqs[i2];
 			const std::string& q2   = frag_quals[i2];
 
-			std::string R1_seq  = seq1;
-			std::string R1_qual = q1;
-
-			std::string R2_seq;
-			std::string R2_qual;
-			
-			if (seq2.size() > static_cast<std::size_t>(trim)) {
-				R2_seq = seq2.substr(trim);
-				R2_qual = q2.substr(trim);
-			} else {
+			if (seq2.size() <= static_cast<std::size_t>(trim))
 				continue;
-			}
+
+			std::string R2_seq  = seq2.substr(trim);
+			std::string R2_qual = q2.substr(trim);
 
 			std::string base_id = read.seqHeader + "_" +
 								  std::to_string(i1) + "_" +
@@ -187,17 +166,14 @@ void build_pe_bambatches(const InRead& read, const EnzymeInfo& enz, BamBatch& R1
 			std::string R1_id = base_id + " 1";
 			std::string R2_id = base_id + " 2";
 
-			bam1_t* b1 = make_unmapped_bam(
-				R1_id, R1_seq, R1_qual,
+			bambatch_append_unmapped(
+				R1_batch, R1_id, seq1, q1,
 				static_cast<uint16_t>(BAM_FPAIRED | BAM_FREAD1)
 			);
-			bam1_t* b2 = make_unmapped_bam(
-				R2_id, R2_seq, R2_qual,
+			bambatch_append_unmapped(
+				R2_batch, R2_id, R2_seq, R2_qual,
 				static_cast<uint16_t>(BAM_FPAIRED | BAM_FREAD2)
 			);
-
-			R1_batch.reads.push_back(b1);
-			R2_batch.reads.push_back(b2);
 		}
 	}
 }
