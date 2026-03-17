@@ -1,5 +1,6 @@
 library("bit64")
 
+DEBUG <- FALSE
 input_file <- "m54306Ue_230222_164948.bc1015--bc1015.hifi_reads.fastq.gz.rd"
 
 # rdFile class definition to store object data
@@ -82,10 +83,12 @@ generateRdFile <- function(input_file) {
   lengths <- c(lengths, readBin(len8_matrix[,1], integer(), n = len8, size = 1, endian = "little", signed = FALSE))
   qualities <- c(qualities, readBin(as.raw(t(cbind(len8_matrix[,2:5]))), numeric(), n = len8, size = 4, endian = "little"))
   
-  cat("len8 =", len8, " len16 =", len16, " len64 =", len64, "\n")
-  cat("length(lengths) =", length(lengths), " length(qualities) =", length(qualities), "\n")
-  cat("finite qualities =", sum(is.finite(qualities)), "\n")
-  summary(qualities)
+  if (DEBUG) {
+	  cat("len8 =", len8, " len16 =", len16, " len64 =", len64, "\n")
+	  cat("length(lengths) =", length(lengths), " length(qualities) =", length(qualities), "\n")
+	  cat("finite qualities =", sum(is.finite(qualities)), "\n")
+	  summary(qualities)
+  }
   
   # new rdFile instance
   rdFile <- rdFileClass$new(input_file = input_file,
