@@ -1330,11 +1330,11 @@ void InReads::printTableCompressed(std::string outFile) {
 	// + len8  * (u8  + u32(float bits))
 	// + len16 * (u16 + u32(float bits))
 	// + len64 * (u64 + u32(float bits))
-	const uLong sourceLen =
-		uLong(sizeof(uint64_t) * (5 + 3)) +
-		uLong(len8)  * (uLong(sizeof(uint8_t))  + uLong(sizeof(uint32_t))) +
-		uLong(len16) * (uLong(sizeof(uint16_t)) + uLong(sizeof(uint32_t))) +
-		uLong(len64) * (uLong(sizeof(uint64_t)) + uLong(sizeof(uint32_t)));
+	const uint64_t sourceLen =
+		uint64_t(sizeof(uint64_t) * (5 + 3)) +
+		uint64_t(len8)  * (sizeof(uint8_t)  + sizeof(uint32_t)) +
+		uint64_t(len16) * (sizeof(uint16_t) + sizeof(uint32_t)) +
+		uint64_t(len64) * (sizeof(uint64_t) + sizeof(uint32_t));
 
 	std::vector<Bytef> source(sourceLen);
 	unsigned char* ptr = reinterpret_cast<unsigned char*>(source.data());
@@ -1396,7 +1396,7 @@ void InReads::printTableCompressed(std::string outFile) {
 	}
 
 	// store decompressed size then compressed blob
-	ofs.write(reinterpret_cast<const char*>(&sourceLen), sizeof(uint64_t));
+	ofs.write(reinterpret_cast<const char*>(&sourceLen), sizeof(sourceLen));
 	ofs.write(reinterpret_cast<const char*>(dest.data()), destLen);
 
 	if (!ofs) throw std::runtime_error("Write failed (disk full? permission issue?)");
@@ -1437,86 +1437,138 @@ void InReads::readTableCompressed(std::string inFile) {
 
 	// open and get file size
 	std::ifstream ifs(inFile, std::ios::binary | std::ios::ate);
-	if (!ifs) throw std::runtime_error("Failed to open input file: " + inFile);
+	if (!ifs) {
+		throw std::runtime_error("Failed to open input file: " + inFile);
+	}
+
 	const std::streamsize fileSize = ifs.tellg();
-	if (fileSize < 0) throw std::runtime_error("tellg() failed for: " + inFile);
+	if (fileSize < 0) {
+		throw std::runtime_error("tellg() failed for: " + inFile);
+	}
 	ifs.seekg(0, std::ios::beg);
 
-	// ---- read md5s header (and track how many bytes we consumed) ----
+	// ---- read md5 header and track consumed bytes ----
 	std::streamsize headerBytes = 0;
 
 	uint32_t md5sN = 0;
-	ifs.read(reinterpret_cast<char*>(&md5sN), sizeof(uint32_t));
-	if (!ifs) throw std::runtime_error("Failed to read md5sN from: " + inFile);
-	headerBytes += sizeof(uint32_t);
+	ifs.read(reinterpret_cast<char*>(&md5sN), sizeof(md5sN));
+	if (!ifs) {
+		throw std::runtime_error("Failed to read md5sN from: " + inFile);
+	}
+	headerBytes += static_cast<std::streamsize>(sizeof(md5sN));
 
-	uint16_t stringSize = 0;
 	for (uint32_t i = 0; i < md5sN; ++i) {
+		uint16_t stringSize = 0;
 		std::string filename, md5;
 
-		ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(uint16_t));
-		if (!ifs) throw std::runtime_error("Failed to read filename length from: " + inFile);
-		headerBytes += sizeof(uint16_t);
+		ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(stringSize));
+		if (!ifs) {
+			throw std::runtime_error("Failed to read filename length from: " + inFile);
+		}
+		headerBytes += static_cast<std::streamsize>(sizeof(stringSize));
 
-		filename.resize(stringSize);
-		if (stringSize) {
+		filename.resize(static_cast<size_t>(stringSize));
+		if (stringSize > 0) {
 			ifs.read(&filename[0], static_cast<std::streamsize>(stringSize));
+			if (!ifs) {
+				throw std::runtime_error("Failed to read filename from: " + inFile);
+			}
 		}
-		headerBytes += stringSize;
+		headerBytes += static_cast<std::streamsize>(stringSize);
 
-		ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(uint16_t));
-		if (!ifs) throw std::runtime_error("Failed to read md5 length from: " + inFile);
-		headerBytes += sizeof(uint16_t);
+		ifs.read(reinterpret_cast<char*>(&stringSize), sizeof(stringSize));
+		if (!ifs) {
+			throw std::runtime_error("Failed to read md5 length from: " + inFile);
+		}
+		headerBytes += static_cast<std::streamsize>(sizeof(stringSize));
 
-		md5.resize(stringSize);
-		if (stringSize) {
+		md5.resize(static_cast<size_t>(stringSize));
+		if (stringSize > 0) {
 			ifs.read(&md5[0], static_cast<std::streamsize>(stringSize));
+			if (!ifs) {
+				throw std::runtime_error("Failed to read md5 from: " + inFile);
+			}
 		}
-		headerBytes += stringSize;
+		headerBytes += static_cast<std::streamsize>(stringSize);
 
-		md5s.push_back(std::make_pair(std::move(filename), std::move(md5)));
+		md5s.emplace_back(std::move(filename), std::move(md5));
 	}
 
-	// ---- read decompressed size ----
-	uint64_t decompressedSize_u64 = 0;
-	ifs.read(reinterpret_cast<char*>(&decompressedSize_u64), sizeof(uint64_t));
-	if (!ifs) throw std::runtime_error("Failed to read decompressedSize from: " + inFile);
-	headerBytes += sizeof(uint64_t);
+	// ---- read decompressed size from file format ----
+	uint64_t decompressedSize = 0;
+	ifs.read(reinterpret_cast<char*>(&decompressedSize), sizeof(decompressedSize));
+	if (!ifs) {
+		throw std::runtime_error("Failed to read decompressed size from: " + inFile);
+	}
+	headerBytes += static_cast<std::streamsize>(sizeof(decompressedSize));
 
-	if (decompressedSize_u64 == 0)
+	if (decompressedSize == 0) {
 		throw std::runtime_error("Invalid decompressed size (0) in: " + inFile);
-
-	if (headerBytes > fileSize)
+	}
+	if (headerBytes > fileSize) {
 		throw std::runtime_error("Corrupt file (header larger than file) in: " + inFile);
+	}
 
-	const uLongf decompressedSize = static_cast<uLongf>(decompressedSize_u64);
+	// ---- compressed payload size from file ----
+	const std::streamsize compressedSize_ss = fileSize - headerBytes;
+	if (compressedSize_ss <= 0) {
+		throw std::runtime_error("Invalid compressed payload size in: " + inFile);
+	}
+	const uint64_t compressedSize64 = static_cast<uint64_t>(compressedSize_ss);
+
+	// ---- validate sizes for allocation ----
+	if (decompressedSize > static_cast<uint64_t>(std::numeric_limits<size_t>::max())) {
+		throw std::runtime_error("Decompressed payload too large to allocate in: " + inFile);
+	}
+	if (compressedSize64 > static_cast<uint64_t>(std::numeric_limits<size_t>::max())) {
+		throw std::runtime_error("Compressed payload too large to allocate in: " + inFile);
+	}
+
+	const size_t decompressedSize_sz = static_cast<size_t>(decompressedSize);
+	const size_t compressedSize_sz = static_cast<size_t>(compressedSize64);
+
+	// ---- validate sizes for zlib API ----
+	if (decompressedSize > static_cast<uint64_t>(std::numeric_limits<uLongf>::max())) {
+		throw std::runtime_error("Decompressed payload too large for zlib API in: " + inFile);
+	}
+	if (compressedSize64 > static_cast<uint64_t>(std::numeric_limits<uLong>::max())) {
+		throw std::runtime_error("Compressed payload too large for zlib API in: " + inFile);
+	}
+
+	const uLongf decompressedSize_z = static_cast<uLongf>(decompressedSize);
+	const uLong compressedSize_z = static_cast<uLong>(compressedSize64);
 
 	// ---- read compressed payload ----
-	const std::streamsize compressedSize_ss = fileSize - headerBytes;
-	if (compressedSize_ss <= 0)
-		throw std::runtime_error("Invalid compressed payload size in: " + inFile);
+	std::vector<Bytef> compressed(compressedSize_sz);
+	ifs.read(reinterpret_cast<char*>(compressed.data()), compressedSize_ss);
+	if (!ifs) {
+		throw std::runtime_error("Failed to read compressed payload from: " + inFile);
+	}
 
-	const uLong compressedSize = static_cast<uLong>(compressedSize_ss);
+	// ---- decompress ----
+	std::vector<Bytef> data(decompressedSize_sz);
+	uLongf outSize = decompressedSize_z;
 
-	std::vector<Bytef> gzData(compressedSize);
-	ifs.read(reinterpret_cast<char*>(gzData.data()), compressedSize);
-	if (!ifs) throw std::runtime_error("Failed to read compressed payload from: " + inFile);
+	const int zrc = uncompress(
+		data.data(), &outSize,
+		compressed.data(), compressedSize_z
+	);
 
-	std::vector<Bytef> data(decompressedSize);
-	uLongf outSize = decompressedSize;
-
-	const int zrc = uncompress(data.data(), &outSize, gzData.data(), compressedSize);
-	if (zrc != Z_OK)
+	if (zrc != Z_OK) {
 		throw std::runtime_error("uncompress() failed with code " + std::to_string(zrc) + " for: " + inFile);
-	if (outSize != decompressedSize)
+	}
+	if (outSize != decompressedSize_z) {
 		throw std::runtime_error("uncompress() size mismatch for: " + inFile);
+	}
 
-	// ---- parse decompressed buffer (matches new writer layout) ----
+	// ---- parse decompressed buffer ----
 	const unsigned char* ptr = reinterpret_cast<const unsigned char*>(data.data());
-	const unsigned char* end = ptr + outSize;
+	const unsigned char* end = ptr + data.size();
 
 	auto need = [&](size_t n) {
-		if (ptr + n > end) throw std::runtime_error("Corrupt decompressed payload (truncated) in: " + inFile);
+		if (static_cast<size_t>(end - ptr) < n) {
+			throw std::runtime_error("Corrupt decompressed payload (truncated) in: " + inFile);
+		}
 	};
 
 	// ACGTN
@@ -1527,25 +1579,48 @@ void InReads::readTableCompressed(std::string inFile) {
 	const uint64_t T = read_u64(ptr);
 	const uint64_t N = read_u64(ptr);
 
-	totA += A; totC += C; totG += G; totT += T; totN += N;
+	totA += A;
+	totC += C;
+	totG += G;
+	totT += T;
+	totN += N;
 
-	// lens
+	// counts
 	need(sizeof(uint64_t) * 3);
 	const uint64_t len8  = read_u64(ptr);
 	const uint64_t len16 = read_u64(ptr);
 	const uint64_t len64 = read_u64(ptr);
 
+	// validate expected payload size exactly
+	const uint64_t expectedPayloadSize =
+		uint64_t(sizeof(uint64_t) * (5 + 3)) +
+		len8  * uint64_t(sizeof(uint8_t)  + sizeof(uint32_t)) +
+		len16 * uint64_t(sizeof(uint16_t) + sizeof(uint32_t)) +
+		len64 * uint64_t(sizeof(uint64_t) + sizeof(uint32_t));
+
+	if (expectedPayloadSize != decompressedSize) {
+		throw std::runtime_error(
+			"Decompressed payload size does not match embedded record counts in: " + inFile
+		);
+	}
+
 	// tmp vectors
 	LenVector<float> readLensTmp;
-	auto &readLensTmp8  = readLensTmp.getReadLens8();
-	auto &readLensTmp16 = readLensTmp.getReadLens16();
-	auto &readLensTmp64 = readLensTmp.getReadLens64();
+	auto& readLensTmp8  = readLensTmp.getReadLens8();
+	auto& readLensTmp16 = readLensTmp.getReadLens16();
+	auto& readLensTmp64 = readLensTmp.getReadLens64();
+
+	if (len8 > static_cast<uint64_t>(std::numeric_limits<size_t>::max()) ||
+		len16 > static_cast<uint64_t>(std::numeric_limits<size_t>::max()) ||
+		len64 > static_cast<uint64_t>(std::numeric_limits<size_t>::max())) {
+		throw std::runtime_error("Record count too large to allocate in: " + inFile);
+	}
 
 	readLensTmp8.reserve(static_cast<size_t>(len8));
 	readLensTmp16.reserve(static_cast<size_t>(len16));
 	readLensTmp64.reserve(static_cast<size_t>(len64));
 
-	// entries: (u8 + u32bits)
+	// entries: (u8 + f32 bits)
 	for (uint64_t i = 0; i < len8; ++i) {
 		need(sizeof(uint8_t) + sizeof(uint32_t));
 		const uint8_t l = read_u8(ptr);
@@ -1553,7 +1628,7 @@ void InReads::readTableCompressed(std::string inFile) {
 		readLensTmp8.emplace_back(l, w);
 	}
 
-	// entries: (u16 + u32bits)
+	// entries: (u16 + f32 bits)
 	for (uint64_t i = 0; i < len16; ++i) {
 		need(sizeof(uint16_t) + sizeof(uint32_t));
 		const uint16_t l = read_u16(ptr);
@@ -1561,7 +1636,7 @@ void InReads::readTableCompressed(std::string inFile) {
 		readLensTmp16.emplace_back(l, w);
 	}
 
-	// entries: (u64 + u32bits)
+	// entries: (u64 + f32 bits)
 	for (uint64_t i = 0; i < len64; ++i) {
 		need(sizeof(uint64_t) + sizeof(uint32_t));
 		const uint64_t l = read_u64(ptr);
@@ -1569,10 +1644,12 @@ void InReads::readTableCompressed(std::string inFile) {
 		readLensTmp64.emplace_back(l, w);
 	}
 
-	// Optional: if you expect exact consumption, you can enforce it:
-	// if (ptr != end) throw std::runtime_error("Extra bytes in decompressed payload in: " + inFile);
+	// enforce exact consumption
+	if (ptr != end) {
+		throw std::runtime_error("Extra bytes in decompressed payload in: " + inFile);
+	}
 
-	// add to vector
+	// merge
 	readLens.insert(readLensTmp);
 	totReads += len8 + len16 + len64;
 }
